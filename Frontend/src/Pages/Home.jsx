@@ -144,31 +144,77 @@ const Home = () => {
         setError('');
     }
 
-    return (
-        <div className={styles.homeContainer}>
-           {/* MODERN COMPACT HERO SECTION */}
+    return (        <div className={styles.homeContainer}>
+           {/* ENHANCED MODERN HERO SECTION */}
            <div className={styles.heroSection}>
+                <div className={styles.heroBackground}>
+                    <div className={styles.heroShape1}></div>
+                    <div className={styles.heroShape2}></div>
+                    <div className={styles.heroShape3}></div>
+                </div>
+                
                 <div className={styles.heroContent}>
                     <div className={styles.heroMain}>
                         <div className={styles.heroInfo}>
                             <div className={styles.welcomeSection}>
+                                <div className={styles.greetingBadge}>
+                                    <svg className={styles.greetingIcon} width="16" height="16" viewBox="0 0 24 24" fill="none">
+                                        <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" fill="currentColor"/>
+                                    </svg>
+                                    <span>Good {new Date().getHours() < 12 ? 'Morning' : new Date().getHours() < 18 ? 'Afternoon' : 'Evening'}</span>
+                                </div>
+                                
                                 <h1 className={styles.heroTitle}>
-                                    Welcome back, <span className={styles.userName}>{user?.name || user?.email || 'User'}</span>
+                                    Welcome back, <br />
+                                    <span className={styles.userName}>{user?.name || user?.email || 'User'}</span>
                                 </h1>
+                                
                                 <p className={styles.heroSubtitle}>
-                                    Manage your financial dashboard and track site progress
+                                    Manage your financial dashboard and track site progress with real-time insights
                                 </p>
                             </div>
                             
                             <div className={styles.heroStats}>
                                 <div className={styles.statItem}>
-                                    <span className={styles.statNumber}>{sites.length}</span>
-                                    <span className={styles.statLabel}>Active Sites</span>
+                                    <div className={styles.statIcon}>
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                                            <path d="M3 7V17C3 18.1046 3.89543 19 5 19H19C20.1046 19 21 18.1046 21 17V7" stroke="currentColor" strokeWidth="2"/>
+                                            <path d="M3 7L12 14L21 7" stroke="currentColor" strokeWidth="2"/>
+                                        </svg>
+                                    </div>
+                                    <div className={styles.statContent}>
+                                        <span className={styles.statNumber}>{sites.length}</span>
+                                        <span className={styles.statLabel}>Active Sites</span>
+                                    </div>
                                 </div>
+                                
                                 <div className={styles.statDivider}></div>
+                                
                                 <div className={styles.statItem}>
-                                    <span className={styles.statNumber}>{loading ? '...' : 'Live'}</span>
-                                    <span className={styles.statLabel}>Status</span>
+                                    <div className={styles.statIcon}>
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                                            <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2"/>
+                                            <path d="M8 12L11 15L16 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                                        </svg>
+                                    </div>
+                                    <div className={styles.statContent}>
+                                        <span className={styles.statNumber}>{loading ? '...' : 'Live'}</span>
+                                        <span className={styles.statLabel}>System Status</span>
+                                    </div>
+                                </div>
+                                
+                                <div className={styles.statDivider}></div>
+                                
+                                <div className={styles.statItem}>
+                                    <div className={styles.statIcon}>
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                                            <path d="M12 2L15.09 8.26L22 9L17 14L18.18 21L12 17.77L5.82 21L7 14L2 9L8.91 8.26L12 2Z" fill="currentColor"/>
+                                        </svg>
+                                    </div>
+                                    <div className={styles.statContent}>
+                                        <span className={styles.statNumber}>{user?.role || 'User'}</span>
+                                        <span className={styles.statLabel}>Role</span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -179,12 +225,25 @@ const Home = () => {
                                 onClick={() => setShowAddSiteModal(true)}
                                 disabled={loading}
                             >
-                                <svg className={styles.buttonIcon} width="16" height="16" viewBox="0 0 24 24" fill="none">
-                                    <path d="M12 5v14m-7-7h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                                <svg className={styles.buttonIcon} width="18" height="18" viewBox="0 0 24 24" fill="none">
+                                    <path d="M12 5v14m-7-7h14" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
                                 </svg>
-                                New Site
+                                <span>Create New Site</span>
                             </button>
-                            <LogoutButton />
+                              <div className={styles.quickActions}>
+                                <button 
+                                    className={styles.quickActionBtn} 
+                                    title="Refresh Data"
+                                    onClick={() => window.location.reload()}
+                                >
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                                        <path d="M3 12A9 9 0 0 1 12 3C16.97 3 21 7.03 21 12S16.97 21 12 21" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                                        <path d="M3 12L7 8M3 12L7 16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                                    </svg>
+                                </button>
+                                
+                                <LogoutButton />
+                            </div>
                         </div>
                     </div>
                 </div>
