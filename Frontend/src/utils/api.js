@@ -1,8 +1,6 @@
 // API utility functions for handling authenticated requests
 
-const API_BASE_URL = process.env.NODE_ENV === 'production' 
-  ? 'https://financedashbord.onrender.com' // Replace with your actual Render URL
-  : 'http://localhost:5000';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
 
 // Get auth token from localStorage
 const getAuthToken = () => {
