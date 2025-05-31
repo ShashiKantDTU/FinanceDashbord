@@ -1,7 +1,7 @@
 // API utility functions for handling authenticated requests
 
 const API_BASE_URL = process.env.NODE_ENV === 'production' 
-  ? 'https://your-backend-name.onrender.com' // Replace with your actual Render URL
+  ? 'https://financedashbord.onrender.com' // Replace with your actual Render URL
   : 'http://localhost:5000';
 
 // Get auth token from localStorage
