@@ -25,7 +25,7 @@ const PORT = process.env.PORT || 5000;
 const corsOptions = {
   origin: [
     'http://localhost:5173', // Local development
-    'https://your-app-name.vercel.app', // Replace with your actual Vercel domain
+    'https://finance-dashbord-three.vercel.app', // Replace with your actual Vercel domain
     // Add more allowed origins as needed
   ],
   credentials: true,
