@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../components/ToastProvider';
 import styles from './Payments.module.css';
 import Sidebar from '../components/Sidebar';
-import { useParams , Link } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
 import { api } from '../utils/api';
 import { FaCalendarAlt } from 'react-icons/fa';
 
@@ -11,11 +11,11 @@ const Payments = () => {
     const { user } = useAuth();
     const { showSuccess, showError, showWarning } = useToast();
     const [employeeData, setEmployeeData] = useState([]);
-    const [loading, setLoading] = useState(true); 
+    const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [expandedRows, setExpandedRows] = useState({});
-    const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });    const [editMode, setEditMode] = useState(null); // employeeId being edited
-    const [editedData, setEditedData] = useState({});    const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+    const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' }); const [editMode, setEditMode] = useState(null); // employeeId being edited
+    const [editedData, setEditedData] = useState({}); const [showConfirmDialog, setShowConfirmDialog] = useState(false);
     const [pendingChanges, setPendingChanges] = useState({});
     const [remarkText, setRemarkText] = useState(''); // Add remark state
     const [isUpdating, setIsUpdating] = useState(false); // Loading state for update operation
@@ -33,54 +33,61 @@ const Payments = () => {
     // Month names for calendar
     const monthNames = [
         'January', 'February', 'March', 'April', 'May', 'June',
-        'July', 'August', 'September', 'October', 'November', 'December'    ];
+        'July', 'August', 'September', 'October', 'November', 'December'];
 
-    const [selectedMonth, setSelectedMonth] = useState(currentDate.getMonth() + 1);    const [selectedYear, setSelectedYear] = useState(currentDate.getFullYear());
-    
+    const [selectedMonth, setSelectedMonth] = useState(currentDate.getMonth() + 1); const [selectedYear, setSelectedYear] = useState(currentDate.getFullYear());
+
     // Default site ID - you can modify this or get from user context
     const processAttendanceData = (attendance) => {
-        let totalDays = 0;
-        let totalOvertime = 0;
-        
-        if (!Array.isArray(attendance)) {
-            console.warn('Attendance data is not an array, returning zero values');
-            return { totalDays: 0, totalOvertime: 0 };
-        }
-        
-        attendance.forEach(att => {
-            if (typeof att !== 'string') {
-                console.warn(`Invalid attendance entry: ${att}. Skipping.`);
-                return;
-            }
-            
-            // Check if employee was present (contains 'P')
-            if (att.includes('P')) {
-                totalDays += 1;
-                
-                // Parse overtime hours if present (e.g., "P8" means present with 8 hours overtime)
-                const overtimeMatch = att.match(/P(\d+)/);
-                if (overtimeMatch) {
-                    const overtime = parseInt(overtimeMatch[1]);
-                    
-                    // Validate overtime hours (0-24 hours per day)
-                    if (!isNaN(overtime) && overtime >= 0 && overtime <= 24) {
-                        totalOvertime += overtime;
-                    } else {
-                        console.warn(`Invalid overtime hours: ${overtime}. Skipping.`);
-                    }
-                }
-            }
-        });        const totalAttendance = totalDays + Math.floor(totalOvertime / 8) + ((totalOvertime % 8) / 10);
 
-        return { totalAttendance: parseFloat(totalAttendance.toFixed(1)) };
+        const attendanceArray = attendance || [];
+
+        // This section calculates summary figures based on the employee's attendance array.
+
+        // Calculate Total Present Days:
+        // Counts entries that include "P" (e.g., "P", "P1", "P8").
+        const totalPresentCount = attendanceArray.reduce((acc, status) => {
+            return acc + (status && status.toUpperCase().includes('P') ? 1 : 0);
+        }, 0);
+
+        // Calculate Total Overtime Hours:
+        // Sums the numeric part of entries like "P2" (2 hours), "A3" (3 hours).
+        // Assumes overtime is indicated by a number following "P" or "A".
+        const totalOvertimeHours = attendanceArray.reduce((acc, status) => {
+            if (status && status.length > 1) {
+                const overtimePart = status.substring(1); // Get character(s) after the first one.
+                const hours = parseInt(overtimePart, 10);
+                return acc + (isNaN(hours) ? 0 : hours);
+            }
+            return acc;
+        }, 0);
+
+        // Calculate Total Absent Days:
+        // Counts entries that include "A" (e.g., "A", "A1").
+        const totalAbsentCount = attendanceArray.reduce((acc, status) => {
+            return acc + (status && status.toUpperCase().includes('A') ? 1 : 0);
+        }, 0);
+
+        // Calculate Final Attendance Days (including overtime):
+        // Overtime hours are converted to days (assuming 8 hours = 1 day).
+        // Remaining overtime hours are represented as a decimal fraction of a day.
+        const overtimeDaysEquivalent = Math.floor(totalOvertimeHours / 8);
+        const remainingOvertimeHoursPart = totalOvertimeHours % 8;
+        // Convert remaining hours to a decimal (e.g., 4 hours = 0.4, not 0.5 of a day based on current logic)
+        // Note: The original logic `remainingOvertimeHours / 10` might be a specific business rule
+        // or a simplification. If 4 hours should be 0.5 days, this should be `remainingOvertimeHours / 8`.
+        // Sticking to original logic:
+        const remainingOvertimeDecimalContribution = remainingOvertimeHoursPart / 10;
+        const finalAttendanceDays = totalPresentCount + overtimeDaysEquivalent + remainingOvertimeDecimalContribution;
+        return finalAttendanceDays;
     };    // Function to calculate payment details
     const calculatePaymentDetails = (dailyRate, attendanceData, advances, additionalWages, previousBalance) => {
         const attendance = processAttendanceData(attendanceData);
-        const grossPayment = dailyRate * attendance.totalAttendance;
+        const grossPayment = dailyRate * attendance;
         const netBalance = grossPayment - advances + additionalWages + previousBalance;
-        
+
         return {
-            attendance: attendance.totalAttendance,
+            attendance,
             grossPayment,
             netBalance
         };
@@ -96,12 +103,12 @@ const Payments = () => {
         const currentDate = new Date();
         const currentYear = currentDate.getFullYear();
         const currentMonth = currentDate.getMonth();
-        
+
         // Disable future months
         if (year > currentYear || (year === currentYear && monthIndex > currentMonth)) {
             return true;
         }
-        
+
         return false;
     };
 
@@ -138,18 +145,19 @@ const Payments = () => {
     }, [showCalendar]);
 
     // Fetch employee data from API
-    useEffect(() => {        const fetchEmployeeData = async () => {
+    useEffect(() => {
+        const fetchEmployeeData = async () => {
             try {
                 setLoading(true);
-                
+
                 const response = await api.get(
                     `/api/employee/allemployees?month=${selectedMonth}&year=${selectedYear}&siteID=${siteID}`
-                );if (response.success) {
+                ); if (response.success) {
                     // console.log('🔄 Processing API response data:', response.data.length, 'employees');
-                      // Transform API data to match the component's expected format
+                    // Transform API data to match the component's expected format
                     const transformedData = response.data.map((emp, index) => {
                         // console.log(`\n🔄 Processing employee ${index + 1}/${response.data.length}: ${emp.name} (${emp.empid})`);
-                        
+
                         // Calculate payment details using the new logic
                         const paymentDetails = calculatePaymentDetails(
                             emp.rate || 0,
@@ -168,7 +176,7 @@ const Payments = () => {
                         //     previousBalance: emp.carryForward || emp.carry_forwarded?.value,
                         //     netBalance: paymentDetails.netBalance
                         // });
-                        
+
                         const transformedEmployee = {
                             id: emp.empid,
                             name: emp.name,
@@ -182,7 +190,8 @@ const Payments = () => {
                             advances: emp.payouts?.map(payout => ({
                                 value: payout.value,
                                 remark: payout.remark,
-                                date: new Date(payout.date).toISOString().split('T')[0]                            })) || [],
+                                date: new Date(payout.date).toISOString().split('T')[0]
+                            })) || [],
                             additionalPayments: emp.additional_req_pays?.map(payment => ({
                                 value: payment.value,
                                 remark: payment.remark,
@@ -197,11 +206,11 @@ const Payments = () => {
                             // Raw attendance for debugging
                             rawAttendance: emp.attendance
                         };
-                        
+
                         // console.log(`✅ Transformed employee ${emp.name}:`, transformedEmployee);
                         return transformedEmployee;
                     });                    //  console.log('🎉 All employees processed successfully:', transformedData.length);
-                      setEmployeeData(transformedData);
+                    setEmployeeData(transformedData);
                 } else {
                     showError('Failed to fetch employee data');
                 }
@@ -277,12 +286,12 @@ const Payments = () => {
     const cancelEdit = () => {
         setEditMode(null);
         setEditedData({});
-    };    const handleFieldChange = (field, value) => {
+    }; const handleFieldChange = (field, value) => {
         const newData = { ...editedData, [field]: parseFloat(value) || 0 };
         // Recalculate totals when daily rate changes
         if (field === 'dailyRate') {
             newData.grossPayment = (newData.dailyRate || 0) * (newData.attendance || 0);
-            newData.netBalance = newData.grossPayment - newData.totalAdvances - newData.totalAdditionalPayments + newData.previousBalance;
+            newData.netBalance = newData.grossPayment - newData.totalAdvances + newData.totalAdditionalPayments + newData.previousBalance;
         }
         setEditedData(newData);
     };
@@ -294,7 +303,7 @@ const Payments = () => {
             ...editedData,
             advances: newAdvances,
             totalAdvances,
-            netBalance: editedData.grossPayment - totalAdvances - editedData.totalAdditionalPayments + editedData.previousBalance
+            netBalance: editedData.grossPayment - totalAdvances + editedData.totalAdditionalPayments + editedData.previousBalance
         });
     };
 
@@ -305,7 +314,7 @@ const Payments = () => {
             ...editedData,
             advances: newAdvances,
             totalAdvances,
-            netBalance: editedData.grossPayment - totalAdvances - editedData.totalAdditionalPayments + editedData.previousBalance
+            netBalance: editedData.grossPayment - totalAdvances + editedData.totalAdditionalPayments + editedData.previousBalance
         });
     };
 
@@ -317,7 +326,7 @@ const Payments = () => {
             ...editedData,
             advances: newAdvances,
             totalAdvances,
-            netBalance: editedData.grossPayment - totalAdvances - editedData.totalAdditionalPayments + editedData.previousBalance
+            netBalance: editedData.grossPayment - totalAdvances + editedData.totalAdditionalPayments + editedData.previousBalance
         });
     };
 
@@ -328,7 +337,7 @@ const Payments = () => {
             ...editedData,
             additionalPayments: newDeductions,
             totalAdditionalPayments: totalDeductions,
-            netBalance: editedData.grossPayment - editedData.totalAdvances - totalDeductions + editedData.previousBalance
+            netBalance: editedData.grossPayment - editedData.totalAdvances + totalDeductions + editedData.previousBalance
         });
     };
 
@@ -339,7 +348,7 @@ const Payments = () => {
             ...editedData,
             additionalPayments: newDeductions,
             totalAdditionalPayments: totalDeductions,
-            netBalance: editedData.grossPayment - editedData.totalAdvances - totalDeductions + editedData.previousBalance
+            netBalance: editedData.grossPayment - editedData.totalAdvances + totalDeductions + editedData.previousBalance
         });
     };
 
@@ -351,9 +360,9 @@ const Payments = () => {
             ...editedData,
             additionalPayments: newDeductions,
             totalAdditionalPayments: totalDeductions,
-            netBalance: editedData.grossPayment - editedData.totalAdvances - totalDeductions + editedData.previousBalance
+            netBalance: editedData.grossPayment - editedData.totalAdvances + totalDeductions + editedData.previousBalance
         });
-    };    const getChangeSummary = () => {
+    }; const getChangeSummary = () => {
         const original = employeeData.find(emp => emp.id === editMode);
         if (!original) return {};
         const changes = {};
@@ -383,9 +392,9 @@ const Payments = () => {
         }
 
         return changes;
-    };    const confirmSave = () => {        // Validate the data before showing confirmation
+    }; const confirmSave = () => {        // Validate the data before showing confirmation
         const validationErrors = validatePaymentData(editedData);
-        
+
         if (validationErrors.length > 0) {
             showError(`Validation failed: ${validationErrors.join(', ')}`);
             return;
@@ -398,39 +407,39 @@ const Payments = () => {
         } else {
             cancelEdit();
         }
-    };    const applySave = async () => {
+    }; const applySave = async () => {
         try {
             setIsUpdating(true);
-            
+
             // Call the update function with the formatted data
             const response = await updatePaymentData(editedData);
-            
-            
+
+
             const apiData = response.data;
             let successMsg = `${response.message}`;
-            
+
             if (apiData?.updatedFields?.length > 0) {
                 successMsg += ` (Updated: ${apiData.updatedFields.join(', ')})`;
             }
-            
+
             if (apiData?.futureMonthsMarked > 0) {
                 successMsg += ` - ${apiData.futureMonthsMarked} future months marked for recalculation`;
             }
-            
+
             showSuccess(successMsg);
-              // Close edit mode and dialogs
+            // Close edit mode and dialogs
             setEditMode(null);
             setEditedData({});
             setShowConfirmDialog(false);
             setPendingChanges({});
             setRemarkText(''); // Clear remark after successful save
-            
+
             // console.log('✅ Payment data updated successfully');
             // console.log('📊 Response data:', apiData);
-            
+
             // Refresh employee data from API to get the freshest data
             await refreshEmployeeData();
-            
+
         } catch (error) {
             console.error('❌ Failed to update payment data:', error);
             showError(error.message || 'Failed to update payment data. Please try again.');
@@ -461,7 +470,7 @@ const Payments = () => {
             }            // Check if additional payments changed
             const originalAdditionalPayments = originalEmployee.additionalPayments || [];
             const newAdditionalPayments = editedEmployeeData.additionalPayments || [];
-            
+
             // Only include if there are actual changes and the new data is not empty
             const additionalPaymentsChanged = JSON.stringify(originalAdditionalPayments) !== JSON.stringify(newAdditionalPayments);
             if (additionalPaymentsChanged && newAdditionalPayments.length > 0) {
@@ -478,7 +487,7 @@ const Payments = () => {
             // Check if advances/payouts changed
             const originalAdvances = originalEmployee.advances || [];
             const newAdvances = editedEmployeeData.advances || [];
-            
+
             // Only include if there are actual changes and the new data is not empty
             const advancesChanged = JSON.stringify(originalAdvances) !== JSON.stringify(newAdvances);
             if (advancesChanged && newAdvances.length > 0) {
@@ -530,10 +539,10 @@ const Payments = () => {
             // console.log('📝 Change tracking ID:', response.data?.changeTrackingId);
 
             return response;
-            
+
         } catch (error) {
             console.error('❌ Error updating payment data:', error);
-            
+
             // Handle different types of API errors
             if (error.response) {
                 // API returned an error response
@@ -550,14 +559,14 @@ const Payments = () => {
     const refreshEmployeeData = async () => {
         try {
             setLoading(true);
-            
+
             const response = await api.get(
                 `/api/employee/allemployees?month=${selectedMonth}&year=${selectedYear}&siteID=${siteID}`
             );
 
             if (response.success) {
                 // console.log('🔄 Refreshing employee data after update...');
-                
+
                 // Transform API data to match the component's expected format
                 const transformedData = response.data.map((emp, index) => {
                     const paymentDetails = calculatePaymentDetails(
@@ -595,7 +604,7 @@ const Payments = () => {
                         year: emp.year,
                         rawAttendance: emp.attendance
                     };
-                });                setEmployeeData(transformedData);
+                }); setEmployeeData(transformedData);
                 // console.log('✅ Employee data refreshed successfully');
             } else {
                 throw new Error('Failed to refresh employee data');
@@ -684,425 +693,427 @@ const Payments = () => {
                     </div>
                 </div>
             </div>            <div className={styles.controlsMini}>
-                <div className={styles.monthSelectorMini} ref={calendarRef}>
-                    <button
-                        type="button"
-                        className={styles.monthButtonMini}
-                        onClick={() => setShowCalendar(!showCalendar)}
-                        disabled={loading}
-                    >
-                        <FaCalendarAlt className={styles.calendarIconMini} />
-                        <span>{formatSelectedMonthDisplay()}</span>
-                        <svg
-                            className={`${styles.chevronMini} ${showCalendar ? styles.chevronUp : ''}`}
-                            width="12"
-                            height="12"
-                            viewBox="0 0 16 16"
-                            fill="none"
+                    <div className={styles.monthSelectorMini} ref={calendarRef}>
+                        <button
+                            type="button"
+                            className={styles.monthButtonMini}
+                            onClick={() => setShowCalendar(!showCalendar)}
+                            disabled={loading}
                         >
-                            <path
-                                d="M4 6L8 10L12 6"
-                                stroke="currentColor"
-                                strokeWidth="2"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                            />
-                        </svg>
-                    </button>
-                    {showCalendar && (
-                        <>
-                            <div className={styles.calendarBackdrop} onClick={() => setShowCalendar(false)}></div>
-                            <div className={styles.calendarDropdown}>
-                                <div className={styles.calendarHeader}>
-                                    <button
-                                        type="button"
-                                        className={styles.yearNavButton}
-                                        onClick={handlePreviousYear}
-                                    >
-                                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                                            <path
-                                                d="M10 12L6 8L10 4"
-                                                stroke="currentColor"
-                                                strokeWidth="2"
-                                                strokeLinecap="round"
-                                                strokeLinejoin="round"
-                                            />
-                                        </svg>
-                                    </button>
-                                    <span className={styles.yearDisplay}>{calendarYear}</span>
-                                    <button
-                                        type="button"
-                                        className={styles.yearNavButton}
-                                        onClick={handleNextYear}
-                                        disabled={calendarYear >= new Date().getFullYear()}
-                                    >
-                                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                                            <path
-                                                d="M6 4L10 8L6 12"
-                                                stroke="currentColor"
-                                                strokeWidth="2"
-                                                strokeLinecap="round"
-                                                strokeLinejoin="round"
-                                            />
-                                        </svg>
-                                    </button>
-                                </div>
-                                <div className={styles.monthGrid}>
-                                    {monthNames.map((monthName, index) => {
-                                        const disabled = isMonthDisabled(calendarYear, index);
-                                        const isSelected = selectedMonth === (index + 1) && selectedYear === calendarYear;
-                                        const isCurrent = calendarYear === new Date().getFullYear() && index === new Date().getMonth();
-
-                                        return (
-                                            <button
-                                                key={index}
-                                                type="button"
-                                                className={`${styles.monthCell} ${disabled ? styles.monthDisabled : ''
-                                                    } ${isSelected ? styles.monthSelected : ''
-                                                    } ${isCurrent ? styles.monthCurrent : ''
-                                                    }`}
-                                                onClick={() => {
-                                                    setSelectedMonth(index + 1);
-                                                    setSelectedYear(calendarYear);
-                                                    setShowCalendar(false);
-                                                }}
-                                                disabled={disabled}
-                                            >
-                                                {monthName.slice(0, 3)}
-                                            </button>
-                                        );
-                                    })}
-                                </div>
-                            </div>
-                        </>
-                    )}
-                    {loading && <span className={styles.loadingTextMini}>Loading...</span>}
-                </div>
-                <div className={styles.searchBoxMini}>
-                    <input
-                        type="text"
-                        placeholder="Search employees..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className={styles.searchInputMini}
-                    />
-                    <span className={styles.searchIconMini}>🔍</span>
-                </div>
-                <div className={styles.resultCountMini}>
-                    {sortedEmployees.length}/{employeeData.length}
-                </div>
-            </div>
-
-            <div className={styles.tableContainer}>
-                <table className={styles.paymentsTable}>
-                    <thead>
-                        <tr>
-                            <th onClick={() => handleSort('id')} className={styles.sortable}>Employee ID {getSortIcon('id')}</th>
-                            <th onClick={() => handleSort('name')} className={styles.sortable}>Name {getSortIcon('name')}</th>
-                            <th onClick={() => handleSort('dailyRate')} className={styles.sortable}>Daily Rate {getSortIcon('dailyRate')}</th>
-                            <th onClick={() => handleSort('attendance')} className={styles.sortable}>Attendance {getSortIcon('attendance')}</th>
-                            <th onClick={() => handleSort('grossPayment')} className={styles.sortable}>Gross Payment {getSortIcon('grossPayment')}</th>
-                            <th onClick={() => handleSort('totalAdvances')} className={styles.sortable}>Advances {getSortIcon('totalAdvances')}</th>
-                            <th onClick={() => handleSort('totalAdditionalPayments')} className={styles.sortable}>Bonus {getSortIcon('totalAdditionalPayments')}</th>
-                            <th onClick={() => handleSort('previousBalance')} className={styles.sortable}>Previous Balance {getSortIcon('previousBalance')}</th>
-                            <th onClick={() => handleSort('netBalance')} className={styles.sortable}>Net Balance {getSortIcon('netBalance')}</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {sortedEmployees.map((employee) => (
-                        <React.Fragment key={employee.id}>
-                            <tr className={styles.employeeRow}>
-                                <td className={styles.employeeId}>{employee.id}</td>
-                                <td className={styles.employeeName}>{employee.name}</td>
-                                <td>
-                                    {editMode === employee.id ? (
-                                        <input
-                                            type="number"
-                                            value={editedData.dailyRate}
-                                            onChange={(e) => handleFieldChange('dailyRate', e.target.value)}
-                                            className={styles.editInput}
-                                            min="0"
-                                            step="10"
-                                        />
-                                    ) : (
-                                        formatCurrency(employee.dailyRate)
-                                    )}
-                                </td>
-                                <td>
-                                    <span className={styles.attendanceBadge}>
-                                        {employee.attendance.toFixed(1)} days
-                                    </span>
-                                </td>
-                                <td className={styles.positiveAmount}>
-                                    {formatCurrency(editMode === employee.id ? editedData.grossPayment : employee.grossPayment)}
-                                </td>
-                                <td className={styles.advanceCell}>
-                                    <div className={styles.cellWithDetails}>
-                                        <span className={styles.negativeAmount}>
-                                            {formatCurrency(editMode === employee.id ? editedData.totalAdvances : employee.totalAdvances)}
-                                        </span>
+                            <FaCalendarAlt className={styles.calendarIconMini} />
+                            <span>{formatSelectedMonthDisplay()}</span>
+                            <svg
+                                className={`${styles.chevronMini} ${showCalendar ? styles.chevronUp : ''}`}
+                                width="12"
+                                height="12"
+                                viewBox="0 0 16 16"
+                                fill="none"
+                            >
+                                <path
+                                    d="M4 6L8 10L12 6"
+                                    stroke="currentColor"
+                                    strokeWidth="2"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                />
+                            </svg>
+                        </button>
+                        {showCalendar && (
+                            <>
+                                <div className={styles.calendarBackdrop} onClick={() => setShowCalendar(false)}></div>
+                                <div className={styles.calendarDropdown}>
+                                    <div className={styles.calendarHeader}>
                                         <button
-                                            className={`${styles.detailBtn} ${expandedRows[`${employee.id}_advances`] ? styles.active : ''
-                                                }`}
-                                            onClick={() => toggleRowExpansion(employee.id, 'advances')}
-                                            title="View Advances Details"
+                                            type="button"
+                                            className={styles.yearNavButton}
+                                            onClick={handlePreviousYear}
                                         >
-                                            📋 {editMode === employee.id ? editedData.advances.length : employee.advances.length}
+                                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                                <path
+                                                    d="M10 12L6 8L10 4"
+                                                    stroke="currentColor"
+                                                    strokeWidth="2"
+                                                    strokeLinecap="round"
+                                                    strokeLinejoin="round"
+                                                />
+                                            </svg>
+                                        </button>
+                                        <span className={styles.yearDisplay}>{calendarYear}</span>
+                                        <button
+                                            type="button"
+                                            className={styles.yearNavButton}
+                                            onClick={handleNextYear}
+                                            disabled={calendarYear >= new Date().getFullYear()}
+                                        >
+                                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                                <path
+                                                    d="M6 4L10 8L6 12"
+                                                    stroke="currentColor"
+                                                    strokeWidth="2"
+                                                    strokeLinecap="round"
+                                                    strokeLinejoin="round"
+                                                />
+                                            </svg>
                                         </button>
                                     </div>
-                                </td>
-                                <td className={styles.deductionCell}>
-                                    <div className={styles.cellWithDetails}>
-                                        <span className={styles.negativeAmount}>
-                                            {formatCurrency(editMode === employee.id ? editedData.totalAdditionalPayments : employee.totalAdditionalPayments)}
-                                        </span>
-                                        <button
-                                            className={`${styles.detailBtn} ${expandedRows[`${employee.id}_deductions`] ? styles.active : ''
-                                                }`}
-                                            onClick={() => toggleRowExpansion(employee.id, 'deductions')}
-                                            title="View Deductions Details"
-                                        >
-                                            📋 {editMode === employee.id ? editedData.additionalPayments.length : employee.additionalPayments.length}
-                                        </button>
+                                    <div className={styles.monthGrid}>
+                                        {monthNames.map((monthName, index) => {
+                                            const disabled = isMonthDisabled(calendarYear, index);
+                                            const isSelected = selectedMonth === (index + 1) && selectedYear === calendarYear;
+                                            const isCurrent = calendarYear === new Date().getFullYear() && index === new Date().getMonth();
+
+                                            return (
+                                                <button
+                                                    key={index}
+                                                    type="button"
+                                                    className={`${styles.monthCell} ${disabled ? styles.monthDisabled : ''
+                                                        } ${isSelected ? styles.monthSelected : ''
+                                                        } ${isCurrent ? styles.monthCurrent : ''
+                                                        }`}
+                                                    onClick={() => {
+                                                        setSelectedMonth(index + 1);
+                                                        setSelectedYear(calendarYear);
+                                                        setShowCalendar(false);
+                                                    }}
+                                                    disabled={disabled}
+                                                >
+                                                    {monthName.slice(0, 3)}
+                                                </button>
+                                            );
+                                        })}
                                     </div>
-                                </td>
-                                <td className={styles.neutralAmount}>{formatCurrency(employee.previousBalance)}</td>
-                                <td className={styles.netBalance}>
-                                    {formatCurrency(editMode === employee.id ? editedData.netBalance : employee.netBalance)}
-                                </td>
-                                <td className={styles.actions}>
-                                    {editMode === employee.id ? (
-                                        <div className={styles.editActions}>
-                                            <button onClick={confirmSave} className={styles.saveBtn} title="Save Changes">
-                                                💾
-                                            </button>
-                                            <button onClick={cancelEdit} className={styles.cancelBtn} title="Cancel Edit">
-                                                ❌
-                                            </button>
-                                        </div>
-                                    ) : (
-                                        <button
-                                            onClick={() => startEdit(employee)}
-                                            className={styles.editBtn}
-                                            disabled={editMode !== null}
-                                            title="Edit Employee"
-                                        >
-                                            ✏️
-                                        </button>
-                                    )}
-                                </td>
+                                </div>
+                            </>
+                        )}
+                        {loading && <span className={styles.loadingTextMini}>Loading...</span>}
+                    </div>
+                    <div className={styles.searchBoxMini}>
+                        <input
+                            type="text"
+                            placeholder="Search employees..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className={styles.searchInputMini}
+                        />
+                        <span className={styles.searchIconMini}>🔍</span>
+                    </div>
+                    <div className={styles.resultCountMini}>
+                        {sortedEmployees.length}/{employeeData.length}
+                    </div>
+                </div>
+
+                <div className={styles.tableContainer}>
+                    <table className={styles.paymentsTable}>
+                        <thead>
+                            <tr>
+                                <th onClick={() => handleSort('id')} className={styles.sortable}>Employee ID {getSortIcon('id')}</th>
+                                <th onClick={() => handleSort('name')} className={styles.sortable}>Name {getSortIcon('name')}</th>
+                                <th onClick={() => handleSort('dailyRate')} className={styles.sortable}>Daily Rate {getSortIcon('dailyRate')}</th>
+                                <th onClick={() => handleSort('attendance')} className={styles.sortable}>Attendance {getSortIcon('attendance')}</th>
+                                <th onClick={() => handleSort('grossPayment')} className={styles.sortable}>Gross Payment {getSortIcon('grossPayment')}</th>
+                                <th onClick={() => handleSort('totalAdvances')} className={styles.sortable}>Advances {getSortIcon('totalAdvances')}</th>
+                                <th onClick={() => handleSort('totalAdditionalPayments')} className={styles.sortable}>Bonus {getSortIcon('totalAdditionalPayments')}</th>
+                                <th onClick={() => handleSort('previousBalance')} className={styles.sortable}>Previous Balance {getSortIcon('previousBalance')}</th>
+                                <th onClick={() => handleSort('netBalance')} className={styles.sortable}>Net Balance {getSortIcon('netBalance')}</th>
+                                <th>Actions</th>
                             </tr>
-                            {expandedRows[`${employee.id}_advances`] && (
-                                <tr className={styles.expandedRow}><td colSpan="10">
-                                    <div className={styles.expandedContent}>
-                                        <div className={styles.expandedHeader}>
-                                            <h4 className={styles.expandedTitle}>💰 Advances Details for {employee.name}</h4>
-                                            {editMode === employee.id && (
-                                                <button onClick={addAdvance} className={styles.addBtn} title="Add Advance">
-                                                    ➕ Add Advance
+                        </thead>
+                        <tbody>
+                            {sortedEmployees.map((employee) => (
+                                <React.Fragment key={employee.id}>
+                                    <tr className={styles.employeeRow}>
+                                        <td className={styles.employeeId}>{employee.id}</td>
+                                        <td className={styles.employeeName}>{employee.name}</td>
+                                        <td>
+                                            {editMode === employee.id ? (
+                                                <input
+                                                    type="number"
+                                                    value={editedData.dailyRate}
+                                                    onChange={(e) => handleFieldChange('dailyRate', e.target.value)}
+                                                    className={styles.editInput}
+                                                    min="0"
+                                                    step="10"
+                                                />
+                                            ) : (
+                                                formatCurrency(employee.dailyRate)
+                                            )}
+                                        </td>
+                                        <td>
+                                            <span className={styles.attendanceBadge}>
+                                                {employee.attendance.toFixed(1)} days
+                                            </span>
+                                        </td>
+                                        <td className={styles.positiveAmount}>
+                                            {formatCurrency(editMode === employee.id ? editedData.grossPayment : employee.grossPayment)}
+                                        </td>
+                                        <td className={styles.advanceCell}>
+                                            <div className={styles.cellWithDetails}>
+                                                <span className={styles.negativeAmount}>
+                                                    {formatCurrency(editMode === employee.id ? editedData.totalAdvances : employee.totalAdvances)}
+                                                </span>
+                                                <button
+                                                    className={`${styles.detailBtn} ${expandedRows[`${employee.id}_advances`] ? styles.active : ''
+                                                        }`}
+                                                    onClick={() => toggleRowExpansion(employee.id, 'advances')}
+                                                    title="View Advances Details"
+                                                >
+                                                    📋 {editMode === employee.id ? editedData.advances.length : employee.advances.length}
+                                                </button>
+                                            </div>
+                                        </td>
+                                        <td className={styles.deductionCell}>
+                                            <div className={styles.cellWithDetails}>
+                                                <span className={styles.negativeAmount}>
+                                                    {formatCurrency(editMode === employee.id ? editedData.totalAdditionalPayments : employee.totalAdditionalPayments)}
+                                                </span>
+                                                <button
+                                                    className={`${styles.detailBtn} ${expandedRows[`${employee.id}_deductions`] ? styles.active : ''
+                                                        }`}
+                                                    onClick={() => toggleRowExpansion(employee.id, 'deductions')}
+                                                    title="View Deductions Details"
+                                                >
+                                                    📋 {editMode === employee.id ? editedData.additionalPayments.length : employee.additionalPayments.length}
+                                                </button>
+                                            </div>
+                                        </td>
+                                        <td className={styles.neutralAmount}>{formatCurrency(employee.previousBalance)}</td>
+                                        <td className={styles.netBalance}>
+                                            {formatCurrency(editMode === employee.id ? editedData.netBalance : employee.netBalance)}
+                                        </td>
+                                        <td className={styles.actions}>
+                                            {editMode === employee.id ? (
+                                                <div className={styles.editActions}>
+                                                    <button onClick={confirmSave} className={styles.saveBtn} title="Save Changes">
+                                                        💾
+                                                    </button>
+                                                    <button onClick={cancelEdit} className={styles.cancelBtn} title="Cancel Edit">
+                                                        ❌
+                                                    </button>
+                                                </div>
+                                            ) : (
+                                                <button
+                                                    onClick={() => startEdit(employee)}
+                                                    className={styles.editBtn}
+                                                    disabled={editMode !== null}
+                                                    title="Edit Employee"
+                                                >
+                                                    ✏️
                                                 </button>
                                             )}
-                                        </div>
-                                        <div className={styles.detailsGrid}>
-                                            {(editMode === employee.id ? editedData.advances : employee.advances).map((advance, index) => (
-                                                <div key={index} className={styles.detailItem}>
-                                                    {editMode === employee.id ? (
-                                                        <div className={styles.editDetailItem}>
-                                                            <div className={styles.editDetailHeader}>
-                                                                <input
-                                                                    type="number"
-                                                                    value={advance.value}
-                                                                    onChange={(e) => updateAdvance(index, 'value', e.target.value)}
-                                                                    className={styles.editDetailInput}
-                                                                    placeholder="Amount"
-                                                                    min="0"
-                                                                />
-                                                                <input
-                                                                    type="date"
-                                                                    value={advance.date}
-                                                                    onChange={(e) => updateAdvance(index, 'date', e.target.value)}
-                                                                    className={styles.editDetailDate}
-                                                                />
-                                                                <button
-                                                                    onClick={() => removeAdvance(index)}
-                                                                    className={styles.removeBtn}
-                                                                    title="Remove Advance"
-                                                                >
-                                                                    🗑️
-                                                                </button>
-                                                            </div>
-                                                            <input
-                                                                type="text"
-                                                                value={advance.remark}
-                                                                onChange={(e) => updateAdvance(index, 'remark', e.target.value)}
-                                                                className={styles.editDetailRemark}
-                                                                placeholder="Remark"
-                                                            />
-                                                        </div>
-                                                    ) : (
-                                                        <>
-                                                            <div className={styles.detailHeader}>
-                                                                <span className={styles.detailAmount}>-{formatCurrency(advance.value)}</span>
-                                                                <span className={styles.detailDate}>{advance.date}</span>
-                                                            </div>
-                                                            <div className={styles.detailRemark}>{advance.remark}</div>
-                                                        </>
+                                        </td>
+                                    </tr>
+                                    {expandedRows[`${employee.id}_advances`] && (
+                                        <tr className={styles.expandedRow}><td colSpan="10">
+                                            <div className={styles.expandedContent}>
+                                                <div className={styles.expandedHeader}>
+                                                    <h4 className={styles.expandedTitle}>💰 Advances Details for {employee.name}</h4>
+                                                    {editMode === employee.id && (
+                                                        <button onClick={addAdvance} className={styles.addBtn} title="Add Advance">
+                                                            ➕ Add Advance
+                                                        </button>
                                                     )}
                                                 </div>
-                                            ))}
-                                        </div>
-                                        <div className={styles.detailSummary}>
-                                            <strong>Total Advances: {formatCurrency(editMode === employee.id ? editedData.totalAdvances : employee.totalAdvances)}</strong>                        </div>
-                                    </div>
-                                </td>
-                                </tr>
-                            )}                
-                            {expandedRows[`${employee.id}_deductions`] && (
-                                <tr className={styles.expandedRow}><td colSpan="10">
-                                    <div className={styles.expandedContent}>                                        <div className={styles.expandedHeader}>
-                                            <h4 className={styles.expandedTitle}>📋 Additional Wages Details for {employee.name}</h4>
-                                            {editMode === employee.id && (
-                                                <button onClick={addDeduction} className={styles.addBtn} title="Add Additional Wage">
-                                                    ➕ Add Additional Wage
-                                                </button>
-                                            )}
-                                        </div>
-                                        <div className={styles.detailsGrid}>
-                                            {(editMode === employee.id ? editedData.additionalPayments : employee.additionalPayments).map((payment, index) => (
-                                                <div key={index} className={styles.detailItem}>
-                                                    {editMode === employee.id ? (
-                                                        <div className={styles.editDetailItem}>
-                                                            <div className={styles.editDetailHeader}>
-                                                                <input
-                                                                    type="number"
-                                                                    value={payment.value}
-                                                                    onChange={(e) => updateDeduction(index, 'value', e.target.value)}
-                                                                    className={styles.editDetailInput}
-                                                                    placeholder="Amount"
-                                                                    min="0"
-                                                                />
-                                                                <input
-                                                                    type="date"
-                                                                    value={payment.date}
-                                                                    onChange={(e) => updateDeduction(index, 'date', e.target.value)}
-                                                                    className={styles.editDetailDate}
-                                                                />                                                                <button
-                                                                    onClick={() => removeDeduction(index)}
-                                                                    className={styles.removeBtn}
-                                                                    title="Remove Additional Wage"
-                                                                >
-                                                                    🗑️
-                                                                </button>
-                                                            </div>
-                                                            <input
-                                                                type="text"
-                                                                value={payment.remark}
-                                                                onChange={(e) => updateDeduction(index, 'remark', e.target.value)}
-                                                                className={styles.editDetailRemark}
-                                                                placeholder="Remark"
-                                                            />
+                                                <div className={styles.detailsGrid}>
+                                                    {(editMode === employee.id ? editedData.advances : employee.advances).map((advance, index) => (
+                                                        <div key={index} className={styles.detailItem}>
+                                                            {editMode === employee.id ? (
+                                                                <div className={styles.editDetailItem}>
+                                                                    <div className={styles.editDetailHeader}>
+                                                                        <input
+                                                                            type="number"
+                                                                            value={advance.value}
+                                                                            onChange={(e) => updateAdvance(index, 'value', e.target.value)}
+                                                                            className={styles.editDetailInput}
+                                                                            placeholder="Amount"
+                                                                            min="0"
+                                                                        />
+                                                                        <input
+                                                                            type="date"
+                                                                            value={advance.date}
+                                                                            onChange={(e) => updateAdvance(index, 'date', e.target.value)}
+                                                                            className={styles.editDetailDate}
+                                                                        />
+                                                                        <button
+                                                                            onClick={() => removeAdvance(index)}
+                                                                            className={styles.removeBtn}
+                                                                            title="Remove Advance"
+                                                                        >
+                                                                            🗑️
+                                                                        </button>
+                                                                    </div>
+                                                                    <input
+                                                                        type="text"
+                                                                        value={advance.remark}
+                                                                        onChange={(e) => updateAdvance(index, 'remark', e.target.value)}
+                                                                        className={styles.editDetailRemark}
+                                                                        placeholder="Remark"
+                                                                    />
+                                                                </div>
+                                                            ) : (
+                                                                <>
+                                                                    <div className={styles.detailHeader}>
+                                                                        <span className={styles.detailAmount}>-{formatCurrency(advance.value)}</span>
+                                                                        <span className={styles.detailDate}>{advance.date}</span>
+                                                                    </div>
+                                                                    <div className={styles.detailRemark}>{advance.remark}</div>
+                                                                </>
+                                                            )}
                                                         </div>
-                                                    ) : (
-                                                        <>                                                            <div className={styles.detailHeader}>
-                                                                <span className={styles.detailAmount}>+{formatCurrency(payment.value)}</span>
-                                                                <span className={styles.detailDate}>{payment.date}</span>
-                                                            </div>
-                                                            <div className={styles.detailRemark}>{payment.remark}</div>
-                                                        </>
-                                                    )}
+                                                    ))}
                                                 </div>
-                                            ))}
-                                        </div>                                        <div className={styles.detailSummary}>
-                                            <strong>Total Additional Wages: {formatCurrency(editMode === employee.id ? editedData.totalAdditionalPayments : employee.totalAdditionalPayments)}</strong>
-                                        </div>
-                                    </div>
-                                </td>
-                                </tr>
-                            )}
-                        </React.Fragment>))}
-                    </tbody>
-                </table>
-            </div>            {/* Confirmation Dialog */}
-            {showConfirmDialog && (
-                <div className={styles.dialogOverlay}>
-                    <div className={styles.confirmDialog}>
-                        <div className={styles.dialogHeader}>
-                            <h3>🔍 Confirm Changes</h3>
-                            <p>Review changes for <strong>{editedData.name}</strong>:</p>
-                        </div>
-                        
-                        <div className={styles.dialogContent}>
-                            {Object.entries(pendingChanges).map(([field, change]) => (
-                                <div key={field} className={styles.changeItem}>
-                                    {field === 'dailyRate' && (
-                                        <span>💰 Daily Rate: ₹{change.from} → ₹{change.to}</span>
+                                                <div className={styles.detailSummary}>
+                                                    <strong>Total Advances: {formatCurrency(editMode === employee.id ? editedData.totalAdvances : employee.totalAdvances)}</strong>                        </div>
+                                            </div>
+                                        </td>
+                                        </tr>
                                     )}
-                                    {field === 'advances' && (
-                                        <span>💳 Advances: {change.from} items (₹{change.totalFrom}) → {change.to} items (₹{change.totalTo})</span>
+                                    {expandedRows[`${employee.id}_deductions`] && (
+                                        <tr className={styles.expandedRow}><td colSpan="10">
+                                            <div className={styles.expandedContent}>                                        
+                                            <div className={styles.expandedHeader}>
+                                                <h4 className={styles.expandedTitle}>📋 Additional Wages Details for {employee.name}</h4>
+                                                {editMode === employee.id && (
+                                                    <button onClick={addDeduction} className={styles.addBtn} title="Add Additional Wage">
+                                                        ➕ Add Additional Wage
+                                                    </button>
+                                                )}
+                                            </div>
+                                                <div className={styles.detailsGrid}>
+                                                    {(editMode === employee.id ? editedData.additionalPayments : employee.additionalPayments).map((payment, index) => (
+                                                        <div key={index} className={styles.detailItem}>
+                                                            {editMode === employee.id ? (
+                                                                <div className={styles.editDetailItem}>
+                                                                    <div className={styles.editDetailHeader}>
+                                                                        <input
+                                                                            type="number"
+                                                                            value={payment.value}
+                                                                            onChange={(e) => updateDeduction(index, 'value', e.target.value)}
+                                                                            className={styles.editDetailInput}
+                                                                            placeholder="Amount"
+                                                                            min="0"
+                                                                        />
+                                                                        <input
+                                                                            type="date"
+                                                                            value={payment.date}
+                                                                            onChange={(e) => updateDeduction(index, 'date', e.target.value)}
+                                                                            className={styles.editDetailDate}
+                                                                        />                                                                <button
+                                                                            onClick={() => removeDeduction(index)}
+                                                                            className={styles.removeBtn}
+                                                                            title="Remove Additional Wage"
+                                                                        >
+                                                                            🗑️
+                                                                        </button>
+                                                                    </div>
+                                                                    <input
+                                                                        type="text"
+                                                                        value={payment.remark}
+                                                                        onChange={(e) => updateDeduction(index, 'remark', e.target.value)}
+                                                                        className={styles.editDetailRemark}
+                                                                        placeholder="Remark"
+                                                                    />
+                                                                </div>
+                                                            ) : (
+                                                                <>                                                            
+                                                                <div className={styles.detailHeader}>
+                                                                    <span className={styles.detailAmount}>+{formatCurrency(payment.value)}</span>
+                                                                    <span className={styles.detailDate}>{payment.date}</span>
+                                                                </div>
+                                                                    <div className={styles.detailRemark}>{payment.remark}</div>
+                                                                </>
+                                                            )}
+                                                        </div>
+                                                    ))}
+                                                </div>                                        <div className={styles.detailSummary}>
+                                                    <strong>Total Additional Wages: {formatCurrency(editMode === employee.id ? editedData.totalAdditionalPayments : employee.totalAdditionalPayments)}</strong>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        </tr>
                                     )}
-                                    {field === 'deductions' && (
-                                        <span>📋 Additional Wages: {change.from} items (₹{change.totalFrom}) → {change.to} items (₹{change.totalTo})</span>
-                                    )}
-                                </div>
-                            ))}
-                        </div>
+                                </React.Fragment>))}
+                        </tbody>
+                    </table>
+                </div>            {/* Confirmation Dialog */}
+                {showConfirmDialog && (
+                    <div className={styles.dialogOverlay}>
+                        <div className={styles.confirmDialog}>
+                            <div className={styles.dialogHeader}>
+                                <h3>🔍 Confirm Changes</h3>
+                                <p>Review changes for <strong>{editedData.name}</strong>:</p>
+                            </div>
 
-                        {/* Remark Section */}
-                        <div className={styles.remarkSection}>
-                            <label htmlFor="remarkInput" className={styles.remarkLabel}>
-                                💬 Reason for Changes (Required):
-                            </label>
-                            <textarea
-                                id="remarkInput"
-                                value={remarkText}
-                                onChange={(e) => setRemarkText(e.target.value)}
-                                placeholder="Please provide a reason for these changes..."
-                                className={styles.remarkTextarea}
-                                rows={3}
-                                maxLength={500}
-                                required
-                            />
-                            <div className={styles.remarkCounter}>
-                                {remarkText.length}/500 characters
+                            <div className={styles.dialogContent}>
+                                {Object.entries(pendingChanges).map(([field, change]) => (
+                                    <div key={field} className={styles.changeItem}>
+                                        {field === 'dailyRate' && (
+                                            <span>💰 Daily Rate: ₹{change.from} → ₹{change.to}</span>
+                                        )}
+                                        {field === 'advances' && (
+                                            <span>💳 Advances: {change.from} items (₹{change.totalFrom}) → {change.to} items (₹{change.totalTo})</span>
+                                        )}
+                                        {field === 'deductions' && (
+                                            <span>📋 Additional Wages: {change.from} items (₹{change.totalFrom}) → {change.to} items (₹{change.totalTo})</span>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+
+                            {/* Remark Section */}
+                            <div className={styles.remarkSection}>
+                                <label htmlFor="remarkInput" className={styles.remarkLabel}>
+                                    💬 Reason for Changes (Required):
+                                </label>
+                                <textarea
+                                    id="remarkInput"
+                                    value={remarkText}
+                                    onChange={(e) => setRemarkText(e.target.value)}
+                                    placeholder="Please provide a reason for these changes..."
+                                    className={styles.remarkTextarea}
+                                    rows={3}
+                                    maxLength={500}
+                                    required
+                                />
+                                <div className={styles.remarkCounter}>
+                                    {remarkText.length}/500 characters
+                                </div>
+                            </div>
+
+                            <div className={styles.dialogActions}>
+                                <button
+                                    onClick={applySave}
+                                    className={styles.confirmBtn}
+                                    disabled={isUpdating || !remarkText.trim()}
+                                >
+                                    {isUpdating ? '⏳ Updating...' : '✅ Save Changes'}
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        setShowConfirmDialog(false);
+                                        setRemarkText(''); // Clear remark when canceling
+                                    }}
+                                    className={styles.cancelDialogBtn}
+                                    disabled={isUpdating}
+                                >
+                                    ❌ Cancel
+                                </button>
                             </div>
                         </div>
+                    </div>
+                )}
 
-                        <div className={styles.dialogActions}>
-                            <button 
-                                onClick={applySave} 
-                                className={styles.confirmBtn}
-                                disabled={isUpdating || !remarkText.trim()}
-                            >
-                                {isUpdating ? '⏳ Updating...' : '✅ Save Changes'}
-                            </button>
-                            <button 
-                                onClick={() => {
-                                    setShowConfirmDialog(false);
-                                    setRemarkText(''); // Clear remark when canceling
-                                }} 
-                                className={styles.cancelDialogBtn}
-                                disabled={isUpdating}
-                            >
-                                ❌ Cancel
-                            </button>
+                {sortedEmployees.length === 0 && (
+                    <div className={styles.noResults}>
+                        <div className={styles.noResultsContent}>
+                            <span className={styles.noResultsIcon}>🔍</span>
+                            <h3>No employees found</h3>
+                            <p>Try adjusting your search criteria</p>
                         </div>
                     </div>
-                </div>
-            )}
+                )}
+            </div>
+        </div>
 
-            {sortedEmployees.length === 0 && (
-                <div className={styles.noResults}>
-                    <div className={styles.noResultsContent}>
-                        <span className={styles.noResultsIcon}>🔍</span>
-                        <h3>No employees found</h3>
-                        <p>Try adjusting your search criteria</p>
-                    </div>
-                </div>
-            )}
-        </div>
-        </div>
-        
     );
 };
 
