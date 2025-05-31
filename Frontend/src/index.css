@@ -1,0 +1,239 @@
+:root {
+  /* ========================================
+     BACKGROUND COLORS
+     ======================================== */
+  --color-bg-body: #1a1b23;           /* Primary app background - soft dark blue-gray */
+  --color-bg-primary: #232530;        /* Main content areas */
+  --color-bg-secondary: #2a2d3a;      /* Cards, panels, modals */
+  --color-bg-tertiary: #353a4a;       /* Interactive elements, selected states */
+  --color-bg-quaternary: #434862;     /* Elevated elements */
+  
+  /* Interactive Background States */
+  --color-bg-hover: #2d3240;          /* Subtle hover states */
+  --color-bg-active: #3a3f52;         /* Active/pressed states */
+  --color-bg-disabled: #1f2128;       /* Disabled elements */
+  --color-bg-input: #272935;          /* Form inputs, text areas */
+  --color-bg-input-focus: #2f3242;    /* Focused form inputs */
+
+  /* ========================================
+     TEXT COLORS
+     ======================================== */
+  --color-text-primary: #e8eaed;      /* Primary text - softer high contrast */
+  --color-text-secondary: #b8bcc8;    /* Secondary text - labels, captions */
+  --color-text-tertiary: #8a8e9b;     /* Tertiary text - hints, placeholders */
+  --color-text-quaternary: #5f6368;   /* Disabled text */
+  --color-text-inverse: #1a1b23;      /* Text on light backgrounds */
+  --color-text-link: #8ab4f8;         /* Links and interactive text */
+  --color-text-link-hover: #a8c7fa;   /* Hovered links */
+
+  /* ========================================
+     ACCENT & BRAND COLORS
+     ======================================== */
+  --color-primary: #7aa3f0;           /* Primary brand color - softer blue */
+  --color-primary-hover: #5e8ce8;     /* Primary hover state */
+  --color-primary-active: #4d7dd4;    /* Primary active/pressed */
+  --color-primary-light: rgba(122, 163, 240, 0.15);  /* Light overlay */
+  --color-primary-subtle: rgba(122, 163, 240, 0.08); /* Subtle background */
+
+  /* ========================================
+     SEMANTIC COLORS
+     ======================================== */
+  /* Success States */
+  --color-success: #6ACC6D;           /* Success primary */
+  --color-success-hover: #5CB85C;     /* Success hover */
+  --color-success-light: rgba(106, 204, 109, 0.15);  /* Success background */
+  --color-success-subtle: rgba(106, 204, 109, 0.08); /* Subtle success bg */
+  
+  /* Warning States */
+  --color-warning: #FFD54F;           /* Warning primary */
+  --color-warning-hover: #FFC107;     /* Warning hover */
+  --color-warning-light: rgba(255, 213, 79, 0.15);   /* Warning background */
+  --color-warning-subtle: rgba(255, 213, 79, 0.08);  /* Subtle warning bg */
+  
+  /* Error/Danger States */
+  --color-error: #EF5350;             /* Error primary */
+  --color-error-hover: #E53935;       /* Error hover */
+  --color-error-light: rgba(239, 83, 80, 0.15);      /* Error background */
+  --color-error-subtle: rgba(239, 83, 80, 0.08);     /* Subtle error bg */
+  
+  /* Info States */
+  --color-info: #42A5F5;              /* Info primary */
+  --color-info-hover: #2196F3;        /* Info hover */
+  --color-info-light: rgba(66, 165, 245, 0.15);      /* Info background */
+  --color-info-subtle: rgba(66, 165, 245, 0.08);     /* Subtle info bg */
+
+  /* ========================================
+     BORDER COLORS
+     ======================================== */
+  --color-border-light: #343846;      /* Subtle dividers */
+  --color-border-medium: #434862;     /* Standard borders */
+  --color-border-strong: #5a607a;     /* Emphasized borders */
+  --color-border-focus: #8ab4f8;      /* Focus rings */
+  --color-border-error: #ef5350;      /* Error borders */
+  --color-border-success: #6acc6d;    /* Success borders */
+
+  /* ========================================
+     ICON COLORS
+     ======================================== */
+  --color-icon-primary: #d0d4e0;      /* Primary icons */
+  --color-icon-secondary: #b8bcc8;    /* Secondary icons */
+  --color-icon-tertiary: #8a8e9b;     /* Subtle icons */
+  --color-icon-active: #8ab4f8;       /* Active/selected icons */
+  --color-icon-disabled: #5f6368;     /* Disabled icons */
+
+  /* ========================================
+     TYPOGRAPHY
+     ======================================== */
+  /* Font Families */
+  --font-family-primary: 'Inter', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
+  --font-family-mono: 'Fira Code', 'Cascadia Code', 'Consolas', 'Monaco', monospace;
+  --font-family-heading: var(--font-family-primary);
+
+  /* Font Sizes - Consistent Scale */
+  --font-size-xs: 0.75rem;            /* 12px */
+  --font-size-sm: 0.875rem;           /* 14px */
+  --font-size-base: 1rem;             /* 16px - body text */
+  --font-size-md: 1rem;               /* 16px - alias for base */
+  --font-size-lg: 1.125rem;           /* 18px */
+  --font-size-xl: 1.25rem;            /* 20px */
+  --font-size-2xl: 1.5rem;            /* 24px */
+  --font-size-3xl: 1.875rem;          /* 30px */
+  --font-size-4xl: 2.25rem;           /* 36px */
+
+  /* Font Weights */
+  --font-weight-light: 300;
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  /* Line Heights */
+  --line-height-tight: 1.25;
+  --line-height-normal: 1.5;
+  --line-height-relaxed: 1.75;
+
+  /* ========================================
+     SPACING SYSTEM
+     ======================================== */
+  --space-0: 0;
+  --space-px: 1px;
+  --space-0-5: 0.125rem;              /* 2px */
+  --space-1: 0.25rem;                 /* 4px */
+  --space-1-5: 0.375rem;              /* 6px */
+  --space-2: 0.5rem;                  /* 8px */
+  --space-2-5: 0.625rem;              /* 10px */
+  --space-3: 0.75rem;                 /* 12px */
+  --space-3-5: 0.875rem;              /* 14px */
+  --space-4: 1rem;                    /* 16px */
+  --space-5: 1.25rem;                 /* 20px */
+  --space-6: 1.5rem;                  /* 24px */
+  --space-8: 2rem;                    /* 32px */
+  --space-10: 2.5rem;                 /* 40px */
+  --space-12: 3rem;                   /* 48px */
+  --space-16: 4rem;                   /* 64px */
+
+  /* Semantic Spacing Aliases */
+  --space-xs: var(--space-2);         /* 8px */
+  --space-sm: var(--space-3);         /* 12px */
+  --space-md: var(--space-4);         /* 16px */
+  --space-lg: var(--space-6);         /* 24px */
+  --space-xl: var(--space-8);         /* 32px */
+  --space-2xl: var(--space-12);       /* 48px */
+
+  /* ========================================
+     BORDER RADIUS
+     ======================================== */
+  --border-radius-none: 0;
+  --border-radius-sm: 0.25rem;        /* 4px */
+  --border-radius-md: 0.5rem;         /* 8px */
+  --border-radius-lg: 0.75rem;        /* 12px */
+  --border-radius-xl: 1rem;           /* 16px */
+  --border-radius-2xl: 1.5rem;        /* 24px */
+  --border-radius-full: 9999px;       /* Fully rounded */
+
+  /* ========================================
+     SHADOWS
+     ======================================== */
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.5);
+  --shadow-xl: 0 20px 25px rgba(0, 0, 0, 0.6);
+  --shadow-2xl: 0 25px 50px rgba(0, 0, 0, 0.7);
+
+  /* Semantic Shadow Aliases */
+  --box-shadow-sm: var(--shadow-sm);
+  --box-shadow-md: var(--shadow-md);
+  --box-shadow-lg: var(--shadow-lg);
+  --box-shadow-card: var(--shadow-md);
+  --box-shadow-modal: var(--shadow-2xl);
+  --box-shadow-button-hover: var(--shadow-md);
+
+  /* ========================================
+     TRANSITIONS & ANIMATIONS
+     ======================================== */
+  /* Durations */
+  --transition-duration-fast: 0.1s;
+  --transition-duration-normal: 0.2s;
+  --transition-duration-slow: 0.3s;
+  --transition-duration-slower: 0.5s;
+
+  /* Timing Functions */
+  --transition-timing-linear: linear;
+  --transition-timing-ease: ease;
+  --transition-timing-ease-in: ease-in;
+  --transition-timing-ease-out: ease-out;
+  --transition-timing-ease-in-out: ease-in-out;
+
+  /* Common Transitions */
+  --transition-all: all var(--transition-duration-normal) var(--transition-timing-ease-in-out);
+  --transition-colors: color var(--transition-duration-normal) var(--transition-timing-ease-in-out),
+                      background-color var(--transition-duration-normal) var(--transition-timing-ease-in-out),
+                      border-color var(--transition-duration-normal) var(--transition-timing-ease-in-out);
+  --transition-transform: transform var(--transition-duration-normal) var(--transition-timing-ease-in-out);
+  --transition-opacity: opacity var(--transition-duration-normal) var(--transition-timing-ease-in-out);
+
+  /* ========================================
+     Z-INDEX SCALE
+     ======================================== */
+  --z-index-hide: -1;
+  --z-index-base: 0;
+  --z-index-docked: 10;
+  --z-index-dropdown: 1000;
+  --z-index-sticky: 1100;
+  --z-index-banner: 1200;
+  --z-index-overlay: 1300;
+  --z-index-modal: 1400;
+  --z-index-popover: 1500;
+  --z-index-skiplink: 1600;
+  --z-index-toast: 1700;
+  --z-index-tooltip: 1800;
+
+  /* ========================================
+     LEGACY ALIASES (for backward compatibility)
+     ======================================== */
+  --color-accent-primary: var(--color-primary);
+  --color-accent-secondary: var(--color-primary-hover);
+  --color-accent-muted: var(--color-primary-active);
+  --color-text-default: var(--color-text-primary);
+  --color-text-muted: var(--color-text-tertiary);
+  --color-border: var(--color-border-medium);
+  --color-border-dark: var(--color-border-strong);
+  --color-danger: var(--color-error);
+  --color-danger-hover: var(--color-error-hover);
+  --color-danger-light: var(--color-error-light);
+  --color-success-light: var(--color-success-light);
+  --transition-easing: var(--transition-timing-ease-in-out);
+  --box-shadow-hover: var(--shadow-lg);
+}
+
+
+html , body , #root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+}
+
+
+

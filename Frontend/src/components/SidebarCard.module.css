@@ -1,0 +1,175 @@
+.sidebarCard {
+  display: flex;
+  align-items: center;
+  padding: var(--space-sm) var(--space-md);
+  margin: var(--space-xs) 0;
+  border-radius: var(--border-radius-sm);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+  background: transparent;
+  border: 1px solid transparent;
+  min-height: 48px;
+}
+
+.sidebarCard:hover {
+  background: var(--color-bg-hover);
+  border-color: var(--color-border-light);
+  transform: translateX(4px);
+}
+
+.sidebarCard.active {
+  background: var(--color-accent-primary);
+  color: white;
+  box-shadow: var(--box-shadow-sm);
+}
+
+.sidebarCard.active:hover {
+  background: var(--color-accent-secondary);
+  transform: translateX(2px);
+}
+
+.sidebarCard.collapsed {
+  padding: var(--space-sm);
+  justify-content: center;
+  min-width: 40px;
+  box-sizing: border-box;
+  overflow-x: hidden;
+}
+
+.cardContent {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  width: 100%;
+}
+
+.iconContainer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  color: var(--color-text-default);
+  transition: all 0.2s ease;
+}
+
+.sidebarCard.active .iconContainer {
+  color: white;
+}
+
+.textContainer {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.cardTitle {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-default);
+  transition: color 0.2s ease;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sidebarCard.active .cardTitle {
+  color: white;
+  font-weight: 600;
+}
+
+.activeIndicator {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 24px;
+  background: white;
+  border-radius: 2px 0 0 2px;
+}
+
+/* Tooltip for collapsed state */
+.tooltip {
+  position: absolute;
+  left: 100%;
+  top: 50%;
+  transform: translateY(-50%);
+  background: var(--color-bg-secondary);
+  color: var(--color-text-default);
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--border-radius-sm);
+  box-shadow: var(--box-shadow-md);
+  z-index: 100;
+  font-size: var(--font-size-sm);
+  white-space: nowrap;
+  margin-left: var(--space-sm);
+  border: 1px solid var(--color-border-light);
+
+  border-radius: var(--border-radius-small);
+  font-size: 0.875rem;
+  font-weight: 500;
+  white-space: nowrap;
+  box-shadow: var(--card-shadow);
+  border: 1px solid var(--border-color);
+  z-index: 1000;
+  margin-left: var(--spacing-sm);
+  opacity: 0;
+  animation: fadeIn 0.2s ease forwards;
+}
+
+.tooltip::before {
+  content: '';
+  position: absolute;
+  right: 100%;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 0;
+  height: 0;
+  border: 6px solid transparent;
+  border-right-color: var(--color-border-light);
+}
+
+.tooltip::after {
+  content: '';
+  position: absolute;
+  right: calc(100% - 1px);
+  top: 50%;
+  transform: translateY(-50%);
+  width: 0;
+  height: 0;
+  border: 5px solid transparent;
+  border-right-color: var(--color-bg-secondary);
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-50%) translateX(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(-50%) translateX(0);
+  }
+}
+
+/* Focus styles for accessibility */
+.sidebarCard:focus {
+  outline: 2px solid var(--color-accent-primary);
+  outline-offset: 2px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .sidebarCard {
+    min-height: 44px;
+    padding: var(--spacing-xs) var(--spacing-sm);
+  }
+  
+  .cardTitle {
+    font-size: 0.8rem;
+  }
+}
