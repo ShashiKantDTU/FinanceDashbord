@@ -40,10 +40,10 @@ router.post('/addemployee', authenticateToken, async (req, res) => {
             console.log('No month/year provided, using current month/year');
         }
         
-        // Set default values for other required fields
-        const currentDate = new Date();
-        const currentMonth = currentDate.getMonth() + 1; // JavaScript months are 0-based
-        const currentYear = currentDate.getFullYear();
+        // // Set default values for other required fields
+        // const currentDate = new Date();
+        // const currentMonth = currentDate.getMonth() + 1; // JavaScript months are 0-based
+        // const currentYear = currentDate.getFullYear();
         
         // Get user info from auth middleware (JWT contains email)
         const createdBy = req.user?.email || req.user?.userEmail || 'unknown-user';
@@ -58,14 +58,14 @@ router.post('/addemployee', authenticateToken, async (req, res) => {
         // Check if employee already exists for this month/year
         const existingEmployee = await employeeSchema.findOne({
             empid: newEmpId,
-            month: currentMonth,
-            year: currentYear
+            month: month,
+            year: year
         });
         
         if (existingEmployee) {
             return res.status(409).json({
                 success: false,
-                error: `Employee ${newEmpId} already exists for ${currentMonth}/${currentYear}.`
+                error: `Employee ${newEmpId} already exists for ${month}/${year}.`
             });
         }
         
@@ -74,8 +74,8 @@ router.post('/addemployee', authenticateToken, async (req, res) => {
             name: name.trim(),
             empid: newEmpId,
             rate: parseFloat(rate),
-            month: currentMonth,
-            year: currentYear,
+            month: month,
+            year: year,
             siteID: siteID.trim(),
             payouts: [],
             wage: 0,
@@ -102,8 +102,8 @@ router.post('/addemployee', authenticateToken, async (req, res) => {
             const changeTrackingResult = await TrackChanges(
                 siteID.trim(),
                 newEmpId,
-                currentMonth,
-                currentYear,
+                month,
+                year,
                 new Date(),
                 createdBy,
                 `New employee "${name}" added to the system by ${createdBy}`,
@@ -130,14 +130,14 @@ router.post('/addemployee', authenticateToken, async (req, res) => {
                         changesRecorded: changeTrackingResult.changes?.length || 0
                     },
                     metadata: {
-                        month: currentMonth,
-                        year: currentYear,
+                        month: month,
+                        year: year,
                         rate: parseFloat(rate),
                         siteID: siteID.trim(),
                         createdBy: createdBy
                     }
                 },
-                message: `Employee ${name} (${newEmpId}) created successfully for ${currentMonth}/${currentYear} by ${createdBy}`
+                message: `Employee ${name} (${newEmpId}) created successfully for ${month}/${year} by ${createdBy}`
             });
               } catch (trackingError) {
             console.warn('⚠️ Employee created but change tracking failed:', trackingError.message);
@@ -151,14 +151,14 @@ router.post('/addemployee', authenticateToken, async (req, res) => {
                         details: trackingError.message
                     },
                     metadata: {
-                        month: currentMonth,
-                        year: currentYear,
+                        month: month,
+                        year: year,
                         rate: parseFloat(rate),
                         siteID: siteID.trim(),
                         createdBy: createdBy
                     }
                 },
-                message: `Employee ${name} (${newEmpId}) created successfully for ${currentMonth}/${currentYear} by ${createdBy} (change tracking failed)`
+                message: `Employee ${name} (${newEmpId}) created successfully for ${month}/${year} by ${createdBy} (change tracking failed)`
             });
         }
         
