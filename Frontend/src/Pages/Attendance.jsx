@@ -338,7 +338,129 @@ const Attendance = () => {
         // Restore attendance data from the backup.
         setAttendanceData(JSON.parse(JSON.stringify(originalAttendanceData)));
         console.log('Edit cancelled, data restored to original state.');
+    };    // --- ATTENDANCE CHANGE HANDLER ---
+    // Updates attendance data when user modifies attendance values in edit mode
+    const handleAttendanceChange = (employeeIndex, dayIndex, newValue) => {
+        if (!isEditMode) return; // Only allow changes in edit mode
+        
+        const validOptions = getValidAttendanceOptions();
+        
+        // Validate the input value
+        if (newValue && !validOptions.includes(newValue)) {
+            showWarning(`Invalid attendance code: ${newValue}. Valid codes: P, A, P1-P23, A1-A23`);
+            return;
+        }
+        
+        const currentEmployee = attendanceData[employeeIndex];
+        const oldValue = currentEmployee?.attendance[dayIndex] || '';
+        
+        // Only track change if value actually changed
+        if (oldValue !== newValue) {
+            // Update changes tracking
+            setChanges(prevChanges => {
+                // Remove any existing change for this employee/day combination
+                const filteredChanges = prevChanges.filter(
+                    change => !(change.employeeIndex === employeeIndex && change.day === dayIndex + 1)
+                );
+                
+                // Add new change if the value is different from original
+                const originalValue = originalAttendanceData[employeeIndex]?.attendance[dayIndex] || '';
+                if (originalValue !== newValue) {
+                    return [...filteredChanges, {
+                        employeeIndex,
+                        employeeName: currentEmployee.name,
+                        day: dayIndex + 1, // Display as 1-based day number
+                        oldValue: originalValue,
+                        newValue: newValue
+                    }];
+                }
+                
+                return filteredChanges;
+            });
+        }
+        
+        // Update the attendance data
+        setAttendanceData(prevData => {
+            const newData = [...prevData];
+            if (newData[employeeIndex] && newData[employeeIndex].attendance) {
+                newData[employeeIndex] = {
+                    ...newData[employeeIndex],
+                    attendance: [...newData[employeeIndex].attendance]
+                };
+                newData[employeeIndex].attendance[dayIndex] = newValue;
+            }
+            return newData;
+        });
+    };    // --- SAVE CHANGES ACTION ---
+    // Shows confirmation dialog with summary of changes before saving
+    const handleSaveChanges = async () => {
+        // If no changes were made, just exit edit mode
+        if (changes.length === 0) {
+            setIsEditMode(false);
+            showWarning('No changes were made.');
+            return;
+        }
+        
+        // Show confirmation dialog with summary of changes
+        setShowConfirmDialog(true);
     };
+
+    // --- CONFIRM SAVE CHANGES ---
+    // Actually saves the edited attendance data to the backend API after confirmation
+    const confirmSaveChanges = async () => {
+        setShowConfirmDialog(false);
+        setIsSaving(true);
+        try {
+            // Prepare the request body according to API specification
+            const [year, month] = selectedMonth.split('-');
+            const requestBody = {
+                month: selectedMonth,
+                siteID: siteID,
+                attendanceData: attendanceData.map(employee => ({
+                    id: employee.id,
+                    name: employee.name,
+                    attendance: employee.attendance
+                }))
+            };
+
+            console.log('Saving attendance data:', requestBody);
+
+            // Make API call to update attendance
+            const response = await api.put('/api/change-tracking/attendance/updateattendance', requestBody);
+
+            if (response.success) {
+                // Update original data to reflect saved changes
+                setOriginalAttendanceData(JSON.parse(JSON.stringify(attendanceData)));
+                setIsEditMode(false);
+                setChanges([]); // Clear changes after successful save
+                
+                const summary = response.summary;
+                showSuccess(
+                    `Attendance saved successfully! ${summary.successful}/${summary.totalEmployees} employees updated.`
+                );
+                
+                // Optionally refresh data to get latest calculations
+                setRefreshTrigger(prev => prev + 1);
+            } else {
+                throw new Error(response.message || 'Failed to save attendance data');
+            }
+        } catch (error) {
+            console.error('Error saving attendance:', error);
+            const errorMessage = error.response?.data?.message || error.message || 'Failed to save attendance changes';
+            showError(errorMessage);
+            
+            // If there were validation errors, show them
+            if (error.response?.data?.validationErrors) {
+                const validationErrors = error.response.data.validationErrors;
+                validationErrors.forEach(err => {
+                    showError(`${err.employeeID}: ${err.error}`);
+                });
+            }
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
     // --- ADD EMPLOYEE ACTIONS ---    // Opens the modal for adding a new employee.
     const handleOpenAddEmployeeModal = () => {
         setNewEmployee({ name: '', rate: '' }); // Reset form fields.
