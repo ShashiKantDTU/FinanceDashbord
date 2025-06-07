@@ -31,12 +31,9 @@ const calculateEmployeeData = (employee) => {
     // Calculate total advances paid to employee in the month
     const totalAdvances = employee.payouts.reduce((sum, payout) => {
         return sum + (payout.value || 0);
-    }, 0);
-
-    // Process attendance data and calculate working days and overtime
+    }, 0);    // Process attendance data and calculate working days and overtime
     const { totalDays, totalOvertime } = processAttendanceData(employee.attendance);
-    
-    // Convert overtime hours to days (8 hours = 1 day)
+      // Convert overtime hours to days (8 hours = 1 day)
     const overtimeDays = Math.floor(totalOvertime / 8) + ((totalOvertime % 8) / 10);
     const totalAttendance = totalDays + overtimeDays;
     
@@ -87,8 +84,7 @@ const processAttendanceData = (attendance) => {
         console.warn('Attendance data is not an array, returning zero values');
         return { totalDays: 0, totalOvertime: 0 };
     }
-    
-    attendance.forEach(att => {
+      attendance.forEach(att => {
         if (typeof att !== 'string') {
             console.warn(`Invalid attendance entry: ${att}. Skipping.`);
             return;
@@ -97,18 +93,18 @@ const processAttendanceData = (attendance) => {
         // Check if employee was present (contains 'P')
         if (att.includes('P')) {
             totalDays += 1;
+        }
+        
+        // Parse overtime hours if present (e.g., "P8" means present with 8 hours overtime, "A8" means absent but did 8 hours overtime)
+        const overtimeMatch = att.match(/[PA](\d+)/);
+        if (overtimeMatch) {
+            const overtime = parseInt(overtimeMatch[1]);
             
-            // Parse overtime hours if present (e.g., "P8" means present with 8 hours overtime)
-            const overtimeMatch = att.match(/P(\d+)/);
-            if (overtimeMatch) {
-                const overtime = parseInt(overtimeMatch[1]);
-                
-                // Validate overtime hours (0-24 hours per day)
-                if (!isNaN(overtime) && overtime >= 0 && overtime <= 24) {
-                    totalOvertime += overtime;
-                } else {
-                    console.warn(`Invalid overtime hours: ${overtime}. Skipping.`);
-                }
+            // Validate overtime hours (0-24 hours per day)
+            if (!isNaN(overtime) && overtime >= 0 && overtime <= 24) {
+                totalOvertime += overtime;
+            } else {
+                console.warn(`Invalid overtime hours: ${overtime}. Skipping.`);
             }
         }
     });
