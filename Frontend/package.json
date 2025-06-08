@@ -12,6 +12,8 @@
     "preview:network": "vite preview --host 0.0.0.0 --port 5173"
   },
   "dependencies": {
+    "jspdf": "^2.5.1",
+    "jspdf-autotable": "^3.5.25",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-icons": "^5.5.0",

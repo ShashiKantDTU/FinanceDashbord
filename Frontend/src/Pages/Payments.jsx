@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../components/ToastProvider';
 import styles from './Payments.module.css';
@@ -6,10 +6,11 @@ import Sidebar from '../components/Sidebar';
 import { useParams, Link } from 'react-router-dom';
 import { api } from '../utils/api';
 import { FaCalendarAlt } from 'react-icons/fa';
+import { generateEmployeeReportPDF } from '../utils/pdfReportGenerator';
 
 const Payments = () => {
     const { user } = useAuth();
-    const { showSuccess, showError, showWarning } = useToast();
+    const { showSuccess, showError } = useToast();
     const [employeeData, setEmployeeData] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
@@ -64,9 +65,7 @@ const Payments = () => {
 
         // Calculate Total Absent Days:
         // Counts entries that include "A" (e.g., "A", "A1").
-        const totalAbsentCount = attendanceArray.reduce((acc, status) => {
-            return acc + (status && status.toUpperCase().includes('A') ? 1 : 0);
-        }, 0);
+        
 
         // Calculate Final Attendance Days (including overtime):
         // Overtime hours are converted to days (assuming 8 hours = 1 day).
@@ -79,9 +78,8 @@ const Payments = () => {
         // Sticking to original logic:
         const remainingOvertimeDecimalContribution = remainingOvertimeHoursPart / 10;
         const finalAttendanceDays = totalPresentCount + overtimeDaysEquivalent + remainingOvertimeDecimalContribution;
-        return finalAttendanceDays;
-    };    // Function to calculate payment details
-    const calculatePaymentDetails = (dailyRate, attendanceData, advances, additionalWages, previousBalance) => {
+        return finalAttendanceDays;    };    // Function to calculate payment details
+    const calculatePaymentDetails = useCallback((dailyRate, attendanceData, advances, additionalWages, previousBalance) => {
         const attendance = processAttendanceData(attendanceData);
         const grossPayment = dailyRate * attendance;
         const netBalance = grossPayment - advances + additionalWages + previousBalance;
@@ -91,7 +89,7 @@ const Payments = () => {
             grossPayment,
             netBalance
         };
-    };
+    }, []);
 
     // Calendar utility functions
     const formatSelectedMonthDisplay = () => {
@@ -114,18 +112,9 @@ const Payments = () => {
 
     const handlePreviousYear = () => {
         setCalendarYear(prev => Math.max(prev - 1, 2020)); // Don't go before 2020
-    };
-
-    const handleNextYear = () => {
+    };    const handleNextYear = () => {
         const currentYear = new Date().getFullYear();
         setCalendarYear(prev => Math.min(prev + 1, currentYear));
-    };
-
-    const handleMonthSelect = (monthIndex) => {
-        const newMonth = monthIndex + 1;
-        setSelectedMonth(newMonth);
-        setCalendarYear(calendarYear);
-        setShowCalendar(false);
     };
 
     // Close calendar when clicking outside
@@ -155,7 +144,7 @@ const Payments = () => {
                 ); if (response.success) {
                     // console.log('🔄 Processing API response data:', response.data.length, 'employees');
                     // Transform API data to match the component's expected format
-                    const transformedData = response.data.map((emp, index) => {
+                    const transformedData = response.data.map((emp) => {
                         // console.log(`\n🔄 Processing employee ${index + 1}/${response.data.length}: ${emp.name} (${emp.empid})`);
 
                         // Calculate payment details using the new logic
@@ -219,11 +208,10 @@ const Payments = () => {
                 showError(err.message || 'Failed to fetch employee data');
             } finally {
                 setLoading(false);
-            }
-        };
+            }        };
 
         fetchEmployeeData();
-    }, [selectedMonth, selectedYear, siteID]);
+    }, [selectedMonth, selectedYear, siteID, calculatePaymentDetails, showError]);
 
     const filteredEmployees = employeeData.filter(emp =>
         emp.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -568,7 +556,7 @@ const Payments = () => {
                 // console.log('🔄 Refreshing employee data after update...');
 
                 // Transform API data to match the component's expected format
-                const transformedData = response.data.map((emp, index) => {
+                const transformedData = response.data.map((emp) => {
                     const paymentDetails = calculatePaymentDetails(
                         emp.rate || 0,
                         emp.attendance,
@@ -653,6 +641,23 @@ const Payments = () => {
     useEffect(() => {
         setCalendarYear(selectedYear);
     }, [selectedYear]);
+
+    // PDF download handler
+    const handleDownloadPDF = useCallback(() => {
+        try {
+            if (!employeeData || employeeData.length === 0) {
+                showError('No employee data available to generate PDF');
+                return;
+            }
+
+            // Use the existing transformed employee data
+            generateEmployeeReportPDF(employeeData);
+            showSuccess('PDF report generated successfully!');
+        } catch (error) {
+            console.error('Error generating PDF:', error);
+            showError('Failed to generate PDF report. Please try again.');
+        }
+    }, [employeeData, showError, showSuccess]);
 
     if (loading) {
         return (
@@ -796,10 +801,18 @@ const Payments = () => {
                             className={styles.searchInputMini}
                         />
                         <span className={styles.searchIconMini}>🔍</span>
-                    </div>
-                    <div className={styles.resultCountMini}>
+                    </div>                    <div className={styles.resultCountMini}>
                         {sortedEmployees.length}/{employeeData.length}
                     </div>
+                    <button
+                        type="button"
+                        onClick={handleDownloadPDF}
+                        disabled={loading || employeeData.length === 0}
+                        className={styles.pdfDownloadButton}
+                        title="Download PDF Report"
+                    >
+                        📄 PDF
+                    </button>
                 </div>
 
                 <div className={styles.tableContainer}>
