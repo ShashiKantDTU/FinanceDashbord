@@ -519,7 +519,6 @@
 .netBalance {
   font-weight: var(--font-weight-semibold);
   font-size: 0.95rem;
-  color: var(--color-success);
 }
 
 /* Compact Cell with Details */
@@ -649,7 +648,18 @@
 
 .detailAmount {
   font-weight: var(--font-weight-semibold);
-  color: var(--color-error);
+  font-size: 0.95rem;
+}
+
+.detailAmountPositive {
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-success); /* Green color for bonuses/additional wages */
+  font-size: 0.95rem;
+}
+
+.detailAmountNegative {
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-error); /* Red color for advances */
   font-size: 0.95rem;
 }
 
@@ -1074,15 +1084,7 @@
   font-weight: var(--font-weight-medium);
 }
 
-.metricValue {
-  font-size: var(--font-size-lg);
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-text-default);
-}
 
-.metricValue.netBalance {
-  color: var(--color-success);
-}
 
 /* Payment Breakdown */
 .paymentBreakdown {

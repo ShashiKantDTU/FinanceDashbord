@@ -876,7 +876,7 @@ const Payments = () => {
                                         </td>
                                         <td className={styles.deductionCell}>
                                             <div className={styles.cellWithDetails}>
-                                                <span className={styles.negativeAmount}>
+                                                <span className={styles.positiveAmount}>
                                                     {formatCurrency(editMode === employee.id ? editedData.totalAdditionalPayments : employee.totalAdditionalPayments)}
                                                 </span>
                                                 <button
@@ -890,7 +890,7 @@ const Payments = () => {
                                             </div>
                                         </td>
                                         <td className={styles.neutralAmount}>{formatCurrency(employee.previousBalance)}</td>
-                                        <td className={styles.netBalance}>
+                                        <td className={`${styles.netBalance} ${employee.netBalance > 0 ? styles.positiveAmount : employee.netBalance < 0 ? styles.negativeAmount : styles.neutralAmount}`}>
                                             {formatCurrency(editMode === employee.id ? editedData.netBalance : employee.netBalance)}
                                         </td>
                                         <td className={styles.actions}>
@@ -965,7 +965,7 @@ const Payments = () => {
                                                             ) : (
                                                                 <>
                                                                     <div className={styles.detailHeader}>
-                                                                        <span className={styles.detailAmount}>-{formatCurrency(advance.value)}</span>
+                                                                        <span className={styles.detailAmountNegative}>-{formatCurrency(advance.value)}</span>
                                                                         <span className={styles.detailDate}>{advance.date}</span>
                                                                     </div>
                                                                     <div className={styles.detailRemark}>{advance.remark}</div>
@@ -1029,7 +1029,7 @@ const Payments = () => {
                                                             ) : (
                                                                 <>                                                            
                                                                 <div className={styles.detailHeader}>
-                                                                    <span className={styles.detailAmount}>+{formatCurrency(payment.value)}</span>
+                                                                    <span className={styles.detailAmountPositive}>+{formatCurrency(payment.value)}</span>
                                                                     <span className={styles.detailDate}>{payment.date}</span>
                                                                 </div>
                                                                     <div className={styles.detailRemark}>{payment.remark}</div>
@@ -1037,7 +1037,8 @@ const Payments = () => {
                                                             )}
                                                         </div>
                                                     ))}
-                                                </div>                                        <div className={styles.detailSummary}>
+                                                </div>                                        
+                                                <div className={styles.detailSummary}>
                                                     <strong>Total Additional Wages: {formatCurrency(editMode === employee.id ? editedData.totalAdditionalPayments : employee.totalAdditionalPayments)}</strong>
                                                 </div>
                                             </div>
