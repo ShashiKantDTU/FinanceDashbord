@@ -43,6 +43,8 @@ const ForgotPassword = () => {
         setError('Too many reset requests. Please try again later.');
       } else if (error.message?.includes('invalid email')) {
         setError('Please enter a valid email address.');
+      } else if (error.message?.includes('Failed to send')) {
+        setError('Unable to send reset email. Please check your email address and try again.');
       } else {
         setError(error.message || 'Failed to send reset email. Please check your connection and try again.');
       }

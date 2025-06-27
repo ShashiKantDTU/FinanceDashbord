@@ -16,8 +16,17 @@ const userSchema = new mongoose.Schema({
     password: {
         type: String,
         required: true,
-        minlength: 6
-    },    site: [{
+        minlength: 4
+    },
+    resetPasswordToken: {
+        type: String,
+        default: null
+    },
+    resetPasswordExpires: {
+        type: Date,
+        default: null
+    },
+    site: [{
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Site'
     }]

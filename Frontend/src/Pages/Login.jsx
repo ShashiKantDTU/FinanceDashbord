@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { authAPI } from '../utils/api';
 import styles from './Login.module.css';
@@ -11,12 +11,23 @@ const Login = () => {
   });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [emailError, setEmailError] = useState('');
   const [passwordError, setPasswordError] = useState('');
   
   const navigate = useNavigate();
+  const location = useLocation();
   const { login } = useAuth();
+
+  // Check for success messages from navigation state
+  useEffect(() => {
+    if (location.state?.message) {
+      setMessage(location.state.message);
+      // Clear the message from navigation state
+      navigate(location.pathname, { replace: true });
+    }
+  }, [location.state, navigate, location.pathname]);
 
   const validateEmail = (email) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -30,8 +41,9 @@ const Login = () => {
       [name]: value
     }));
     
-    // Clear errors when user starts typing
+    // Clear errors and messages when user starts typing
     if (error) setError('');
+    if (message) setMessage('');
     if (name === 'email' && emailError) setEmailError('');
     if (name === 'password' && passwordError) setPasswordError('');
     
@@ -39,8 +51,8 @@ const Login = () => {
     if (name === 'email' && value && !validateEmail(value)) {
       setEmailError('Please enter a valid email address');
     }
-    if (name === 'password' && value && value.length < 6) {
-      setPasswordError('Password must be at least 6 characters');
+    if (name === 'password' && value && value.length < 4) {
+      setPasswordError('Password must be at least 4 characters');
     }
   };
 
@@ -63,8 +75,8 @@ const Login = () => {
     if (!formData.password) {
       setPasswordError('Password is required');
       hasErrors = true;
-    } else if (formData.password.length < 6) {
-      setPasswordError('Password must be at least 6 characters');
+    } else if (formData.password.length < 4) {
+      setPasswordError('Password must be at least 4 characters');
       hasErrors = true;
     }
 
@@ -126,6 +138,15 @@ const Login = () => {
                 <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
               </svg>
               {error}
+            </div>
+          )}
+
+          {message && (
+            <div className={styles.successMessage}>
+              <svg className={styles.successIcon} viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+              </svg>
+              {message}
             </div>
           )}
 

@@ -25,21 +25,13 @@ const SignUp = () => {
   };
 
   const validatePassword = (password) => {
-    // Password strength validation
-    const minLength = password.length >= 8;
-    const hasUpper = /[A-Z]/.test(password);
-    const hasLower = /[a-z]/.test(password);
-    const hasNumber = /\d/.test(password);
-    const hasSpecial = /[!@#$%^&*(),.?":{}|<>]/.test(password);
+    // Simple password validation - minimum 4 characters
+    const minLength = password.length >= 4;
     
     return {
-      isValid: minLength && hasUpper && hasLower && hasNumber,
+      isValid: minLength,
       requirements: {
-        minLength,
-        hasUpper,
-        hasLower,
-        hasNumber,
-        hasSpecial
+        minLength
       }
     };
   };
@@ -78,7 +70,7 @@ const SignUp = () => {
         if (value) {
           const validation = validatePassword(value);
           if (!validation.isValid) {
-            newError = 'Password must be at least 8 characters with uppercase, lowercase, and number';
+            newError = 'Password must be at least 4 characters long';
           }
         }
         break;
@@ -122,7 +114,7 @@ const SignUp = () => {
     } else {
       const validation = validatePassword(formData.password);
       if (!validation.isValid) {
-        errors.password = 'Password must be at least 8 characters with uppercase, lowercase, and number';
+        errors.password = 'Password must be at least 4 characters long';
       }
     }
     

@@ -3,6 +3,8 @@ const cors = require('cors');
 require('dotenv').config();
 const JWT = require('jsonwebtoken');
 const mongoose = require('mongoose');
+const { testEmailConnection } = require('./Utils/emailService');
+
 // Connect to MongoDB
 const mongoURI = process.env.MONGO_URI || 'mongodb://localhost:27017/finance-dashboard';
 
@@ -90,11 +92,28 @@ app.use((err, req, res, next) => {
 
 // Start server
 
-mongoose.connect(mongoURI).then(() => {
+mongoose.connect(mongoURI).then(async () => {
   console.log('Connected to MongoDB successfully');
+  
+  // Test email configuration if credentials are provided
+  if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
+    console.log('Testing email configuration...');
+    const emailWorking = await testEmailConnection();
+    if (emailWorking) {
+      console.log('✅ Email service is configured and ready');
+    } else {
+      console.log('⚠️  Email service configuration failed - password reset emails will not work');
+      console.log('Please check your EMAIL_USER and EMAIL_PASS in .env file');
+    }
+  } else {
+    console.log('⚠️  Email credentials not configured - password reset emails will not work');
+    console.log('Please set EMAIL_USER and EMAIL_PASS in .env file');
+  }
+  
   app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
-});
+    console.log(`🚀 Server is running on port ${PORT}`);
+    console.log(`🔗 Frontend URL: ${process.env.FRONTEND_URL}`);
+  });
 }).catch(err => {
   console.error('Error connecting to MongoDB:', err);
 });

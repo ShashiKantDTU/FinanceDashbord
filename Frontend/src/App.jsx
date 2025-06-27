@@ -6,6 +6,7 @@ import Payments from "./Pages/Payments";
 import Login from "./Pages/Login";
 import SignUp from "./Pages/SignUp";
 import ForgotPassword from "./Pages/ForgotPassword";
+import ResetPassword from "./Pages/ResetPassword";
 import { AuthProvider } from './context/AuthContext';
 import { ToastProvider } from './components/ToastProvider';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -20,6 +21,7 @@ function App() {
             <Route path="/login" element= {<Login/>} />
             <Route path="/signup" element= {<SignUp/>} />
             <Route path="/forgot-password" element= {<ForgotPassword/>} />
+            <Route path="/reset-password" element= {<ResetPassword/>} />
             <Route path="/" element= {
               <ProtectedRoute>
                 <Home/>
