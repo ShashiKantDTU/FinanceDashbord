@@ -134,6 +134,22 @@ const Attendance = () => {
     // `showEmployeeList`: Boolean controlling the visibility of the employee selection list.
     const [showEmployeeList, setShowEmployeeList] = useState(false);
 
+    // `searchTerm`: String for filtering employees by name in the attendance table.
+    const [searchTerm, setSearchTerm] = useState('');
+
+    // --- SEARCH FUNCTIONALITY ---
+    
+    // Handler for search input changes
+    const handleSearchChange = (e) => {
+        setSearchTerm(e.target.value);
+    };
+
+    // Filter attendance data based on search term
+    const filteredAttendanceData = attendanceData.filter(employee => 
+        employee.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        employee.id.toString().includes(searchTerm)
+    );
+
     // --- DELETE EMPLOYEE FUNCTIONALITY ---
 
     // `showDeleteConfirmDialog`: Boolean controlling the visibility of the delete confirmation dialog.
@@ -412,7 +428,6 @@ const Attendance = () => {
         setIsSaving(true);
         try {
             // Prepare the request body according to API specification
-            const [year, month] = selectedMonth.split('-');
             const requestBody = {
                 month: selectedMonth,
                 siteID: siteID,
@@ -989,7 +1004,67 @@ const Attendance = () => {
                             </div>
                         )}
                     </div>
-                </div>                
+                </div>
+
+                {/* Search Bar Section */}
+                {attendanceData.length > 0 && (
+                    <div className={styles.searchSection}>
+                        <div className={styles.searchContainer}>
+                            <div className={styles.searchInputWrapper}>
+                                <svg 
+                                    className={styles.searchIcon}
+                                    width="16" 
+                                    height="16" 
+                                    viewBox="0 0 24 24" 
+                                    fill="none"
+                                >
+                                    <circle 
+                                        cx="11" 
+                                        cy="11" 
+                                        r="8" 
+                                        stroke="currentColor" 
+                                        strokeWidth="2"
+                                    />
+                                    <path 
+                                        d="m21 21-4.35-4.35" 
+                                        stroke="currentColor" 
+                                        strokeWidth="2" 
+                                        strokeLinecap="round" 
+                                        strokeLinejoin="round"
+                                    />
+                                </svg>
+                                <input
+                                    type="text"
+                                    placeholder="Search employees by name or ID..."
+                                    value={searchTerm}
+                                    onChange={handleSearchChange}
+                                    className={styles.searchInput}
+                                    disabled={isLoading || isEditMode}
+                                />
+                                {searchTerm && (
+                                    <button
+                                        className={styles.clearSearchButton}
+                                        onClick={() => setSearchTerm('')}
+                                        title="Clear search"
+                                    >
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                                            <line x1="18" y1="6" x2="6" y2="18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                                            <line x1="6" y1="6" x2="18" y2="18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                                        </svg>
+                                    </button>
+                                )}
+                            </div>
+                            {searchTerm && (
+                                <div className={styles.searchResults}>
+                                    <span className={styles.searchResultsText}>
+                                        {filteredAttendanceData.length} of {attendanceData.length} employees found
+                                    </span>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
+                
                 <div className={styles.tableContainer}>
                     {error ? (
                         <div className={styles.errorState}>
@@ -1033,7 +1108,7 @@ const Attendance = () => {
                                 </tr>
                             </thead>
                             <tbody>
-                                {attendanceData.map((employeeEntry, employeeIndex) => {
+                                {filteredAttendanceData.map((employeeEntry, employeeIndex) => {
                                     // --- Attendance Calculation Logic ---
                                     // This section calculates summary figures based on the employee's attendance array.
 
@@ -1762,46 +1837,42 @@ const Attendance = () => {
 
                                 {/* Employee Details */}
                                 {importResults.importResults && importResults.importResults.length > 0 && (
-                                    <div className={styles.employeeDetails}>
-                                        <h4 className={styles.sectionTitle}>Employee Details</h4>
-                                        <div className={styles.employeeResultsList}>
-                                            {importResults.importResults.map((result, index) => (
-                                                <div key={index} className={`${styles.employeeResultItem} ${result.success ? styles.resultSuccess : styles.resultError}`}>
-                                                    <div className={styles.employeeResultHeader}>
-                                                        <div className={styles.employeeResultInfo}>
-                                                            <span className={styles.employeeResultName}>{result.name}</span>
-                                                            <span className={styles.employeeResultId}>ID: {result.empid}</span>
-                                                        </div>
-                                                        <div className={styles.employeeResultStatus}>
-                                                            {result.success ? (
-                                                                <span className={styles.successBadge}>✓ Success</span>
-                                                            ) : (
-                                                                <span className={styles.errorBadge}>✗ Failed</span>
-                                                            )}
-                                                        </div>
+                                    <div className={styles.employeeResultsList}>
+                                        {importResults.importResults.map((result, index) => (
+                                            <div key={index} className={`${styles.employeeResultItem} ${result.success ? styles.resultSuccess : styles.resultError}`}>
+                                                <div className={styles.employeeResultHeader}>
+                                                    <div className={styles.employeeResultName}>
+                                                        <strong>{result.name}</strong> (ID: {result.empid})
                                                     </div>
-                                                    
-                                                    <div className={styles.employeeResultDetails}>
-                                                        <div className={styles.resultDetailItem}>
-                                                            <span className={styles.detailLabel}>Carry Forward:</span>
-                                                            <span className={styles.detailValue}>₹{result.carryForwardAmount || 0}</span>
-                                                        </div>
-                                                        {result.changeTracking?.serialNumber && (
-                                                            <div className={styles.resultDetailItem}>
-                                                                <span className={styles.detailLabel}>Serial Number:</span>
-                                                                <span className={styles.detailValue}>{result.changeTracking.serialNumber}</span>
-                                                            </div>
-                                                        )}
-                                                        {!result.success && result.error && (
-                                                            <div className={styles.resultDetailItem}>
-                                                                <span className={styles.detailLabel}>Error:</span>
-                                                                <span className={`${styles.detailValue} ${styles.errorText}`}>{result.error}</span>
-                                                            </div>
+                                                    <div className={styles.employeeResultStatus}>
+                                                        {result.success ? (
+                                                            <span className={styles.successBadge}>✓ Success</span>
+                                                        ) : (
+                                                            <span className={styles.errorBadge}>✗ Failed</span>
                                                         )}
                                                     </div>
                                                 </div>
-                                            ))}
-                                        </div>
+                                                
+                                                <div className={styles.employeeResultDetails}>
+                                                    <div className={styles.resultDetailItem}>
+                                                        <span className={styles.detailLabel}>Carry Forward:</span>
+                                                        <span className={styles.detailValue}>₹{result.carryForwardAmount || 0}</span>
+                                                    </div>
+                                                    {result.changeTracking?.serialNumber && (
+                                                        <div className={styles.resultDetailItem}>
+                                                            <span className={styles.detailLabel}>Serial Number:</span>
+                                                            <span className={styles.detailValue}>{result.changeTracking.serialNumber}</span>
+                                                        </div>
+                                                    )}
+                                                    {!result.success && result.error && (
+                                                        <div className={styles.resultDetailItem}>
+                                                            <span className={styles.detailLabel}>Error:</span>
+                                                            <span className={`${styles.detailValue} ${styles.errorText}`}>{result.error}</span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ))}
                                     </div>
                                 )}
                             </div>
@@ -1820,6 +1891,6 @@ const Attendance = () => {
             </div>
         </div>
     );
-}
+};
 
 export default Attendance;

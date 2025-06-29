@@ -144,3 +144,4 @@ local.md
 *.backup
 *.bak
 *~
+/.github

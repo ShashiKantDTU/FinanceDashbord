@@ -72,8 +72,9 @@ export const AuthProvider = ({ children }) => {
           type: AUTH_ACTIONS.RESTORE_SESSION,
           payload: { token, user: parsedUser },
         });
-      } catch (error) {
+      } catch (err) {
         // If parsing fails, clear storage
+        console.error('Failed to parse user data:', err);
         localStorage.removeItem('token');
         localStorage.removeItem('user');
         dispatch({ type: AUTH_ACTIONS.SET_LOADING, payload: false });
@@ -164,7 +165,8 @@ export const useAuth = () => {
 };
 
 // Higher-order component for protecting routes
-export const withAuth = (Component) => {
+// eslint-disable-next-line no-unused-vars
+export const withAuth = (WrappedComponent) => {
   return function AuthenticatedComponent(props) {
     const { isAuthenticated, isLoading } = useAuth();
     
@@ -188,7 +190,7 @@ export const withAuth = (Component) => {
       return null;
     }
     
-    return <Component {...props} />;
+    return <WrappedComponent {...props} />;
   };
 };
 
