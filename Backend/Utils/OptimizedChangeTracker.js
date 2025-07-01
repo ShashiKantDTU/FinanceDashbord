@@ -678,7 +678,17 @@ const trackOptimizedChanges = async (siteID, employeeID, month, year, changedBy,
  * @returns {String} User-friendly message
  */
 const generateDisplayMessage = (fieldDisplayName, detailedChange, employeeID, month, year, changedBy, timestamp) => {
-    const timeStr = timestamp.toLocaleString();
+    // Convert UTC timestamp to IST for display
+    const timeStr = timestamp.toLocaleString('en-IN', { 
+        timeZone: 'Asia/Kolkata',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: true
+    });
     
     if (fieldDisplayName === 'Attendance') {
         // Attendance change messages with decoded values and exact dates
