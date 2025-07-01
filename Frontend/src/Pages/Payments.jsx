@@ -7,6 +7,7 @@ import { useParams, Link } from 'react-router-dom';
 import { api } from '../utils/api';
 import { FaCalendarAlt } from 'react-icons/fa';
 import { generateEmployeeReportPDF } from '../utils/pdfReportGenerator';
+import CustomSpinner from '../components/CustomSpinner';
 
 const Payments = () => {
     const { user } = useAuth();
@@ -661,10 +662,35 @@ const Payments = () => {
 
     if (loading) {
         return (
-            <div className={styles.container}>
-                <div className={styles.loadingSpinner}>
-                    <div className={styles.spinner}></div>
-                    <p>Loading payment data...</p>
+            <div className={styles.PaymentsContainer}>
+                <Sidebar />
+                <div className={styles.container}>
+                    <div className={styles.headerUltraCompact}>
+                        <div className={styles.titleSection}>
+                            <h1 className={styles.titleCompact}>
+                                💰 Employee Payments - {formatSelectedMonthDisplay()}
+                            </h1>
+                        </div>
+                        <div className={styles.statsRowCompact}>
+                            <div className={styles.statItemCompact}>
+                                <span className={styles.statValueCompact}>0</span>
+                                <span className={styles.statLabelCompact}>Employees</span>
+                            </div>
+                            <div className={styles.statItemCompact}>
+                                <span className={styles.statValueCompact}>₹0</span>
+                                <span className={styles.statLabelCompact}>Gross</span>
+                            </div>
+                            <div className={styles.statItemCompact}>
+                                <span className={styles.statValueCompact}>₹0</span>
+                                <span className={styles.statLabelCompact}>Net</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div className={styles.loadingSpinner}>
+                        <CustomSpinner size={70} color="#3b82f6" />
+                        <p>Loading payment data...</p>
+                    </div>
                 </div>
             </div>
         );
@@ -790,7 +816,11 @@ const Payments = () => {
                                 </div>
                             </>
                         )}
-                        {loading && <span className={styles.loadingTextMini}>Loading...</span>}
+                        {loading && (
+                            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '10px' }}>
+                                <CustomSpinner size={40} color="#3b82f6" />
+                            </div>
+                        )}
                     </div>
                     <div className={styles.searchBoxMini}>
                         <input
@@ -883,7 +913,7 @@ const Payments = () => {
                                                     className={`${styles.detailBtn} ${expandedRows[`${employee.id}_deductions`] ? styles.active : ''
                                                         }`}
                                                     onClick={() => toggleRowExpansion(employee.id, 'deductions')}
-                                                    title="View Deductions Details"
+                                                    title="View Bonus Details"
                                                 >
                                                     📋 {editMode === employee.id ? editedData.additionalPayments.length : employee.additionalPayments.length}
                                                 </button>

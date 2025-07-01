@@ -67,6 +67,10 @@ const employeeSchema = new mongoose.Schema({
         date: {
             type: Date,
             default: Date.now
+        },
+        createdBy: {
+            type: String, // Email or userid of the creator
+            required: true
         }
     }],
     attendance: [String],

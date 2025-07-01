@@ -29,11 +29,6 @@ const Login = () => {
     }
   }, [location.state, navigate, location.pathname]);
 
-  const validateEmail = (email) => {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return emailRegex.test(email);
-  };
-
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({
@@ -48,9 +43,6 @@ const Login = () => {
     if (name === 'password' && passwordError) setPasswordError('');
     
     // Real-time validation
-    if (name === 'email' && value && !validateEmail(value)) {
-      setEmailError('Please enter a valid email address');
-    }
     if (name === 'password' && value && value.length < 4) {
       setPasswordError('Password must be at least 4 characters');
     }
@@ -66,9 +58,6 @@ const Login = () => {
     
     if (!formData.email) {
       setEmailError('Email is required');
-      hasErrors = true;
-    } else if (!validateEmail(formData.email)) {
-      setEmailError('Please enter a valid email address');
       hasErrors = true;
     }
     
@@ -91,6 +80,7 @@ const Login = () => {
       
       // Use the auth context login function
       login(data);
+      
       
       // Redirect to home page
       navigate('/');
@@ -160,7 +150,7 @@ const Login = () => {
                 <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" />
               </svg>
               <input
-                type="email"
+                type="text"
                 id="email"
                 name="email"
                 value={formData.email}

@@ -1,8 +1,10 @@
 import { BrowserRouter , Route, Routes } from "react-router-dom";
 import Home from './Pages/Home';
+import Settings from './Pages/Settings';
 import SitePage from './Pages/SitePage';
 import Attendance from "./Pages/Attendance";
 import Payments from "./Pages/Payments";
+import ChangeTracking from "./Pages/ChangeTracking";
 import Login from "./Pages/Login";
 import SignUp from "./Pages/SignUp";
 import ForgotPassword from "./Pages/ForgotPassword";
@@ -42,6 +44,16 @@ function App() {
                   <Payments/>
                 </ProtectedRoute>
               } />
+              <Route path="/change-tracking/:siteID" element= {
+                <ProtectedRoute>
+                  <ChangeTracking/>
+                </ProtectedRoute>
+              } />
+            <Route path="/settings/:siteID" element= {
+              <ProtectedRoute>
+                <Settings/>
+              </ProtectedRoute>
+            } />
               {/* Add more routes as needed */}
             </Routes>
           </BrowserRouter>

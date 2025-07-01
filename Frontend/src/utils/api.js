@@ -78,18 +78,63 @@ export const authAPI = {
     });
   },
 
-  getProfile: async () => {
-    return apiRequest('/api/auth/profile');
+  getProfile: async (siteId) => {
+    const endpoint = siteId ? `/api/auth/profile/${siteId}` : '/api/auth/profile/';
+    return apiRequest(endpoint);
   },
 
   verifyToken: async () => {
     return apiRequest('/api/auth/verify');
   },
+
+  // Supervisor credential management
+  createSupervisor: async (name, siteId) => {
+    return apiRequest('/api/auth/supervisor-credentials/create', {
+      method: 'POST',
+      body: JSON.stringify({ name, siteId }),
+    });
+  },
+
+  deleteSupervisor: async (supervisor) => {
+    return apiRequest('/api/auth/supervisor-credentials/delete/', {
+      method: 'DELETE',
+      body: JSON.stringify({ supervisor }),
+    });
+  },
+
+  changeSupervisorPassword: async (supervisor) => {
+    return apiRequest('/api/auth/supervisor-credentials/change-password', {
+      method: 'POST',
+      body: JSON.stringify({ supervisor }),
+    });
+  },
+
+  toggleSupervisorStatus: async (supervisor) => {
+    return apiRequest('/api/auth/supervisor-credentials/toggle-status', {
+      method: 'POST',
+      body: JSON.stringify({ supervisor }),
+    });
+  },
 };
 
 // Generic API functions
 export const api = {
-  get: (endpoint) => apiRequest(endpoint),
+  get: (endpoint, options = {}) => {
+    // Handle query parameters
+    if (options.params) {
+      const searchParams = new URLSearchParams();
+      Object.entries(options.params).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          searchParams.append(key, value);
+        }
+      });
+      const queryString = searchParams.toString();
+      if (queryString) {
+        endpoint += (endpoint.includes('?') ? '&' : '?') + queryString;
+      }
+    }
+    return apiRequest(endpoint, options);
+  },
   post: (endpoint, data) => apiRequest(endpoint, {
     method: 'POST',
     body: JSON.stringify(data),

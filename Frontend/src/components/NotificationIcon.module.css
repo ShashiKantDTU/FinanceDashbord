@@ -1,0 +1,341 @@
+/* NotificationIcon.module.css - Professional notification bell styling */
+
+/* ===========================================
+   NOTIFICATION CONTAINER
+   =========================================== */
+
+.notificationContainer {
+    position: relative;
+    display: inline-block;
+}
+
+/* ===========================================
+   NOTIFICATION BUTTON
+   =========================================== */
+
+.notificationButton {
+    position: relative;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border: none;
+    border-radius: 12px;
+    width: 48px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+    overflow: hidden;
+}
+
+.notificationButton:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+}
+
+.notificationButton:active {
+    transform: translateY(-1px);
+    transition: transform 0.1s ease;
+}
+
+.notificationButton:focus {
+    outline: none;
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3), 0 0 0 3px rgba(102, 126, 234, 0.2);
+}
+
+/* Special state for new changes */
+.hasNewChanges {
+    animation: newChangesGlow 2s ease-in-out infinite;
+}
+
+@keyframes newChangesGlow {
+    0%, 100% {
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+    }
+    50% {
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3), 0 0 20px rgba(16, 185, 129, 0.6);
+    }
+}
+
+/* Loading state */
+.loading {
+    cursor: wait;
+}
+
+/* ===========================================
+   BELL ICON
+   =========================================== */
+
+.bellIcon {
+    color: white;
+    font-size: 18px;
+    z-index: 2;
+    position: relative;
+    transition: transform 0.3s ease;
+}
+
+.notificationButton:hover .bellIcon {
+    transform: rotate(15deg);
+}
+
+.hasNewChanges .bellIcon {
+    animation: bellRing 1s ease-in-out infinite;
+}
+
+@keyframes bellRing {
+    0%, 100% { transform: rotate(0deg); }
+    10%, 30%, 50%, 70%, 90% { transform: rotate(10deg); }
+    20%, 40%, 60%, 80% { transform: rotate(-10deg); }
+}
+
+/* ===========================================
+   NOTIFICATION BADGE
+   =========================================== */
+
+.badge {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+    color: white;
+    border-radius: 12px;
+    min-width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 700;
+    z-index: 3;
+    border: 2px solid white;
+    box-shadow: 0 2px 8px rgba(239, 68, 68, 0.4);
+    transition: all 0.3s ease;
+}
+
+.badgeNew {
+    animation: badgePulse 1.5s ease-in-out infinite;
+}
+
+@keyframes badgePulse {
+    0%, 100% {
+        transform: scale(1);
+        background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+    }
+    50% {
+        transform: scale(1.1);
+        background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    }
+}
+
+.badgeText {
+    line-height: 1;
+    padding: 2px 4px;
+    min-width: 16px;
+    text-align: center;
+}
+
+/* ===========================================
+   LOADING INDICATOR
+   =========================================== */
+
+.loadingIndicator {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    width: 16px;
+    height: 16px;
+    z-index: 4;
+}
+
+.loadingSpinner {
+    width: 100%;
+    height: 100%;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-top: 2px solid white;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* ===========================================
+   PULSE OVERLAY FOR NEW CHANGES
+   =========================================== */
+
+.pulseOverlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    border-radius: 12px;
+    background: radial-gradient(circle, rgba(16, 185, 129, 0.3) 0%, transparent 70%);
+    z-index: 1;
+    animation: pulseOverlay 2s ease-in-out infinite;
+}
+
+@keyframes pulseOverlay {
+    0%, 100% {
+        opacity: 0;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 1;
+        transform: scale(1.05);
+    }
+}
+
+/* ===========================================
+   RESPONSIVE DESIGN
+   =========================================== */
+
+@media (max-width: 768px) {
+    .notificationButton {
+        width: 44px;
+        height: 44px;
+    }
+    
+    .bellIcon {
+        font-size: 16px;
+    }
+    
+    .badge {
+        top: -6px;
+        right: -6px;
+        min-width: 18px;
+        height: 18px;
+        font-size: 10px;
+    }
+}
+
+@media (max-width: 480px) {
+    .notificationButton {
+        width: 40px;
+        height: 40px;
+        border-radius: 10px;
+    }
+    
+    .bellIcon {
+        font-size: 14px;
+    }
+    
+    .badge {
+        top: -5px;
+        right: -5px;
+        min-width: 16px;
+        height: 16px;
+        font-size: 9px;
+        border-width: 1px;
+    }
+}
+
+/* ===========================================
+   ACCESSIBILITY ENHANCEMENTS
+   =========================================== */
+
+@media (prefers-reduced-motion: reduce) {
+    .notificationButton,
+    .bellIcon,
+    .badge,
+    .loadingSpinner,
+    .pulseOverlay {
+        animation: none;
+        transition: none;
+    }
+    
+    .notificationButton:hover {
+        transform: none;
+    }
+    
+    .notificationButton:hover .bellIcon {
+        transform: none;
+    }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+    .notificationButton {
+        background: #000;
+        border: 2px solid #fff;
+    }
+    
+    .badge {
+        background: #f00;
+        border: 2px solid #fff;
+    }
+    
+    .bellIcon {
+        color: #fff;
+    }
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+    .notificationButton {
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+    }
+    
+    .notificationButton:hover {
+        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.6);
+    }
+    
+    .badge {
+        border-color: #1f2937;
+    }
+}
+
+/* ===========================================
+   FOCUS INDICATORS FOR KEYBOARD NAVIGATION
+   =========================================== */
+
+.notificationButton:focus-visible {
+    outline: 2px solid #3b82f6;
+    outline-offset: 2px;
+}
+
+/* ===========================================
+   PRINT STYLES
+   =========================================== */
+
+@media print {
+    .notificationContainer {
+        display: none;
+    }
+}
+
+/* ===========================================
+   TOOLTIP ENHANCEMENT
+   =========================================== */
+
+.notificationButton::after {
+    content: attr(title);
+    position: absolute;
+    bottom: -35px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.9);
+    color: white;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+    z-index: 1000;
+}
+
+.notificationButton:hover::after {
+    opacity: 1;
+}
+
+/* Hide tooltip on mobile */
+@media (max-width: 768px) {
+    .notificationButton::after {
+        display: none;
+    }
+}

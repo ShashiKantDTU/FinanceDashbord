@@ -87,6 +87,10 @@ export const AuthProvider = ({ children }) => {
   // Login function
   const login = (userData) => {
     const { token, user } = userData;
+    if(user.role !== 'Admin') {
+      console.error('Invalid user role:', user.role);
+      return;
+    }
     localStorage.setItem('token', token);
     localStorage.setItem('user', JSON.stringify(user));
     dispatch({

@@ -47,12 +47,24 @@ const authRoutes = require('./Routes/auth');
 const dashboardRoutes = require('./Routes/dashboard');
 const employeeRoutes = require('./Routes/EmployeeDetails');
 const changeTrackingRoutes = require('./Routes/changeTracking');
+const detailedChangeTrackingRoutes = require('./Routes/detailedChangeTracking');
+const optimizedEmployeeRoutes = require('./Routes/optimizedEmployeeRoutes');
+
+
+if (process.env.NODE_ENV === 'development') {
+    app.use((req, res, next) => {
+        setTimeout(next, 500);
+    });
+}
+
 
 // Use routes
 app.use('/api/auth', authRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/employee', employeeRoutes);
 app.use('/api/change-tracking', changeTrackingRoutes);
+app.use('/api/detailed-change-tracking', detailedChangeTrackingRoutes);
+app.use('/api/employee-optimized', optimizedEmployeeRoutes);
 
 // Basic route
 app.get('/', (req, res) => {

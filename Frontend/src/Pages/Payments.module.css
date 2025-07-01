@@ -16,6 +16,7 @@
   color: var(--color-text-default);
   font-family: var(--font-family-primary);
   width: 100%;
+ 
 }
 
 /* Ultra Compact Header Section - Performance Optimized */
@@ -183,6 +184,7 @@
   font-size: 0.7rem;
   color: var(--color-text-secondary);
   margin-top: 0.25rem;
+  animation: fadeInOut 2s ease-in-out infinite;
 }
 
 @media (max-width: 768px) {
@@ -686,7 +688,7 @@
   border: 1px solid var(--color-border-medium);
 }
 
-/* Loading Spinner - Performance Optimized */
+/* Loading Spinner - Modern BallTriangle Style */
 .loadingSpinner {
   display: flex;
   flex-direction: column;
@@ -698,6 +700,26 @@
   border-radius: var(--border-radius-lg);
   margin: 2rem;
   border: 1px solid var(--color-border-light);
+  backdrop-filter: blur(10px);
+  box-shadow: var(--shadow-sm);
+  transition: all 0.3s ease;
+  min-height: 300px;
+  gap: var(--space-4);
+}
+
+.loadingSpinner p {
+  margin: 0;
+  margin-top: var(--space-3);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+  animation: fadeInOut 2s ease-in-out infinite;
+}
+
+/* Fade animation for loading text */
+@keyframes fadeInOut {
+  0%, 100% { opacity: 0.7; }
+  50% { opacity: 1; }
 }
 
 .spinner {

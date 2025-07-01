@@ -175,17 +175,14 @@ router.get('/statistics', authenticateToken, async (req, res) => {
 // GET /api/change-tracking/recent
 router.get('/recent', authenticateToken, async (req, res) => {
     try {
-        const { limit, siteID, field, changeType, changedBy } = req.query;
+        const { limit, siteID } = req.query;
         
         console.log('🔥 RECENT CHANGES ENDPOINT HIT (OPTIMIZED)');
-        console.log(`📊 Params: limit=${limit}, siteID=${siteID}, field=${field}, changeType=${changeType}, changedBy=${changedBy}`);
+        console.log(`📊 Params: limit=${limit}, siteID=${siteID}`);
         
         // Use the optimized change tracking model directly
         const query = {};
         if (siteID) query.siteID = siteID;
-        if (field && field !== 'all') query.field = field;
-        if (changeType && changeType !== 'all') query.changeType = changeType;
-        if (changedBy && changedBy !== 'all') query.changedBy = changedBy;
         
         const recentChanges = await OptimizedChangeTracking.find(query)
             .sort({ timestamp: -1 })

@@ -68,6 +68,50 @@
 }
 
 /* ===========================================
+   HEADER CONTROLS SECTION
+   =========================================== */
+
+.headerControls {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-shrink: 0;
+}
+
+/* Change Tracking Button */
+.changeTrackingButton {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%);
+    color: white;
+    border: none;
+    border-radius: var(--border-radius-md);
+    font-size: 0.75rem;
+    font-weight: var(--font-weight-medium);
+    text-decoration: none;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.changeTrackingButton:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    color: white;
+    text-decoration: none;
+}
+
+.changeTrackingButton:active {
+    transform: translateY(0);
+}
+
+.changeTrackingButton svg {
+    font-size: 0.875rem;
+}
+
+/* ===========================================
    MONTH SELECTOR & CALENDAR
    =========================================== */
 
@@ -857,24 +901,9 @@
     color: var(--color-text-secondary);
 }
 
-.loadingTable::before {
-    content: '';
-    width: 20px;
-    height: 20px;
-    border: 2px solid var(--color-border-medium);
-    border-top: 2px solid var(--color-accent-primary);
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-}
-
 .noDataFound {
     font-size: 1rem;
     color: var(--color-text-tertiary);
-}
-
-@keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
 }
 
 /* ===========================================
@@ -1057,13 +1086,21 @@
         gap: 0.75rem;
     }
     
+    .headerControls {
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: center;
+        gap: 0.75rem;
+    }
+    
     .headerText h1 {
         font-size: 1.125rem;
     }
     
     .monthButton {
-        width: 100%;
+        flex: 1;
         justify-content: center;
+        min-width: auto;
     }
     
     .calendarDropdown {

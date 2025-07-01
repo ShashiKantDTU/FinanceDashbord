@@ -8,7 +8,7 @@ const MONGODB_URI = 'mongodb://localhost:27017/finance-dashboard';
 const SITE_ID = "6833ff004bd307e45abbfb41";
 const CREATED_BY = "me@123.com";
 const START_DATE = new Date(2024, 5, 1); // June 2024
-const END_DATE = new Date(2025, 4, 29); // May 29, 2025
+const END_DATE = new Date(2025, 6, 29); // July 29, 2025
 
 // Employee Schema Definition
 const employeeSchema = new mongoose.Schema({

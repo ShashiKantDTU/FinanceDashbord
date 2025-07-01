@@ -1,7 +1,10 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { FaSearch, FaFilter, FaChevronLeft, FaChevronRight, FaDownload, FaCalendarAlt } from 'react-icons/fa';
+import { FaSearch, FaFilter, FaChevronLeft, FaChevronRight, FaDownload, FaCalendarAlt, FaChartLine } from 'react-icons/fa';
 import { useParams } from 'react-router-dom';
+import CustomSpinner from '../components/CustomSpinner';
+import NotificationIcon from '../components/NotificationIcon';
+import ChangeTrackingPanel from '../components/ChangeTrackingPanel';
 
 import styles from './SitePage.module.css';
 import Sidebar from '../components/Sidebar';
@@ -43,23 +46,12 @@ const SitePage = () => {
 
     console.log(`Site ID from URL: ${siteID}`);
 
-    /**
-     * Formats year-month string for display
-     * @param {string} yearMonthValue - Year-month in YYYY-MM format
-     * @returns {string} Formatted display string (e.g., "May 2025")
-     */
-    const formatYearMonthLabel = (yearMonthValue) => {
-        const [year, month] = yearMonthValue.split('-');
-        const date = new Date(year, month - 1);
-        return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-    };
-
     // Initialize current year-month
     const currentYearMonth = getCurrentYearMonth();    // ===========================================
     // MOCK DATA - Replace with API calls in production
     // ===========================================
     
-   // ===========================================
+    // ===========================================
     // STATE MANAGEMENT
     // ===========================================
     
@@ -80,6 +72,9 @@ const SitePage = () => {
     // Pagination states
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage, setItemsPerPage] = useState(10);
+
+    // Notification panel states
+    const [isNotificationPanelOpen, setIsNotificationPanelOpen] = useState(false);
 
     // ===========================================
     // DATA FETCHING FUNCTIONS
@@ -249,14 +244,14 @@ const SitePage = () => {
      * Handles year-month selection change from calendar
      * @param {string} newYearMonth - New year-month selection
      */
-    const handleYearMonthChange = async (newYearMonth) => {
+    const handleYearMonthChange = useCallback(async (newYearMonth) => {
         setSelectedYearMonth(newYearMonth);
         setShowCalendar(false);
         setCurrentPage(1); // Reset to first page when changing month
         
         // Fetch data for the new year-month
-        await fetchEmployeeData(newYearMonth , siteID);
-    };    // ===========================================
+        await fetchEmployeeData(newYearMonth, siteID);
+    }, [siteID]);    // ===========================================
     // OPTIMIZED EVENT HANDLERS
     // ===========================================
     
@@ -285,15 +280,23 @@ const SitePage = () => {
     const handlePageChange = useCallback((page) => {
         setCurrentPage(page);
     }, []);
+    
+    /**
+     * Handles notification icon click
+     */
+    const handleNotificationClick = useCallback(() => {
+        setIsNotificationPanelOpen(true);
+    }, []);
 
     /**
-     * Handles items per page changes
-     * @param {Event} e - Select change event
+     * Handles notification panel close
      */
-    const handleItemsPerPageChange = useCallback((e) => {
-        setItemsPerPage(parseInt(e.target.value));
-        setCurrentPage(1); // Reset to first page when changing items per page
-    }, []);// ===========================================
+    const handleNotificationPanelClose = useCallback(() => {
+        setIsNotificationPanelOpen(false);
+    }, []);
+    
+    
+    // ===========================================
     // CALENDAR UTILITY FUNCTIONS
     // ===========================================
     
@@ -466,9 +469,9 @@ const SitePage = () => {
      * Load data for current year-month on component mount
      */
     useEffect(() => {
-        fetchEmployeeData(currentYearMonth , siteID);
+        fetchEmployeeData(currentYearMonth, siteID);
         console.log(`Loading data for current year-month: ${currentYearMonth}`);
-    }, [currentYearMonth]);    // ===========================================
+    }, [currentYearMonth, siteID]);    // ===========================================
     // COMPONENT RENDER
     // ===========================================
 
@@ -484,108 +487,124 @@ const SitePage = () => {
                             <p>Manage and monitor employee payments and site operations</p>
                         </div>
                         
-                        {/* Month/Year Selector with Calendar */}
-                        <div className={styles.monthSelector} ref={calendarRef}>
-                            <button 
-                                type="button"
-                                className={styles.monthButton}
-                                onClick={() => setShowCalendar(!showCalendar)}
-                                disabled={isLoading}
-                                aria-label="Select month and year"
+                        {/* Notification and Controls Section */}
+                        <div className={styles.headerControls}>
+                            {/* Notification Icon */}
+                            <NotificationIcon 
+                                siteID={siteID}
+                                onClick={handleNotificationClick}
+                            />
+                            
+                            {/* Detailed Change Tracking Button */}
+                            <Link 
+                                to={`/change-tracking/${siteID}`}
+                                className={styles.changeTrackingButton}
+                                title="View detailed change tracking"
                             >
-                                <FaCalendarAlt />
-                                <span>{formatSelectedYearMonthDisplay()}</span>
-                                <svg 
-                                    className={`${styles.chevron} ${showCalendar ? styles.chevronUp : ''}`}
-                                    width="16" 
-                                    height="16" 
-                                    viewBox="0 0 16 16" 
-                                    fill="none"
-                                    aria-hidden="true"
+                                <FaChartLine />
+                                <span>Detailed View</span>
+                            </Link>
+                            
+                            {/* Month/Year Selector with Calendar */}
+                            <div className={styles.monthSelector} ref={calendarRef}>
+                                <button 
+                                    type="button"
+                                    className={styles.monthButton}
+                                    onClick={() => setShowCalendar(!showCalendar)}
+                                    disabled={isLoading}
+                                    aria-label="Select month and year"
                                 >
-                                    <path 
-                                        d="M4 6L8 10L12 6" 
-                                        stroke="currentColor" 
-                                        strokeWidth="2" 
-                                        strokeLinecap="round" 
-                                        strokeLinejoin="round"
-                                    />
-                                </svg>
-                            </button>
-                            
-                            {/* Calendar Dropdown */}
-                            {showCalendar && (
-                                <div className={styles.calendarDropdown}>
-                                    {/* Calendar Header with Year Navigation */}
-                                    <div className={styles.calendarHeader}>
-                                        <button 
-                                            type="button"
-                                            className={styles.yearNavButton}
-                                            onClick={handlePreviousYear}
-                                            aria-label="Previous year"
-                                        >
-                                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                                                <path 
-                                                    d="M10 12L6 8L10 4" 
-                                                    stroke="currentColor" 
-                                                    strokeWidth="2" 
-                                                    strokeLinecap="round" 
-                                                    strokeLinejoin="round"
-                                                />
-                                            </svg>
-                                        </button>
-                                        <span className={styles.yearDisplay}>{calendarYear}</span>
-                                        <button 
-                                            type="button"
-                                            className={styles.yearNavButton}
-                                            onClick={handleNextYear}
-                                            disabled={calendarYear >= new Date().getFullYear()}
-                                            aria-label="Next year"
-                                        >
-                                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                                                <path 
-                                                    d="M6 4L10 8L6 12" 
-                                                    stroke="currentColor" 
-                                                    strokeWidth="2" 
-                                                    strokeLinecap="round" 
-                                                    strokeLinejoin="round"
-                                                />
-                                            </svg>
-                                        </button>
+                                    <FaCalendarAlt />
+                                    <span>{formatSelectedYearMonthDisplay()}</span>
+                                    <svg 
+                                        className={`${styles.chevron} ${showCalendar ? styles.chevronUp : ''}`}
+                                        width="16" 
+                                        height="16" 
+                                        viewBox="0 0 16 16" 
+                                        fill="none"
+                                        aria-hidden="true"
+                                    >
+                                        <path 
+                                            d="M4 6L8 10L12 6" 
+                                            stroke="currentColor" 
+                                            strokeWidth="2" 
+                                            strokeLinecap="round" 
+                                            strokeLinejoin="round"
+                                        />
+                                    </svg>
+                                </button>
+                                
+                                {/* Calendar Dropdown */}
+                                {showCalendar && (
+                                    <div className={styles.calendarDropdown}>
+                                        {/* Calendar Header with Year Navigation */}
+                                        <div className={styles.calendarHeader}>
+                                            <button 
+                                                type="button"
+                                                className={styles.yearNavButton}
+                                                onClick={handlePreviousYear}
+                                                aria-label="Previous year"
+                                            >
+                                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                                    <path 
+                                                        d="M10 12L6 8L10 4" 
+                                                        stroke="currentColor" 
+                                                        strokeWidth="2" 
+                                                        strokeLinecap="round" 
+                                                        strokeLinejoin="round"
+                                                    />
+                                                </svg>
+                                            </button>
+                                            <span className={styles.yearDisplay}>{calendarYear}</span>
+                                            <button 
+                                                type="button"
+                                                className={styles.yearNavButton}
+                                                onClick={handleNextYear}
+                                                disabled={calendarYear >= new Date().getFullYear()}
+                                                aria-label="Next year"
+                                            >
+                                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                                    <path 
+                                                        d="M6 4L10 8L6 12" 
+                                                        stroke="currentColor" 
+                                                        strokeWidth="2" 
+                                                        strokeLinecap="round" 
+                                                        strokeLinejoin="round"
+                                                    />
+                                                </svg>
+                                            </button>
+                                        </div>
+                                        
+                                        {/* Month Grid */}
+                                        <div className={styles.monthGrid}>
+                                            {monthNames.map((monthName, index) => {
+                                                const disabled = isMonthDisabled(calendarYear, index);
+                                                const isSelected = selectedYearMonth === `${calendarYear}-${String(index + 1).padStart(2, '0')}`;
+                                                const isCurrent = calendarYear === new Date().getFullYear() && index === new Date().getMonth();
+                                                
+                                                return (
+                                                    <button
+                                                        key={index}
+                                                        type="button"
+                                                        className={`${styles.monthCell} ${
+                                                            disabled ? styles.monthDisabled : ''
+                                                        } ${
+                                                            isSelected ? styles.monthSelected : ''
+                                                        } ${
+                                                            isCurrent ? styles.monthCurrent : ''
+                                                        }`}
+                                                        onClick={() => handleMonthSelect(index)}
+                                                        disabled={disabled}
+                                                        aria-label={`Select ${monthName} ${calendarYear}`}
+                                                    >
+                                                        {monthName.slice(0, 3)}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
                                     </div>
-                                    
-                                    {/* Month Grid */}
-                                    <div className={styles.monthGrid}>
-                                        {monthNames.map((monthName, index) => {
-                                            const disabled = isMonthDisabled(calendarYear, index);
-                                            const isSelected = selectedYearMonth === `${calendarYear}-${String(index + 1).padStart(2, '0')}`;
-                                            const isCurrent = calendarYear === new Date().getFullYear() && index === new Date().getMonth();
-                                            
-                                            return (
-                                                <button
-                                                    key={index}
-                                                    type="button"
-                                                    className={`${styles.monthCell} ${
-                                                        disabled ? styles.monthDisabled : ''
-                                                    } ${
-                                                        isSelected ? styles.monthSelected : ''
-                                                    } ${
-                                                        isCurrent ? styles.monthCurrent : ''
-                                                    }`}
-                                                    onClick={() => handleMonthSelect(index)}
-                                                    disabled={disabled}
-                                                    aria-label={`Select ${monthName} ${calendarYear}`}
-                                                >
-                                                    {monthName.slice(0, 3)}
-                                                </button>
-                                            );
-                                        })}
-                                    </div>
-                                </div>
-                            )}
-                            
-                            {/* Loading Indicator */}
-                            {isLoading && <span className={styles.loadingText}>Loading...</span>}
+                                )}
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -767,7 +786,9 @@ const SitePage = () => {
                                         <tr>
                                             <td colSpan="5" className={styles.noData}>
                                                 {isLoading ? (
-                                                    <div className={styles.loadingTable}>Loading data...</div>
+                                                    <div className={styles.loadingTable}>
+                                                        <CustomSpinner size={60} color="#3b82f6" />
+                                                    </div>
                                                 ) : (
                                                     <div className={styles.noDataFound}>
                                                         No employees found matching your criteria
@@ -842,6 +863,13 @@ const SitePage = () => {
                     </div>
                 </div>
             </div>
+            
+            {/* Change Tracking Notification Panel */}
+            <ChangeTrackingPanel 
+                isOpen={isNotificationPanelOpen}
+                onClose={handleNotificationPanelClose}
+                siteID={siteID}
+            />
         </div>
     );
 }

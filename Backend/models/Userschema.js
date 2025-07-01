@@ -29,7 +29,11 @@ const userSchema = new mongoose.Schema({
     site: [{
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Site'
-    }]
+    }],
+    supervisors: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Supervisor'
+    }],
 }, {
     timestamps: true
     

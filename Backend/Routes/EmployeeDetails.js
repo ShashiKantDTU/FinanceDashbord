@@ -1,7 +1,8 @@
 const express = require('express');
 const employeeSchema = require('../models/EmployeeSchema'); // Assuming you have an EmployeeSchema model
 const { FetchlatestData, calculateEmployeeData } = require('../Utils/Jobs');
-const { TrackChanges, latestEmpSerialNumber } = require('../Utils/ChangeTracker');
+const { trackOptimizedChanges } = require('../Utils/OptimizedChangeTracker');
+const { latestEmpSerialNumber } = require('../Utils/EmployeeUtils');
 const {authenticateToken} = require('../Middleware/auth');
 const router = express.Router();
 
@@ -97,37 +98,29 @@ router.post('/addemployee', authenticateToken, async (req, res) => {
         const savedEmployee = await newEmployee.save();
         
         console.log(`✅ Employee ${newEmpId} created successfully`);
-          // Track the addition of the new employee using ChangeTracker
+          // Track the addition of the new employee using Optimized Change Tracker
         try {
-            const changeTrackingResult = await TrackChanges(
+            const changeTrackingResult = await trackOptimizedChanges(
                 siteID.trim(),
                 newEmpId,
                 month,
                 year,
-                new Date(),
                 createdBy,
                 `New employee "${name}" added to the system by ${createdBy}`,
                 {}, // oldEmployeeData (empty for new employee)
-                savedEmployee.toObject(), // newEmployeeData
-                {
-                    ipAddress: req.ip || 'unknown',
-                    userAgent: req.get('User-Agent') || 'unknown',
-                    sessionId: req.session?.id || 'unknown',
-                    applicationVersion: '1.0.0',
-                    creationType: 'api_creation',
-                    createdByUser: createdBy
-                }
+                savedEmployee.toObject() // newEmployeeData
             );
             
-            console.log(`📊 Change tracking recorded with serial: ${changeTrackingResult.serialNumber}`);
+            console.log(`📊 Optimized change tracking recorded: ${changeTrackingResult.length} changes logged`);
             
             return res.status(201).json({
                 success: true,
                 data: {
                     employee: savedEmployee,
                     changeTracking: {
-                        serialNumber: changeTrackingResult.serialNumber,
-                        changesRecorded: changeTrackingResult.changes?.length || 0
+                        optimized: true,
+                        changeLogEntries: changeTrackingResult.length,
+                        changesRecorded: changeTrackingResult.length
                     },
                     metadata: {
                         month: month,
@@ -140,14 +133,15 @@ router.post('/addemployee', authenticateToken, async (req, res) => {
                 message: `Employee ${name} (${newEmpId}) created successfully for ${month}/${year} by ${createdBy}`
             });
               } catch (trackingError) {
-            console.warn('⚠️ Employee created but change tracking failed:', trackingError.message);
+            console.warn('⚠️ Employee created but optimized change tracking failed:', trackingError.message);
             // Employee was created successfully, but change tracking failed
             return res.status(201).json({
                 success: true,
                 data: {
                     employee: savedEmployee,
                     changeTracking: {
-                        error: 'Change tracking failed but employee was created',
+                        optimized: true,
+                        error: 'Optimized change tracking failed but employee was created',
                         details: trackingError.message
                     },
                     metadata: {
@@ -256,44 +250,34 @@ router.delete('/deleteemployee', authenticateToken, async (req, res) => {
                     // Store original data for change tracking
                     const originalData = employeeRecord.toObject();
                     
-                    // Track the deletion using ChangeTracker
-                    const changeTrackingResult = await TrackChanges(
+                    // Track the deletion using Optimized Change Tracker
+                    const changeTrackingResult = await trackOptimizedChanges(
                         employeeRecord.siteID,
                         empid.trim(),
                         employeeRecord.month,
                         employeeRecord.year,
-                        new Date(),
                         deletedBy,
                         `Employee "${name}" completely deleted from the system (including all historical data) by ${deletedBy}. Reason: Delete previous month data option was selected.`,
                         originalData, // oldEmployeeData
-                        {}, // newEmployeeData (empty for deletion)
-                        {
-                            ipAddress: req.ip || 'unknown',
-                            userAgent: req.get('User-Agent') || 'unknown',
-                            sessionId: req.session?.id || 'unknown',
-                            applicationVersion: '1.0.0',
-                            deletionType: 'complete_deletion',
-                            deletedByUser: deletedBy,
-                            deletePreviousMonth: true,
-                            targetMonth: month,
-                            targetYear: year
-                        }
+                        {} // newEmployeeData (empty for deletion)
                     );
                     
                     changeTrackingResults.push({
                         month: employeeRecord.month,
                         year: employeeRecord.year,
-                        serialNumber: changeTrackingResult.serialNumber,
+                        optimized: true,
+                        changeLogEntries: changeTrackingResult.length,
                         siteID: employeeRecord.siteID
                     });
                     
-                    console.log(`📊 Change tracking recorded for ${employeeRecord.month}/${employeeRecord.year} with serial: ${changeTrackingResult.serialNumber}`);
+                    console.log(`📊 Optimized change tracking recorded for ${employeeRecord.month}/${employeeRecord.year}: ${changeTrackingResult.length} changes`);
                     
                 } catch (trackingError) {
-                    console.warn(`⚠️ Change tracking failed for ${employeeRecord.month}/${employeeRecord.year}:`, trackingError.message);
+                    console.warn(`⚠️ Optimized change tracking failed for ${employeeRecord.month}/${employeeRecord.year}:`, trackingError.message);
                     changeTrackingResults.push({
                         month: employeeRecord.month,
                         year: employeeRecord.year,
+                        optimized: true,
                         error: trackingError.message,
                         siteID: employeeRecord.siteID
                     });
@@ -334,44 +318,34 @@ router.delete('/deleteemployee', authenticateToken, async (req, res) => {
             const originalData = employeeRecord.toObject();
             
             try {
-                // Track the deletion using ChangeTracker
-                const changeTrackingResult = await TrackChanges(
+                // Track the deletion using Optimized Change Tracker
+                const changeTrackingResult = await trackOptimizedChanges(
                     employeeRecord.siteID,
                     empid.trim(),
                     parseInt(month),
                     parseInt(year),
-                    new Date(),
                     deletedBy,
                     `Employee "${name}" deleted from ${month}/${year} by ${deletedBy}. Only current month data was deleted.`,
                     originalData, // oldEmployeeData
-                    {}, // newEmployeeData (empty for deletion)
-                    {
-                        ipAddress: req.ip || 'unknown',
-                        userAgent: req.get('User-Agent') || 'unknown',
-                        sessionId: req.session?.id || 'unknown',
-                        applicationVersion: '1.0.0',
-                        deletionType: 'single_month_deletion',
-                        deletedByUser: deletedBy,
-                        deletePreviousMonth: false,
-                        targetMonth: month,
-                        targetYear: year
-                    }
+                    {} // newEmployeeData (empty for deletion)
                 );
                 
                 changeTrackingResults.push({
                     month: parseInt(month),
                     year: parseInt(year),
-                    serialNumber: changeTrackingResult.serialNumber,
+                    optimized: true,
+                    changeLogEntries: changeTrackingResult.length,
                     siteID: employeeRecord.siteID
                 });
                 
-                console.log(`📊 Change tracking recorded with serial: ${changeTrackingResult.serialNumber}`);
+                console.log(`📊 Optimized change tracking recorded: ${changeTrackingResult.length} changes`);
                 
             } catch (trackingError) {
-                console.warn('⚠️ Change tracking failed:', trackingError.message);
+                console.warn('⚠️ Optimized change tracking failed:', trackingError.message);
                 changeTrackingResults.push({
                     month: parseInt(month),
                     year: parseInt(year),
+                    optimized: true,
                     error: trackingError.message,
                     siteID: employeeRecord.siteID
                 });
@@ -589,47 +563,33 @@ router.post('/importemployees', authenticateToken, async (req, res) => {
 
                 console.log(`✅ Employee ${sourceEmployee.empid} imported successfully`);
 
-                // Track the import using ChangeTracker
+                // Track the import using Optimized Change Tracker
                 try {
-                    const changeTrackingResult = await TrackChanges(
+                    const changeTrackingResult = await trackOptimizedChanges(
                         siteID.trim(),
                         sourceEmployee.empid,
                         parseInt(targetMonth),
                         parseInt(targetYear),
-                        new Date(),
                         importedBy,
                         `Employee "${sourceEmployee.name}" imported from ${sourceMonth}/${sourceYear} to ${targetMonth}/${targetYear} by ${importedBy}. Carry forward: ${carryForwardAmount}`,
                         {}, // oldEmployeeData (empty for import)
-                        savedEmployee.toObject(), // newEmployeeData
-                        {
-                            ipAddress: req.ip || 'unknown',
-                            userAgent: req.get('User-Agent') || 'unknown',
-                            sessionId: req.session?.id || 'unknown',
-                            applicationVersion: '1.0.0',
-                            operationType: 'employee_import',
-                            importedByUser: importedBy,
-                            sourceMonth: parseInt(sourceMonth),
-                            sourceYear: parseInt(sourceYear),
-                            targetMonth: parseInt(targetMonth),
-                            targetYear: parseInt(targetYear),
-                            carryForwardAmount: carryForwardAmount,
-                            preserveCarryForward: preserveCarryForward,
-                            preserveAdditionalPays: preserveAdditionalPays
-                        }
+                        savedEmployee.toObject() // newEmployeeData
                     );
                     
                     changeTrackingResults.push({
                         empid: sourceEmployee.empid,
-                        serialNumber: changeTrackingResult.serialNumber,
+                        optimized: true,
+                        changeLogEntries: changeTrackingResult.length,
                         success: true
                     });
                     
-                    console.log(`📊 Change tracking recorded for ${sourceEmployee.empid} with serial: ${changeTrackingResult.serialNumber}`);
+                    console.log(`📊 Optimized change tracking recorded for ${sourceEmployee.empid}: ${changeTrackingResult.length} changes`);
                     
                 } catch (trackingError) {
-                    console.warn(`⚠️ Change tracking failed for ${sourceEmployee.empid}:`, trackingError.message);
+                    console.warn(`⚠️ Optimized change tracking failed for ${sourceEmployee.empid}:`, trackingError.message);
                     changeTrackingResults.push({
                         empid: sourceEmployee.empid,
+                        optimized: true,
                         error: trackingError.message,
                         success: false
                     });

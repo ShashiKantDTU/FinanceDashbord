@@ -10,7 +10,7 @@
 
 const mongoose = require('mongoose');
 const employeeSchema = require('../models/EmployeeSchema'); 
-const { TrackChanges } = require('./ChangeTracker');
+const { trackOptimizedChanges } = require('./OptimizedChangeTracker');
 
 /**
  * Calculate employee data for a given month
@@ -158,6 +158,10 @@ const FetchlatestData = async (siteID, EmpID, month, year) => {
 
         // Update employee record with calculated values
         Object.assign(employee, calculationResult);
+        
+        // Fix legacy data before saving
+        fixLegacyData(employee);
+        
         await employee.save();
         
         return employee;
@@ -176,7 +180,7 @@ const FetchlatestData = async (siteID, EmpID, month, year) => {
  * @param {Number} recursionDepth - Current recursion depth (for safety)
  * @param {Number} maxRecursionDepth - Maximum allowed recursion depth
  */
-const CorrectCalculations = async (siteID, EmpID, recursionDepth = 0, maxRecursionDepth = 50) => {
+const CorrectCalculations = async (siteID, EmpID, recursionDepth = 0, maxRecursionDepth = 60) => {
     try {
         // Prevent infinite recursion
         if (recursionDepth > maxRecursionDepth) {
@@ -274,6 +278,30 @@ const CorrectAllEmployeeData = async (siteID, startYear = null, startMonth = nul
 // === HELPER FUNCTIONS ===
 
 /**
+ * Fix legacy data by adding missing required fields
+ * @param {Object} employeeRecord - Employee record to fix
+ */
+const fixLegacyData = (employeeRecord) => {
+    // Fix additional_req_pays missing createdBy
+    if (employeeRecord.additional_req_pays && Array.isArray(employeeRecord.additional_req_pays)) {
+        employeeRecord.additional_req_pays.forEach(item => {
+            if (!item.createdBy) {
+                item.createdBy = 'legacy_system';
+            }
+        });
+    }
+
+    // Fix payouts missing createdBy
+    if (employeeRecord.payouts && Array.isArray(employeeRecord.payouts)) {
+        employeeRecord.payouts.forEach(item => {
+            if (!item.createdBy) {
+                item.createdBy = 'legacy_system';
+            }
+        });
+    }
+};
+
+/**
  * Validate basic input parameters
  */
 const validateBasicParams = (siteID, EmpID, month = null, year = null) => {
@@ -337,20 +365,23 @@ const updateEmployeeCalculations = async (employeeRecord, previousBalance, origi
     employeeRecord.closing_balance = calculationResult.closing_balance;
     employeeRecord.recalculationneeded = false;
 
+    // Fix legacy data before saving
+    fixLegacyData(employeeRecord);
+
     // Save to database
     await employeeRecord.save();
     console.log(`✅ Successfully updated employee ${EmpID} for ${month}/${year}`);
 
-    // Track changes
+    // Track changes using Optimized Change Tracker
     try {
         const updatedData = employeeRecord.toObject();
-        await TrackChanges(
-            siteID, EmpID, month, year, new Date(),
+        await trackOptimizedChanges(
+            siteID, EmpID, month, year,
             'System', 'Automatic recalculation of employee data',
             originalData, updatedData
         );
     } catch (trackingError) {
-        console.warn(`Warning: Failed to track changes for ${EmpID}:`, trackingError.message);
+        console.warn(`Warning: Failed to track optimized changes for ${EmpID}:`, trackingError.message);
         // Don't throw here - tracking failure shouldn't break the main process
     }
 };
@@ -500,6 +531,7 @@ module.exports = {
     CorrectCalculations,
     CorrectAllEmployeeData,
     // Helper functions for external use
+    fixLegacyData,
     validateBasicParams,
     findOldestRecalculationRecord,
     getPreviousMonthBalance,

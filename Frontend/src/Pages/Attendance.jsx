@@ -5,6 +5,7 @@ import { FaCalendarAlt } from 'react-icons/fa';
 import { api } from '../utils/api';
 import { useParams } from 'react-router';
 import { useToast } from '../components/ToastProvider';
+import CustomSpinner from '../components/CustomSpinner';
 
 const Attendance = () => {
     // Initialize toast notifications
@@ -63,7 +64,7 @@ const Attendance = () => {
     const [selectedMonth, setSelectedMonth] = useState(getCurrentMonth());
 
     // `isLoading`: Boolean indicating if data is currently being fetched from the API.
-    const [isLoading, setIsLoading] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
 
     // `isEditMode`: Boolean indicating if the attendance table is in edit mode.
     const [isEditMode, setIsEditMode] = useState(false);
@@ -840,6 +841,7 @@ const Attendance = () => {
 
 
     // --- JSX RENDERING ---
+    
     return (
         <div className={styles.attendanceContainer}>
             <Sidebar />
@@ -935,7 +937,6 @@ const Attendance = () => {
                                     </div>
                                 </div>
                             )}
-                            {isLoading && <span className={styles.loadingText}>Loading...</span>}
                         </div>
                         {!isEditMode && (
                             <button
@@ -1078,9 +1079,9 @@ const Attendance = () => {
                                 Retry
                             </button>
                         </div>
-                    ) : isLoading ? (
+                    ) : (isLoading || attendanceData.length === 0) && isLoading ? (
                         <div className={styles.loadingState}>
-                            <div className={styles.spinner}></div>
+                            <CustomSpinner size={80} color="#3b82f6" />
                             <p>Loading attendance data...</p>
                         </div>
                     ) : attendanceData.length === 0 ? (
