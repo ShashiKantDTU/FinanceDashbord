@@ -1,18 +1,16 @@
 const express = require('express');
 const router = express.Router();
-const mongoose = require('mongoose');
 const { authenticateToken } = require('../Middleware/auth');
 
 // Import the new optimized change tracking functions
 const { 
     updateEmployeeDataOptimized, 
-    getFieldChangeHistory, 
     getFieldChangeStatistics,
-    trackOptimizedChanges
 } = require('../Utils/OptimizedChangeTracker');
 
 // Import the optimized change tracking model
 const OptimizedChangeTracking = require('../models/OptimizedChangeTrackingSchema');
+const EmployeeSchema = require('../models/EmployeeSchema');
 
 // Add logging middleware to track all requests
 router.use((req, res, next) => {
@@ -146,7 +144,7 @@ router.get('/employee/:employeeID', authenticateToken, validateRequest(['siteID'
 // GET /api/change-tracking/statistics
 router.get('/statistics', authenticateToken, async (req, res) => {
     try {
-        const { siteID, fromDate, toDate, year, month } = req.query;
+        const { siteID, fromDate, toDate } = req.query;
         
         console.log('🔥 STATISTICS ENDPOINT HIT (OPTIMIZED)');
         console.log(`📊 Params: siteID=${siteID}, fromDate=${fromDate}, toDate=${toDate}`);
@@ -222,6 +220,144 @@ router.get('/recent', authenticateToken, async (req, res) => {
         });
     }
 });
+
+
+// Route to update employee attendance FOR MOBILE APP
+router.put('/employee/mobapi/attendance/update', authenticateToken, async (req, res) => {
+    try {
+
+        const { employeeId, attendance, date , siteID } = req.body;
+        // Validate required fields
+        if (!employeeId || !attendance || !date || !siteID) {
+            console.log('Missing required fields: employeeId, attendance, date, siteID are required');
+            return res.status(400).json({
+                success: false,
+                message: 'Missing required fields: employeeId, attendance, date, siteID are required'
+            });
+        }
+        console.log(`📝 Updating attendance for employee ${employeeId} on ${date}`);
+        // check if date is Today's date
+        const currentDate = new Date().getDate();
+        const currentMonth = new Date().getMonth() + 1; // Months are 0-based in JS
+        const currentYear = new Date().getFullYear();
+
+        // 
+
+
+        if (date.date.toString().trim() !== currentDate.toString() || date.month.toString().trim() !== currentMonth.toString() || date.year.toString().trim() !== currentYear.toString()) {
+            console.log(` Received date is not today's date!  recieved :  ${date.date}/${date.month}/${date.year} current : ${currentDate}/${currentMonth}/${currentYear}` );
+            return res.status(400).json({
+                success: false,
+                message: 'Attendance can only be updated for today\'s date'
+            });
+        }
+        const employee = await EmployeeSchema.findOne({ empid: employeeId , month: currentMonth, year: currentYear , siteID: siteID });
+        if (!employee) {
+            console.log(`❌ Employee with ID ${employeeId} not found for month ${currentMonth}/${currentYear}`);
+            return res.status(404).json({
+                success: false,
+                message: `Employee with ID ${employeeId} not found for month ${currentMonth}/${currentYear}`
+            });
+        }
+        // Update the employee attendance record
+        employee.attendance[currentDate - 1] = attendance; // currentDate is 1-based, array is 0-based
+        await employee.save();
+
+        const istTime = new Date().toLocaleString('en-IN', { 
+            timeZone: 'Asia/Kolkata',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: false
+        });
+        
+        const displayMessage = `Attendance Added by ${req.user.email || req.user.userEmail || 'unknown-user'} for employee ${employeeId} on ${date.date}/${date.month}/${date.year} marked as ${attendance} at ${istTime}`;
+
+        // Record and save the change in the Detailed change tracking system
+        try {
+            const changeRecord = {
+            siteID: siteID,
+            employeeID: employeeId,
+            month: currentMonth,
+            year: currentYear,
+            field: 'attendance',
+            fieldDisplayName: 'Attendance',
+            fieldType: 'array_string',
+            changeType: 'added',
+            changeDescription: `Daily attendance for employee ${employeeId} on ${date.date}/${date.month}/${date.year} marked as ${attendance}`,
+            changeData: {
+                from: null, // No previous data for today's attendance
+                to: attendance,
+                item: attendance, // The attendance value being set
+                changedFields: [{
+                field: 'attendance',
+                from: null,
+                to: attendance
+                }],
+                position: currentDate - 1, // 0-based index for today's date
+                attendanceValue: attendance, // The actual attendance value (P, A, etc.)
+                difference: null, // No rate change for attendance
+                percentageChange: null, // No percentage change for attendance
+                dateInfo: {
+                day: date.date,
+                month: date.month,
+                year: date.year,
+                date: new Date(date.year, date.month - 1, date.date), // Create a Date object for the given date
+                dateString: `${date.year}-${date.month.toString().padStart(2, '0')}-${date.date.toString().padStart(2, '0')}`, // Format date as YYYY-MM-DD
+                dayName: new Date(date.year, date.month - 1, date.date).toLocaleString('default', { weekday: 'long' }), // Get day name from date
+                isValid: true // Mark as valid date
+                },
+                attendanceDate: `${date.date}/${date.month}/${date.year}`, // Quick access field for frontend
+                dayName: new Date(date.year, date.month - 1, date.date).toLocaleString('default', { weekday: 'long' }), // Get day name from date
+                date: `${date.date}/${date.month}/${date.year}` // Store as string for attendance dates
+
+            },
+            changedBy: req.user.email || req.user.userEmail || 'unknown-user', // Use email from auth middleware (should be string, not object)
+            remark: `Attendance updated via mobile app on ${new Date().toISOString()}`,
+            timestamp: new Date(),
+            metadata: {
+                displayMessage: displayMessage,
+                isAttendanceChange: true, // Mark this as an attendance change
+                isPaymentChange: false, // Mark this as not a payment change
+                isRateChange: false, // Mark this as not a rate change
+                updateType: 'attendance-only', // Specify this is an attendance-only update
+                complexity: 'simple', // Add required complexity field
+                totalFieldsUpdated: 1, // Add required totalFieldsUpdated field
+                fieldsUpdated: 'attendance' // Specify the field that was updated
+            }
+            }
+
+            // Save the change record to the optimized change tracking system
+            const changeTrackingRecord = new OptimizedChangeTracking(changeRecord);
+            await changeTrackingRecord.save();
+        } catch (changeTrackingError) {
+            console.error('❌ Error saving change tracking record:', changeTrackingError);
+            // Don't fail the request if change tracking fails, just log the error
+            console.log('⚠️ Attendance update succeeded but change tracking failed');
+        }
+        console.log(`✅ Attendance updated successfully for employee ${employeeId} on ${date}`);
+        return res.status(200).json({
+            success: true,
+            message: 'Attendance updated successfully'
+        });
+        
+
+    } catch (error) {
+        console.error('Error updating employee attendance:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Failed to update employee attendance',
+            error: error.message
+        });
+    }
+
+
+})
+
+
 
 // Update employee data endpoint (OPTIMIZED VERSION)
 // PUT /api/change-tracking/employee/:employeeID/update
@@ -358,6 +494,119 @@ router.put('/employee/:employeeID/update', authenticateToken, async (req, res) =
     }
 });
 
+
+// UPDATE EMPLOYEE DATA ENDPOINT FOR MOBILE APP
+router.put('/employee/mobapi/addpayout', authenticateToken, async (req, res) => {
+    try {
+        console.log('Mobile API to update payouts hit successfully')
+        const { empid, updateData, month, year, siteID } = req.body;
+        const changedBy = req.user?.email || req.user?.userEmail || 'unknown-user';
+        
+        // Validate required parameters
+        if (!empid || !updateData || !month || !year || !siteID) {
+            return res.status(400).json({
+                success: false,
+                message: 'Missing required parameters: employeeID, updateData, month, year, siteID are required',
+                requiredFields: ['employeeID', 'updateData', 'month', 'year', 'siteID']
+            });
+        }
+        
+        // Validate updateData structure
+        if (!updateData.value) {
+            return res.status(400).json({
+                success: false,
+                message: 'Missing payment amount. Please provide "value" field.',
+                requiredFields: ['value', 'date', 'remark']
+            });
+        }
+        
+        const monthNum = parseInt(month);
+        const yearNum = parseInt(year);
+        
+        if (monthNum < 1 || monthNum > 12 || yearNum < 2000 || yearNum > 2100) {
+            return res.status(400).json({
+                success: false,
+                message: 'Month must be between 1 and 12 and year must be between 2000 and 2100'
+            });
+        }
+        
+        // Find employee record
+        const employee = await EmployeeSchema.findOne({ 
+            empid: empid, 
+            month: monthNum, 
+            year: yearNum, 
+            siteID: siteID 
+        });
+        
+        if (!employee) {
+            return res.status(404).json({
+                success: false,
+                message: `Employee with ID ${empid} not found for month ${monthNum}/${yearNum}`
+            });
+        }
+        
+        // Create new payout with correct schema structure
+        const newPayout = {
+            value: updateData.value,
+            date: new Date(updateData.date),
+            remark: updateData.remark || 'Payment added via mobile app',
+            createdBy: changedBy // Add required createdBy field
+        };
+        
+        // Add new payout to existing payouts array
+        employee.payouts.push(newPayout);
+        
+        console.log(`✅ Payment prepared for employee ${empid}: ₹${newPayout.value}`);
+        
+        // Use updateEmployeeDataOptimized to handle both save and change tracking
+        const result = await updateEmployeeDataOptimized(
+            siteID,
+            empid,
+            monthNum,
+            yearNum,
+            { payouts: employee.payouts }, // Pass the updated payouts array
+            changedBy,
+            `Payment of ₹${newPayout.value} added via mobile app`
+        );
+        
+        console.log(`✅ Payment added and change tracking completed: ${result.data.changesTracked} changes tracked`);
+        
+        res.json({
+            success: true,
+            message: `Payment of ₹${newPayout.value} added successfully for ${employee.name}`,
+            data: {
+                payment: newPayout,
+                employee: {
+                    empid: employee.empid,
+                    name: employee.name,
+                    totalPayouts: employee.payouts.length,
+                    totalPayoutAmount: employee.payouts.reduce((sum, p) => sum + (p.value || 0), 0)
+                },
+                changeTracking: {
+                    changesTracked: result.data.changesTracked,
+                    systemType: 'optimized',
+                    success: true
+                },
+                timestamp: new Date().toISOString()
+            }
+        });
+        
+    } catch (error) {
+        console.error('❌ Error in mobile payout API:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Internal server error during payment processing',
+            error: error.message
+        });
+    }
+})
+
+
+
+
+
+
+// CURRENTLY BEING USED AT UPDATE EMPLOYEE ATTENDANCE WEB FRONTEND
 // Bulk attendance update endpoint (OPTIMIZED VERSION)
 // PUT /api/change-tracking/attendance/updateattendance
 router.put('/attendance/updateattendance', authenticateToken, async (req, res) => {
@@ -405,7 +654,6 @@ router.put('/attendance/updateattendance', authenticateToken, async (req, res) =
         
         // Get user information from JWT token attached by middleware
         const updatedBy = req.user?.email || req.user?.name || 'unknown-user';
-        const updatedById = req.user?.id || 'unknown-id';
 
         // PHASE 1: Validate all employees exist before making any changes
         console.log(`🔍 Phase 1: Validating all ${attendanceData.length} employees exist...`);

@@ -93,8 +93,19 @@ router.post("/login", async (req, res) => {
             email: existingSupervisor.userId,
             name: existingSupervisor.profileName,
             role: "Supervisor",
+            site: existingSupervisor.site,
           });
 
+          // Get site name from Site model
+          const site = await Site.findById(existingSupervisor.site);
+          if (!site) {
+            return res.status(404).json({ message: "Contact your contractor" });
+          }
+          
+
+          console.log("Supervisor login successful:", existingSupervisor.site[0].toString());
+
+          
           res.status(200).json({
             message: "Login successful",
             token,
@@ -103,6 +114,8 @@ router.post("/login", async (req, res) => {
               name: existingSupervisor.profileName,
               email: existingSupervisor.userId,
               role: "Supervisor",
+              siteid: existingSupervisor.site[0],
+              siteName: site.sitename,
             },
           });
         }

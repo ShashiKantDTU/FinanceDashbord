@@ -1,14 +1,11 @@
 const express = require('express');
 const router = express.Router();
-const mongoose = require('mongoose');
 const { authenticateToken } = require('../Middleware/auth');
 
 // Import the new optimized change tracking functions
 const { 
     updateEmployeeDataOptimized, 
-    getFieldChangeHistory, 
     getFieldChangeStatistics,
-    trackOptimizedChanges
 } = require('../Utils/OptimizedChangeTracker');
 
 // Import the optimized change tracking model
@@ -146,7 +143,7 @@ router.get('/employee/:employeeID', authenticateToken, validateRequest(['siteID'
 // GET /api/change-tracking/statistics
 router.get('/statistics', authenticateToken, async (req, res) => {
     try {
-        const { siteID, fromDate, toDate, year, month } = req.query;
+        const { siteID, fromDate, toDate } = req.query;
         
         console.log('🔥 STATISTICS ENDPOINT HIT (OPTIMIZED)');
         console.log(`📊 Params: siteID=${siteID}, fromDate=${fromDate}, toDate=${toDate}`);
@@ -402,7 +399,7 @@ router.put('/attendance/updateattendance', authenticateToken, async (req, res) =
         
         // Get user information from JWT token attached by middleware
         const updatedBy = req.user?.email || req.user?.name || 'unknown-user';
-        const updatedById = req.user?.id || 'unknown-id';
+        // const updatedById = req.user?.id || 'unknown-id';
 
         // PHASE 1: Validate all employees exist before making any changes
         console.log(`🔍 Phase 1: Validating all ${attendanceData.length} employees exist...`);

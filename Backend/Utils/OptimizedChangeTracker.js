@@ -18,13 +18,39 @@ const ChangeTracking = require('../models/OptimizedChangeTrackingSchema');
 
 /**
  * Generate a synthetic unique key for objects without _id
- * Uses a more flexible approach to match payment objects for modification detection
+ * Uses a stable identifier approach that doesn't change when values are modified
  * @param {Object} item - The item to generate key for
+ * @param {Boolean} forMatching - If true, generates a stable key for matching (ignores changeable fields)
  * @returns {String} Unique key
  */
-const generateSyntheticKey = (item) => {
+const generateSyntheticKey = (item, forMatching = false) => {
     if (!item) return null;
     
+    if (forMatching) {
+        // For matching purposes, use only stable fields that don't change during edits
+        // This allows us to detect modifications instead of treating edits as remove+add
+        if (item.date && item.createdBy) {
+            const dateStr = new Date(item.date).toISOString().split('T')[0]; // YYYY-MM-DD
+            return `${dateStr}_${item.createdBy}`;
+        }
+        
+        // Fallback for matching: use date if available
+        if (item.date) {
+            const dateStr = new Date(item.date).toISOString().split('T')[0];
+            return `date_${dateStr}`;
+        }
+        
+        // Final fallback: use creation order or hash of non-changeable fields
+        const stableFields = {
+            date: item.date,
+            createdBy: item.createdBy
+        };
+        const hash = crypto.createHash('md5');
+        hash.update(JSON.stringify(stableFields));
+        return `stable_${hash.digest('hex').substring(0, 8)}`;
+    }
+    
+    // For uniqueness purposes (original behavior), use all fields
     // For payouts and additional_req_pays: use date + createdBy + value + remark as primary key
     // This ensures uniqueness even when multiple payments are made on the same date by the same user
     if (item.date && item.createdBy) {
@@ -381,105 +407,144 @@ const analyzeChangeTypes = (oldData, newData, criticalFields) => {
     };
 };
 /*
+ * Enhanced comparison for object arrays with better modification detection
  * Handles real-world scenarios where frontend sends complete new arrays
+ * Now properly detects modifications vs additions/removals to prevent duplicate entries
  * @param {Array} oldArray - Original array of objects
  * @param {Array} newArray - Updated array of objects
  * @param {String} fieldName - Name of the field being compared (for better descriptions)
  * @returns {Object} Detailed changes with specific information about what changed
  */
 const compareObjectArrays = (oldArray = [], newArray = [], fieldName = 'payment') => {
-    // Create maps using synthetic keys
-    const oldMap = new Map();
-    const newMap = new Map();
+    // Create maps using stable keys for matching (ignores changeable fields)
+    const oldMatchingMap = new Map();
+    const newMatchingMap = new Map();
     
-    // Build map of old items
-    oldArray.forEach(item => {
-        const key = generateSyntheticKey(item);
-        if (key) oldMap.set(key, item);
+    // Also create maps with full keys for uniqueness checking
+    const oldFullMap = new Map();
+    const newFullMap = new Map();
+    
+    // Build maps for old items
+    oldArray.forEach((item, index) => {
+        const matchingKey = generateSyntheticKey(item, true); // Stable key for matching
+        const fullKey = generateSyntheticKey(item, false); // Full key for uniqueness
+        
+        if (matchingKey) {
+            oldMatchingMap.set(matchingKey, { item, index, fullKey });
+        }
+        if (fullKey) {
+            oldFullMap.set(fullKey, { item, index, matchingKey });
+        }
     });
     
-    // Build map of new items
-    newArray.forEach(item => {
-        const key = generateSyntheticKey(item);
-        if (key) newMap.set(key, item);
+    // Build maps for new items
+    newArray.forEach((item, index) => {
+        const matchingKey = generateSyntheticKey(item, true); // Stable key for matching
+        const fullKey = generateSyntheticKey(item, false); // Full key for uniqueness
+        
+        if (matchingKey) {
+            newMatchingMap.set(matchingKey, { item, index, fullKey });
+        }
+        if (fullKey) {
+            newFullMap.set(fullKey, { item, index, matchingKey });
+        }
     });
     
     const detailedChanges = [];
+    const processedMatchingKeys = new Set();
     
-    // Find added items (exist in new but not in old)
-    newMap.forEach((item, key) => {
-        if (!oldMap.has(key)) {
+    // Step 1: Check for modifications first (same matching key, different full key)
+    newMatchingMap.forEach((newData, matchingKey) => {
+        if (oldMatchingMap.has(matchingKey)) {
+            const oldData = oldMatchingMap.get(matchingKey);
+            
+            // If matching key is same but full key is different, it's a modification
+            if (oldData.fullKey !== newData.fullKey) {
+                const oldItem = oldData.item;
+                const newItem = newData.item;
+                
+                // Compare all fields for changes
+                const changedFields = [];
+                const fieldsToCheck = ['value', 'remark', 'date', 'createdBy'];
+                
+                fieldsToCheck.forEach(field => {
+                    const oldValue = oldItem[field];
+                    const newValue = newItem[field];
+                    
+                    // Handle date comparison specially
+                    if (field === 'date') {
+                        const oldDateStr = oldValue ? new Date(oldValue).toISOString() : null;
+                        const newDateStr = newValue ? new Date(newValue).toISOString() : null;
+                        if (oldDateStr !== newDateStr) {
+                            changedFields.push({
+                                field,
+                                from: oldValue ? new Date(oldValue).toLocaleDateString('en-IN') : null,
+                                to: newValue ? new Date(newValue).toLocaleDateString('en-IN') : null
+                            });
+                        }
+                    } else {
+                        // Regular field comparison
+                        if (String(oldValue) !== String(newValue)) {
+                            changedFields.push({
+                                field,
+                                from: oldValue,
+                                to: newValue
+                            });
+                        }
+                    }
+                });
+                
+                if (changedFields.length > 0) {
+                    // Create enhanced from/to for better display messages
+                    const fromSummary = `₹${oldItem.value || 0} - ${oldItem.remark || 'No remark'}`;
+                    const toSummary = `₹${newItem.value || 0} - ${newItem.remark || 'No remark'}`;
+                    
+                    detailedChanges.push({
+                        changeType: 'modified',
+                        item: newItem,
+                        from: fromSummary, // Enhanced from summary
+                        to: toSummary, // Enhanced to summary
+                        oldItem: oldItem, // Keep original for detailed comparison
+                        newItem: newItem, // Keep new for detailed comparison
+                        changedFields,
+                        description: `${fieldName} modified: ${changedFields.map(cf => 
+                            `${cf.field} changed from "${cf.from}" to "${cf.to}"`
+                        ).join(', ')}`
+                    });
+                }
+                
+                // Mark this matching key as processed to avoid duplicate processing
+                processedMatchingKeys.add(matchingKey);
+            } else {
+                // Same matching key and same full key = no change, mark as processed
+                processedMatchingKeys.add(matchingKey);
+            }
+        }
+    });
+    
+    // Step 2: Find truly added items (new matching key that doesn't exist in old)
+    newMatchingMap.forEach((newData, matchingKey) => {
+        if (!oldMatchingMap.has(matchingKey) && !processedMatchingKeys.has(matchingKey)) {
             detailedChanges.push({
                 changeType: 'added',
-                item: item,
+                item: newData.item,
                 from: null,
-                to: item,
-                description: `New ${fieldName} added: ₹${item.value || 0} - ${item.remark || 'No remark'} (${item.date ? new Date(item.date).toLocaleDateString() : 'No date'})`
+                to: newData.item,
+                description: `New ${fieldName} added: ₹${newData.item.value || 0} - ${newData.item.remark || 'No remark'} (${newData.item.date ? new Date(newData.item.date).toLocaleDateString('en-IN') : 'No date'})`
             });
         }
     });
     
-    // Find removed items (exist in old but not in new)
-    oldMap.forEach((item, key) => {
-        if (!newMap.has(key)) {
+    // Step 3: Find truly removed items (old matching key that doesn't exist in new)
+    oldMatchingMap.forEach((oldData, matchingKey) => {
+        if (!newMatchingMap.has(matchingKey) && !processedMatchingKeys.has(matchingKey)) {
             detailedChanges.push({
                 changeType: 'removed',
-                item: item,
-                from: item,
+                item: oldData.item,
+                from: oldData.item,
                 to: null,
-                description: `${fieldName} removed: ₹${item.value || 0} - ${item.remark || 'No remark'} (${item.date ? new Date(item.date).toLocaleDateString() : 'No date'})`
+                description: `${fieldName} removed: ₹${oldData.item.value || 0} - ${oldData.item.remark || 'No remark'} (${oldData.item.date ? new Date(oldData.item.date).toLocaleDateString('en-IN') : 'No date'})`
             });
-        }
-    });
-    
-    // Find modified items (exist in both but with different values)
-    oldMap.forEach((oldItem, key) => {
-        if (newMap.has(key)) {
-            const newItem = newMap.get(key);
-            
-            // Compare all fields for changes
-            const changedFields = [];
-            const fieldsToCheck = ['value', 'remark', 'date', 'createdBy'];
-            
-            fieldsToCheck.forEach(field => {
-                const oldValue = oldItem[field];
-                const newValue = newItem[field];
-                
-                // Handle date comparison specially
-                if (field === 'date') {
-                    const oldDateStr = oldValue ? new Date(oldValue).toISOString() : null;
-                    const newDateStr = newValue ? new Date(newValue).toISOString() : null;
-                    if (oldDateStr !== newDateStr) {
-                        changedFields.push({
-                            field,
-                            from: oldValue ? new Date(oldValue).toLocaleDateString() : null,
-                            to: newValue ? new Date(newValue).toLocaleDateString() : null
-                        });
-                    }
-                } else {
-                    // Regular field comparison
-                    if (String(oldValue) !== String(newValue)) {
-                        changedFields.push({
-                            field,
-                            from: oldValue,
-                            to: newValue
-                        });
-                    }
-                }
-            });
-            
-            if (changedFields.length > 0) {
-                detailedChanges.push({
-                    changeType: 'modified',
-                    item: newItem,
-                    from: oldItem,
-                    to: newItem,
-                    changedFields,
-                    description: `${fieldName} modified: ${changedFields.map(cf => 
-                        `${cf.field} changed from "${cf.from}" to "${cf.to}"`
-                    ).join(', ')}`
-                });
-            }
         }
     });
     
@@ -697,19 +762,19 @@ const generateDisplayMessage = (fieldDisplayName, detailedChange, employeeID, mo
             const dateStr = detailedChange.dateInfo && detailedChange.dateInfo.isValid 
                 ? ` on ${detailedChange.dateInfo.dateString} (${detailedChange.dateInfo.dayName})`
                 : ` at position ${(detailedChange.position || 0) + 1}`;
-            return `${changedBy} marked ${employeeID} as ${decoded.display} (${detailedChange.attendanceValue})${dateStr} for ${month}/${year} at ${timeStr}`;
+            return `${changedBy} marked ${employeeID} as ${decoded.display} (${detailedChange.attendanceValue})${dateStr} at ${timeStr}`;
         } else if (detailedChange.changeType === 'removed') {
             const decoded = detailedChange.decoded;
             const dateStr = detailedChange.dateInfo && detailedChange.dateInfo.isValid 
                 ? ` from ${detailedChange.dateInfo.dateString} (${detailedChange.dateInfo.dayName})`
                 : ` from position ${(detailedChange.position || 0) + 1}`;
-            return `${changedBy} removed ${employeeID}'s ${decoded.display} (${detailedChange.attendanceValue})${dateStr} for ${month}/${year} at ${timeStr}`;
+            return `${changedBy} removed ${employeeID}'s ${decoded.display} (${detailedChange.attendanceValue})${dateStr} at ${timeStr}`;
         } else if (detailedChange.changeType === 'modified') {
             // Enhanced message for attendance modifications with exact date
             const dateStr = detailedChange.dateInfo && detailedChange.dateInfo.isValid 
                 ? ` on ${detailedChange.dateInfo.dateString} (${detailedChange.dateInfo.dayName})`
                 : ` at position ${(detailedChange.position || 0) + 1}`;
-            return `${changedBy} changed ${employeeID}'s attendance from ${detailedChange.from} to ${detailedChange.to}${dateStr} for ${month}/${year} at ${timeStr}`;
+            return `${changedBy} changed ${employeeID}'s attendance from ${detailedChange.from} to ${detailedChange.to}${dateStr} at ${timeStr}`;
         }
     } else if (fieldDisplayName === 'Daily Rate') {
         // Rate change messages with amount and percentage details
@@ -723,7 +788,7 @@ const generateDisplayMessage = (fieldDisplayName, detailedChange, employeeID, mo
             return `${changedBy} ${changeDirection} ${employeeID}'s daily rate from ₹${detailedChange.from.toLocaleString('en-IN')} to ₹${detailedChange.to.toLocaleString('en-IN')} by ${amountStr}${percentageStr} for ${month}/${year} at ${timeStr}`;
         }
     } else {
-        // Payment change messages
+        // Payment change messages with enhanced from/to details
         if (detailedChange.changeType === 'added') {
             const item = detailedChange.item;
             return `${changedBy} added ${fieldDisplayName.toLowerCase()} for ${employeeID} (${month}/${year}): ₹${item.value || 0} - ${item.remark || 'No remark'} at ${timeStr}`;
@@ -731,10 +796,16 @@ const generateDisplayMessage = (fieldDisplayName, detailedChange, employeeID, mo
             const item = detailedChange.item;
             return `${changedBy} removed ${fieldDisplayName.toLowerCase()} for ${employeeID} (${month}/${year}): ₹${item.value || 0} - ${item.remark || 'No remark'} at ${timeStr}`;
         } else if (detailedChange.changeType === 'modified') {
-            const changedFieldsStr = detailedChange.changedFields?.map(cf => 
-                `${cf.field}: "${cf.from}" → "${cf.to}"`
-            ).join(', ') || 'multiple fields';
-            return `${changedBy} modified ${fieldDisplayName.toLowerCase()} for ${employeeID} (${month}/${year}): ${changedFieldsStr} at ${timeStr}`;
+            // Enhanced modification message with from/to summary
+            if (detailedChange.from && detailedChange.to) {
+                return `${changedBy} modified ${fieldDisplayName.toLowerCase()} for ${employeeID} (${month}/${year}): changed from "${detailedChange.from}" to "${detailedChange.to}" at ${timeStr}`;
+            } else {
+                // Fallback to field-by-field changes if from/to summary not available
+                const changedFieldsStr = detailedChange.changedFields?.map(cf => 
+                    `${cf.field}: "${cf.from}" → "${cf.to}"`
+                ).join(', ') || 'multiple fields';
+                return `${changedBy} modified ${fieldDisplayName.toLowerCase()} for ${employeeID} (${month}/${year}): ${changedFieldsStr} at ${timeStr}`;
+            }
         }
     }
     

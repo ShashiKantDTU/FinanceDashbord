@@ -275,7 +275,7 @@ router.get('/recent-changes', async (req, res) => {
                     query.timestamp = query.timestamp || {};
                     query.timestamp.$gte = new Date(startDate);
                 } catch (e) {
-                    console.warn('Invalid startDate provided:', startDate);
+                    console.warn('Invalid startDate provided:', startDate , e);
                 }
             }
             if (endDate) {
@@ -286,7 +286,7 @@ router.get('/recent-changes', async (req, res) => {
                     endDateTime.setDate(endDateTime.getDate() + 1);
                     query.timestamp.$lt = endDateTime;
                 } catch (e) {
-                    console.warn('Invalid endDate provided:', endDate);
+                    console.warn('Invalid endDate provided:', endDate ,e);
                 }
             }
             

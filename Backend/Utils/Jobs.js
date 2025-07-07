@@ -172,6 +172,12 @@ const FetchlatestData = async (siteID, EmpID, month, year) => {
     }
 };
 
+
+const calculateBasicfields = (employee) => {
+    
+}
+
+
 /**
  * Correct calculations for an employee starting from the oldest month needing recalculation
  * Uses recursive approach to process all months in chronological order

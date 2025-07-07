@@ -6,8 +6,7 @@
 
 const express = require('express');
 const router = express.Router();
-const employeeSchema = require('../models/EmployeeSchema');
-const { updateEmployeeDataOptimized, trackOptimizedChanges } = require('../Utils/OptimizedChangeTracker');
+const { updateEmployeeDataOptimized } = require('../Utils/OptimizedChangeTracker');
 const { authenticateToken } = require('../Middleware/auth');
 
 /**

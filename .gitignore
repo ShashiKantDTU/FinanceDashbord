@@ -145,3 +145,6 @@ local.md
 *.bak
 *~
 /.github
+temp.json
+employee_dummy_data_readable_backup.json
+employee_dummy_data_backup.json
