@@ -411,6 +411,27 @@
     overflow: hidden;
     display: flex;
     flex-direction: column;
+    /* Enhanced for virtualized scrolling */
+    contain: layout style paint;
+    overflow-anchor: none; /* Prevent scroll anchoring issues */
+}
+
+.tableContainer::-webkit-scrollbar {
+    width: 8px;
+}
+
+.tableContainer::-webkit-scrollbar-track {
+    background: var(--color-bg-secondary);
+    border-radius: 4px;
+}
+
+.tableContainer::-webkit-scrollbar-thumb {
+    background: var(--color-border-default);
+    border-radius: 4px;
+}
+
+.tableContainer::-webkit-scrollbar-thumb:hover {
+    background: var(--color-border-strong);
 }
 
 .tableWrapper {
@@ -418,6 +439,12 @@
     overflow: auto;
     scrollbar-width: thin;
     scrollbar-color: var(--color-bg-tertiary) var(--color-bg-secondary);
+    /* Enhanced for virtualized scrolling */
+    transform: translateZ(0);
+    will-change: scroll-position;
+    /* Enable smooth scrolling performance */
+    -webkit-overflow-scrolling: touch;
+    scroll-behavior: smooth;
 }
 
 .tableWrapper::-webkit-scrollbar {
@@ -444,6 +471,10 @@
     font-size: var(--font-size-sm);
     background: var(--color-bg-primary);
     position: relative;
+    /* Enable table layout optimization with automatic column widths */
+    table-layout: auto;
+    /* Improve rendering performance */
+    contain: layout style paint;
 }
 
 .attendanceTable thead {
@@ -454,14 +485,14 @@
 }
 
 .attendanceTable th {
-    padding: var(--space-sm);
+    padding: 0.7em 1.1em;
+    border-bottom: 2px solid var(--color-border-light, #e0e0e0);
+    font-size: 1.05em;
+    font-weight: 600;
+    color: var(--color-text-default, #22223b);
+    background: var(--color-bg-primary, #fff);
     text-align: center;
-    font-weight: var(--font-weight-semibold);
-    color: var(--color-text-default);
-    border-bottom: 2px solid var(--color-border-medium);
-    border-right: 1px solid var(--color-border-light);
-    background: var(--color-bg-secondary);
-    white-space: nowrap;
+    letter-spacing: 0.01em;
 }
 
 .attendanceTable th:last-child {
@@ -470,7 +501,8 @@
 
 .stickyColumn {
     position: sticky;
-    left: 0;    z-index: 5;
+    left: 0;
+    z-index: 5;
     background: var(--color-bg-primary) !important;
     border-right: 2px solid var(--color-border-medium) !important;
     font-weight: var(--font-weight-medium);
@@ -1906,13 +1938,196 @@
     font-weight: 500;
 }
 
-/* Responsive search styles */
-@media (max-width: 768px) {
-    .searchInputWrapper {
-        max-width: 100%;
+/* Transition Message for Progressive Edit Mode */
+.transitionMessage {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-sm);
+    padding: var(--space-sm);
+    background: var(--color-bg-info);
+    border: 1px solid var(--color-border-info);
+    border-radius: var(--border-radius-md);
+    margin-bottom: var(--space-md);
+    color: var(--color-text-info);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+    animation: pulse 2s ease-in-out infinite;
+    /* Add progress bar effect */
+    position: relative;
+    overflow: hidden;
+}
+
+.transitionMessage::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    height: 2px;
+    background: var(--color-accent-primary);
+    animation: progressBar 2s ease-in-out infinite;
+    width: 100%;
+}
+
+@keyframes progressBar {
+    0% {
+        transform: translateX(-100%);
     }
-    
-    .searchInput {
-        font-size: 16px; /* Prevent zoom on iOS */
+    50% {
+        transform: translateX(0%);
     }
+    100% {
+        transform: translateX(100%);
+    }
+}
+
+/* Virtual Table Spacers and Optimization */
+.virtualTableSpacer {
+    height: var(--spacer-height, 0);
+    border: none !important;
+    background: transparent !important;
+    pointer-events: none;
+    width: 100%;
+}
+
+.virtualTableSpacer td {
+    padding: 0 !important;
+    border: none !important;
+    background: transparent !important;
+    height: inherit;
+    line-height: 1;
+    width: 100%;
+}
+
+/* Ensure table container works properly with virtualized content */
+.tableContainer {
+    /* ...existing code... */
+    /* Enhanced for virtualized scrolling */
+    contain: layout style paint;
+    overflow-anchor: none; /* Prevent scroll anchoring issues */
+}
+
+/* Optimize table rendering for virtualization */
+.attendanceTable {
+    /* ...existing code... */
+    /* Improved for virtual scrolling */
+    min-height: 100%;
+    contain: layout style paint;
+}
+
+/* Ensure spacer rows don't interfere with table styling */
+.attendanceTable tbody tr[data-spacer="true"] {
+    background: transparent !important;
+    border: none !important;
+    height: var(--spacer-height, 0);
+}
+
+.attendanceTable tbody tr[data-spacer="true"]:hover {
+    background: transparent !important;
+}
+
+.attendanceTable tbody tr[data-spacer="true"]:nth-child(even) {
+    background: transparent !important;
+}
+
+/* Ensure smooth scrolling performance */
+.tableContainer {
+    /* ...existing code... */
+    /* Enhanced scrolling performance */
+    -webkit-overflow-scrolling: touch;
+    scroll-behavior: smooth;
+    will-change: scroll-position;
+}
+
+/* Progress indicators for edit mode */
+.attendanceTable thead .daysOfWeekRow {
+    background: var(--color-bg-tertiary, #f7f9fa);
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: var(--color-text-secondary, #6c757d);
+    letter-spacing: 0.03em;
+}
+
+.dayOfWeekCell {
+    padding: 0.4em 0.7em;
+    background: var(--color-bg-tertiary, #f7f9fa);
+    font-family: var(--font-family-primary, 'Inter', Arial, sans-serif);
+    font-size: 0.93em;
+    font-weight: 500;
+    color: var(--color-accent-primary, #3b82f6);
+    text-align: center;
+    letter-spacing: 0.02em;
+}
+
+.attendanceTable thead tr {
+    background: var(--color-bg-primary, #fff);
+}
+
+.attendanceTable th {
+    padding: 0.7em 1.1em;
+    border-bottom: 2px solid var(--color-border-light, #e0e0e0);
+    font-size: 1.05em;
+    font-weight: 600;
+    color: var(--color-text-default, #22223b);
+    background: var(--color-bg-primary, #fff);
+    text-align: center;
+    letter-spacing: 0.01em;
+}
+
+.attendanceTable th.stickyColumn {
+    background: linear-gradient(90deg, var(--color-bg-primary, #fff) 90%, #f7f9fa 100%);
+    z-index: 2;
+}
+
+.attendanceTable th.summaryColumn {
+    background: var(--color-bg-tertiary, #f7f9fa);
+    color: var(--color-text-secondary, #6c757d);
+    font-weight: 500;
+}
+
+.compactDayHeader {
+    padding: 0.4em 0.5em !important;
+    background: var(--color-bg-tertiary, #f7f9fa);
+    border-bottom: 2px solid var(--color-border-light, #e0e0e0);
+    min-width: 2.5em;
+    font-family: var(--font-family-primary, 'Inter', Arial, sans-serif);
+}
+
+.compactDayHeaderContent {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.1em;
+}
+
+.dayOfWeek {
+    font-size: 0.85em;
+    font-weight: 500;
+    color: var(--color-accent-primary, #3b82f6);
+    letter-spacing: 0.01em;
+    line-height: 1.1;
+}
+
+.dayNumber {
+    font-size: 1.05em;
+    font-weight: 600;
+    color: var(--color-text-default, #22223b);
+    line-height: 1.1;
+}
+
+.sundayHeader {
+    color: var(--color-accent-primary, #3b82f6) !important;
+    background: #1b355c !important;
+    font-weight: 700 !important;
+    border-radius: 6px;
+    box-shadow: 0 1px 4px 0 rgba(59,130,246,0.07);
+    border-bottom: 2.5px solid var(--color-accent-primary, #3b82f6) !important;
+}
+
+.sundayCell {
+    background: #1b355c !important;
+    color: var(--color-accent-primary, #3b82f6) !important;
+    font-weight: 600;
+    border-bottom: 2px solid #e3eefd;
 }

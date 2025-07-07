@@ -1,11 +1,14 @@
 import Sidebar from '../components/Sidebar';
 import styles from './Attendance.module.css';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { FaCalendarAlt } from 'react-icons/fa';
 import { api } from '../utils/api';
 import { useParams } from 'react-router';
 import { useToast } from '../components/ToastProvider';
 import CustomSpinner from '../components/CustomSpinner';
+import VirtualizedAttendanceTable from '../components/VirtualizedAttendanceTable';
+import { useOptimizedAttendance } from '../hooks/useOptimizedAttendance';
+import { useProgressiveEditMode } from '../hooks/useProgressiveEditMode';
 
 const Attendance = () => {
     // Initialize toast notifications
@@ -31,16 +34,7 @@ const Attendance = () => {
         return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
     };
 
-    // Returns an array of valid attendance codes.
-    // These are used for input validation.
-    const getValidAttendanceOptions = () => {
-        const options = ['P', 'A'];
-        for (let i = 1; i <= 23; i++) {
-            options.push(`P${i}`);
-            options.push(`A${i}`);
-        }
-        return options;
-    };
+
 
     // --- STATE VARIABLES ---
 
@@ -65,9 +59,6 @@ const Attendance = () => {
 
     // `isLoading`: Boolean indicating if data is currently being fetched from the API.
     const [isLoading, setIsLoading] = useState(true);
-
-    // `isEditMode`: Boolean indicating if the attendance table is in edit mode.
-    const [isEditMode, setIsEditMode] = useState(false);
 
     // `isSaving`: Boolean indicating if attendance changes are currently being saved to the API.
     const [isSaving, setIsSaving] = useState(false);
@@ -166,6 +157,35 @@ const Attendance = () => {
     const [isDeletingEmployee, setIsDeletingEmployee] = useState(false);
 
 
+        // Initialize progressive edit mode with advanced optimizations
+    const {
+        isEditMode,
+        isTransitioning,
+        enableEditMode,
+        disableEditMode,
+        shouldShowInputs,
+        setVisibleRows,
+        enabledRowsCount
+    } = useProgressiveEditMode(attendanceData.length);
+
+    // Initialize optimized attendance management
+    const { 
+        handleAttendanceChange, 
+        validAttendanceOptions,
+        cleanup 
+    } = useOptimizedAttendance(
+        attendanceData, 
+        setAttendanceData, 
+        originalAttendanceData, 
+        setChanges, 
+        isEditMode
+    );
+
+    // Cleanup on unmount
+    useEffect(() => {
+        return cleanup;
+    }, [cleanup]);
+
     // --- DATA FETCHING (useEffect) ---
 
     // This effect runs when `selectedMonth` or `siteID` changes.
@@ -215,7 +235,7 @@ const Attendance = () => {
                 setOriginalAttendanceData([]);
             } finally {
                 setIsLoading(false); // Indicate that data loading has finished.
-                setIsEditMode(false); // Exit edit mode when new data is loaded.
+                disableEditMode(); // Exit edit mode when new data is loaded.
             }
         };
 
@@ -228,7 +248,7 @@ const Attendance = () => {
             setOriginalAttendanceData([]);
             setIsLoading(false);
         }
-    }, [selectedMonth, siteID, refreshTrigger]); // Dependencies: re-run if `selectedMonth`, `siteID`, or `refreshTrigger` changes.
+    }, [selectedMonth, siteID, refreshTrigger, disableEditMode]); // Dependencies: re-run if `selectedMonth`, `siteID`, or `refreshTrigger` changes.
 
 
     // --- MONTH SELECTION AND CALENDAR LOGIC ---
@@ -338,82 +358,33 @@ const Attendance = () => {
     // --- EDIT MODE ACTIONS ---
 
     // Activates edit mode, allowing users to modify attendance.
-    const handleEditMode = () => {
-        setIsEditMode(true);
+    const handleEditMode = async () => {
         // `originalAttendanceData` should already be set from `fetchAttendanceData`.
         // If not, ensure it's a copy of the current `attendanceData`.
         if (originalAttendanceData.length === 0 && attendanceData.length > 0) {
             setOriginalAttendanceData(JSON.parse(JSON.stringify(attendanceData)));
         }
+        
+        // Enable progressive edit mode
+        await enableEditMode();
     };
 
     // Deactivates edit mode and reverts any unsaved changes.
     const handleCancelEdit = () => {
-        setIsEditMode(false);
+        disableEditMode();
         setShowConfirmDialog(false); // Hide confirmation dialog if open.
         setChanges([]);              // Clear any tracked changes.
         // Restore attendance data from the backup.
         setAttendanceData(JSON.parse(JSON.stringify(originalAttendanceData)));
         console.log('Edit cancelled, data restored to original state.');
-    };    // --- ATTENDANCE CHANGE HANDLER ---
-    // Updates attendance data when user modifies attendance values in edit mode
-    const handleAttendanceChange = (employeeIndex, dayIndex, newValue) => {
-        if (!isEditMode) return; // Only allow changes in edit mode
-        
-        const validOptions = getValidAttendanceOptions();
-        
-        // Validate the input value
-        if (newValue && !validOptions.includes(newValue)) {
-            showWarning(`Invalid attendance code: ${newValue}. Valid codes: P, A, P1-P23, A1-A23`);
-            return;
-        }
-        
-        const currentEmployee = attendanceData[employeeIndex];
-        const oldValue = currentEmployee?.attendance[dayIndex] || '';
-        
-        // Only track change if value actually changed
-        if (oldValue !== newValue) {
-            // Update changes tracking
-            setChanges(prevChanges => {
-                // Remove any existing change for this employee/day combination
-                const filteredChanges = prevChanges.filter(
-                    change => !(change.employeeIndex === employeeIndex && change.day === dayIndex + 1)
-                );
-                
-                // Add new change if the value is different from original
-                const originalValue = originalAttendanceData[employeeIndex]?.attendance[dayIndex] || '';
-                if (originalValue !== newValue) {
-                    return [...filteredChanges, {
-                        employeeIndex,
-                        employeeName: currentEmployee.name,
-                        day: dayIndex + 1, // Display as 1-based day number
-                        oldValue: originalValue,
-                        newValue: newValue
-                    }];
-                }
-                
-                return filteredChanges;
-            });
-        }
-        
-        // Update the attendance data
-        setAttendanceData(prevData => {
-            const newData = [...prevData];
-            if (newData[employeeIndex] && newData[employeeIndex].attendance) {
-                newData[employeeIndex] = {
-                    ...newData[employeeIndex],
-                    attendance: [...newData[employeeIndex].attendance]
-                };
-                newData[employeeIndex].attendance[dayIndex] = newValue;
-            }
-            return newData;
-        });
-    };    // --- SAVE CHANGES ACTION ---
+    };
+
+    // --- SAVE CHANGES ACTION ---
     // Shows confirmation dialog with summary of changes before saving
     const handleSaveChanges = async () => {
         // If no changes were made, just exit edit mode
         if (changes.length === 0) {
-            setIsEditMode(false);
+            disableEditMode();
             showWarning('No changes were made.');
             return;
         }
@@ -447,7 +418,7 @@ const Attendance = () => {
             if (response.success) {
                 // Update original data to reflect saved changes
                 setOriginalAttendanceData(JSON.parse(JSON.stringify(attendanceData)));
-                setIsEditMode(false);
+                disableEditMode();
                 setChanges([]); // Clear changes after successful save
                 
                 const summary = response.summary;
@@ -749,7 +720,7 @@ const Attendance = () => {
     // --- DELETE EMPLOYEE FUNCTIONALITY ---
 
     // Opens the delete confirmation dialog for a specific employee
-    const handleDeleteEmployee = (employee) => {
+    const handleDeleteEmployee = useCallback((employee) => {
         const [year, month] = selectedMonth.split('-');
         setEmployeeToDelete({
             empid: employee.id,
@@ -759,7 +730,7 @@ const Attendance = () => {
         });
         setDeletePreviousMonth(false); // Reset checkbox
         setShowDeleteConfirmDialog(true);
-    };
+    }, [selectedMonth]);
 
     // Closes the delete confirmation dialog and resets state
     const handleCloseDeleteDialog = () => {
@@ -956,15 +927,24 @@ const Attendance = () => {
                                 type="button"
                                 className={styles.editButton}
                                 onClick={handleEditMode}
-                                disabled={isLoading || attendanceData.length === 0 || isSaving}
+                                disabled={isLoading || attendanceData.length === 0 || isSaving || isTransitioning}
                             >
-                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                                    <path
-                                        d="M11.013 1.427a1.75 1.75 0 0 1 2.474 0l1.086 1.086a1.75 1.75 0 0 1 0 2.474l-8.61 8.61c-.21.21-.47.364-.756.445l-3.251.93a.75.75 0 0 1-.927-.928l.929-3.25c.081-.286.235-.547.445-.758l8.61-8.61Z"
-                                        fill="currentColor"
-                                    />
-                                </svg>
-                                Edit
+                                {isTransitioning ? (
+                                    <>
+                                        <div className={styles.spinner}></div>
+                                        Activating ({enabledRowsCount}/{attendanceData.length})
+                                    </>
+                                ) : (
+                                    <>
+                                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                            <path
+                                                d="M11.013 1.427a1.75 1.75 0 0 1 2.474 0l1.086 1.086a1.75 1.75 0 0 1 0 2.474l-8.61 8.61c-.21.21-.47.364-.756.445l-3.251.93a.75.75 0 0 1-.927-.928l.929-3.25c.081-.286.235-.547.445-.758l8.61-8.61Z"
+                                                fill="currentColor"
+                                            />
+                                        </svg>
+                                        Edit
+                                    </>
+                                )}
                             </button>
                         ) : (
                             <div className={styles.editModeActions}>
@@ -1067,6 +1047,12 @@ const Attendance = () => {
                 )}
                 
                 <div className={styles.tableContainer}>
+                    {isTransitioning && (
+                        <div className={styles.transitionMessage}>
+                            <CustomSpinner size={20} color="#3b82f6" />
+                            <span>Enabling edit mode ({enabledRowsCount}/{attendanceData.length} rows active)...</span>
+                        </div>
+                    )}
                     {error ? (
                         <div className={styles.errorState}>
                             <div className={styles.errorIcon}>⚠️</div>
@@ -1091,137 +1077,17 @@ const Attendance = () => {
                             <p>No employee data found for {formatSelectedMonthDisplay()}</p>
                         </div>
                     ) : (
-                        <div className={styles.tableWrapper}>
-                        <table className={styles.attendanceTable}>                            
-                            <thead>
-                                <tr>
-                                    <th className={styles.stickyColumn}>ID</th>
-                                    <th className={styles.stickyColumn}>Employee Name</th>
-                                    {Array.from({ length: new Date(selectedMonth.split('-')[0], selectedMonth.split('-')[1], 0).getDate() }, (_, i) => (
-                                        <th key={i + 1} className={styles.dayColumn}>{i + 1}</th>
-                                    ))}
-                                    <th className={styles.summaryColumn}>Present</th>
-                                    <th className={styles.summaryColumn}>Overtime (hrs)</th>
-                                    <th className={styles.summaryColumn}>Absent</th>
-                                    <th className={styles.summaryColumn}>Final Days</th>
-                                    <th className={styles.summaryColumn}>Payment (₹)</th>
-                                    {!isEditMode && <th className={styles.summaryColumn}>Actions</th>}
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {filteredAttendanceData.map((employeeEntry, employeeIndex) => {
-                                    // --- Attendance Calculation Logic ---
-                                    // This section calculates summary figures based on the employee's attendance array.
-
-                                    const attendanceArray = employeeEntry.attendance || [];
-
-                                    // Calculate Total Present Days:
-                                    // Counts entries that include "P" (e.g., "P", "P1", "P8").
-                                    const totalPresentCount = attendanceArray.reduce((acc, status) => {
-                                        return acc + (status && status.toUpperCase().includes('P') ? 1 : 0);
-                                    }, 0);
-
-                                    // Calculate Total Overtime Hours:
-                                    // Sums the numeric part of entries like "P2" (2 hours), "A3" (3 hours).
-                                    // Assumes overtime is indicated by a number following "P" or "A".
-                                    const totalOvertimeHours = attendanceArray.reduce((acc, status) => {
-                                        if (status && status.length > 1) {
-                                            const overtimePart = status.substring(1); // Get character(s) after the first one.
-                                            const hours = parseInt(overtimePart, 10);
-                                            return acc + (isNaN(hours) ? 0 : hours);
-                                        }
-                                        return acc;
-                                    }, 0);
-
-                                    // Calculate Total Absent Days:
-                                    // Counts entries that include "A" (e.g., "A", "A1").
-                                    const totalAbsentCount = attendanceArray.reduce((acc, status) => {
-                                        return acc + (status && status.toUpperCase().includes('A') ? 1 : 0);
-                                    }, 0);
-                                    
-                                    // Calculate Final Attendance Days (including overtime):
-                                    // Overtime hours are converted to days (assuming 8 hours = 1 day).
-                                    // Remaining overtime hours are represented as a decimal fraction of a day.
-                                    const overtimeDaysEquivalent = Math.floor(totalOvertimeHours / 8);
-                                    const remainingOvertimeHoursPart = totalOvertimeHours % 8;
-                                    // Convert remaining hours to a decimal (e.g., 4 hours = 0.4, not 0.5 of a day based on current logic)
-                                    // Note: The original logic `remainingOvertimeHours / 10` might be a specific business rule
-                                    // or a simplification. If 4 hours should be 0.5 days, this should be `remainingOvertimeHours / 8`.
-                                    // Sticking to original logic:
-                                    const remainingOvertimeDecimalContribution = remainingOvertimeHoursPart / 10; 
-                                    const finalAttendanceDays = totalPresentCount + overtimeDaysEquivalent + remainingOvertimeDecimalContribution;
-
-                                    // Calculate Payment:
-                                    // Based on final attendance days and the employee's daily rate.
-                                    const dailyRate = employeeEntry.rate || 550; // Default rate if not specified.
-                                    const paymentAmount = (finalAttendanceDays * dailyRate).toFixed(2); // Format to 2 decimal places.
-
-                                    return (
-                                        <tr key={employeeEntry.id || employeeIndex}>
-                                            <td className={styles.stickyColumn}>{employeeEntry.id}</td>
-                                            <td className={styles.stickyColumn}>{employeeEntry.name}</td>
-                                            {/* Daily Attendance Cells */}
-                                            {Array.from({ length: new Date(selectedMonth.split('-')[0], selectedMonth.split('-')[1], 0).getDate() }, (_, dayCellIndex) => (
-                                                <td 
-                                                    key={dayCellIndex + 1} 
-                                                    className={`${styles.dayColumn} ${
-                                                        attendanceArray[dayCellIndex]?.toUpperCase().includes('P') ? styles.present :
-                                                        attendanceArray[dayCellIndex]?.toUpperCase().includes('A') ? styles.absent :
-                                                        styles.notMarked
-                                                    }`}
-                                                >
-                                                    {isEditMode ? (
-                                                        <input
-                                                            type="text"
-                                                            className={`${styles.attendanceInput} ${
-                                                                // Apply invalid style if input is not empty and not a valid option.
-                                                                attendanceArray[dayCellIndex] && 
-                                                                !getValidAttendanceOptions().includes(attendanceArray[dayCellIndex].toUpperCase())
-                                                                    ? styles.invalidInput : ''
-                                                            }`}
-                                                            value={attendanceArray[dayCellIndex] || ''}
-                                                            onChange={(e) => handleAttendanceChange(employeeIndex, dayCellIndex, e.target.value)}
-                                                            placeholder="-" // Placeholder for empty input
-                                                            maxLength="3" // E.g., "P8", "P10", "A23"
-                                                            title={`Valid: ${getValidAttendanceOptions().join(', ')}`}
-                                                        />
-                                                    ) : (
-                                                        <span className={styles.attendanceStatus}>
-                                                            {attendanceArray[dayCellIndex] || '-'} {/* Display "-" if not marked */}
-                                                        </span>
-                                                    )}
-                                                </td>
-                                            ))}
-                                            
-                                            {/* Summary Columns */}
-                                            <td className={styles.summaryColumn}>{totalPresentCount}</td>                                            
-                                            <td className={styles.summaryColumn}>{totalOvertimeHours}</td>
-                                            <td className={styles.summaryColumn}>{totalAbsentCount}</td>
-                                            <td className={styles.summaryColumn}>{finalAttendanceDays.toFixed(1)}</td>
-                                            <td className={styles.summaryColumn}>₹{paymentAmount}</td>
-                                            {!isEditMode && (
-                                                <td className={styles.summaryColumn}>
-                                                    <button
-                                                        type="button"
-                                                        className={styles.deleteButton}
-                                                        onClick={() => handleDeleteEmployee(employeeEntry)}
-                                                        title={`Delete ${employeeEntry.name}`}
-                                                    >
-                                                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                                                            <path
-                                                                d="M6.5 1H9.5A1 1 0 0 1 10.5 2V3H13A0.5 0.5 0 0 1 13 4H12V13A2 2 0 0 1 10 15H6A2 2 0 0 1 4 13V4H3A0.5 0.5 0 0 1 3 3H5.5V2A1 1 0 0 1 6.5 1ZM5.5 4V13A1 1 0 0 0 6.5 14H9.5A1 1 0 0 0 10.5 13V4H5.5ZM7 6A0.5 0.5 0 0 1 7.5 6.5V11.5A0.5 0.5 0 0 1 6.5 11.5V6.5A0.5 0.5 0 0 1 7 6ZM9 6A0.5 0.5 0 0 1 9.5 6.5V11.5A0.5 0.5 0 0 1 8.5 11.5V6.5A0.5 0.5 0 0 1 9 6Z"
-                                                                fill="currentColor"
-                                                            />
-                                                        </svg>
-                                                    </button>
-                                                </td>
-                                            )}
-                                        </tr>
-                                    );
-                                })}                            
-                                </tbody>
-                        </table>
-                        </div>
+                        <VirtualizedAttendanceTable
+                            filteredAttendanceData={filteredAttendanceData}
+                            attendanceData={attendanceData}
+                            selectedMonth={selectedMonth}
+                            isEditMode={isEditMode}
+                            shouldShowInputs={shouldShowInputs}
+                            setVisibleRows={setVisibleRows}
+                            onAttendanceChange={handleAttendanceChange}
+                            onDeleteEmployee={handleDeleteEmployee}
+                            validAttendanceOptions={validAttendanceOptions}
+                        />
                     )}
                 </div>
                 {showConfirmDialog && (

@@ -766,8 +766,7 @@ router.post("/importemployees", authenticateToken, async (req, res) => {
 });
 
 // Get employee details with pending payoutes in month
-router.get(
-  "/employeewithpendingpayouts",
+router.get("/employeewithpendingpayouts",
   authenticateToken,
   async (req, res) => {
     // Required query parameters: month, year, and siteID
@@ -1029,8 +1028,7 @@ router.get("/allemployees", authenticateToken, async (req, res) => {
 });
 
 // Route to get employee with pending attendance on a specific date
-router.get(
-  "/employeewithpendingattendance",
+router.get("/employeewithpendingattendance",
   authenticateToken,
   async (req, res) => {
     // check for required query parameters
@@ -1322,8 +1320,7 @@ router.get("/allemployeelist", authenticateToken, async (req, res) => {
 
 // Fetch employee details by ID, month, and year
 
-router.get(
-  "/employee/:siteID/:empid/:month/:year",
+router.get("/employee/:siteID/:empid/:month/:year",
   authenticateToken,
   async (req, res) => {
     const { empid, month, year, siteID } = req.params;
