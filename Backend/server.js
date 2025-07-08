@@ -23,13 +23,24 @@ process.on('SIGINT', () => {
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// CORS configuration for production
+// CORS configuration for production and development
+const allowedOrigins = [];
+if (process.env.FRONTEND_URL) {
+  allowedOrigins.push(process.env.FRONTEND_URL);
+}
+if (process.env.NODE_ENV === 'development') {
+  allowedOrigins.push('http://localhost:5173');
+}
 const corsOptions = {
-  origin: [
-    'http://localhost:5173', // Local development
-    'https://finance-dashbord-three.vercel.app', // Replace with your actual Vercel domain
-    // Add more allowed origins as needed
-  ],
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps, curl, etc.)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    } else {
+      return callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
   optionsSuccessStatus: 200,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
@@ -79,7 +90,7 @@ app.get('/', (req, res) => {
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.status(200).json({ 
-    status: 'healthy', 
+    status: 'healthy',
     timestamp: new Date().toISOString(),
     uptime: process.uptime()
   });
