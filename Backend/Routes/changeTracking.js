@@ -236,19 +236,18 @@ router.put('/employee/mobapi/attendance/update', authenticateToken, async (req, 
             });
         }
         console.log(`📝 Updating attendance for employee ${employeeId} on ${date}`);
-        // check if date is Today's date
-        const currentDate = new Date().getDate();
-        const currentMonth = new Date().getMonth() + 1; // Months are 0-based in JS
-        const currentYear = new Date().getFullYear();
-
-        // 
-
+        // check if date is Today's date (in IST)
+        const now = new Date();
+        const nowIST = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
+        const currentDate = nowIST.getDate();
+        const currentMonth = nowIST.getMonth() + 1; // Months are 0-based in JS
+        const currentYear = nowIST.getFullYear();
 
         if (date.date.toString().trim() !== currentDate.toString() || date.month.toString().trim() !== currentMonth.toString() || date.year.toString().trim() !== currentYear.toString()) {
-            console.log(` Received date is not today's date!  recieved :  ${date.date}/${date.month}/${date.year} current : ${currentDate}/${currentMonth}/${currentYear}` );
+            console.log(` Received date is not today's date!  recieved :  ${date.date}/${date.month}/${date.year} current (IST): ${currentDate}/${currentMonth}/${currentYear}` );
             return res.status(400).json({
                 success: false,
-                message: 'Attendance can only be updated for today\'s date'
+                message: 'Attendance can only be updated for today\'s date (IST)'
             });
         }
         const employee = await EmployeeSchema.findOne({ empid: employeeId , month: currentMonth, year: currentYear , siteID: siteID });
