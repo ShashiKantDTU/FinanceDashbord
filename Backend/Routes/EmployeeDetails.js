@@ -1068,20 +1068,23 @@ router.get("/employeewithpendingattendance",
       });
     }
 
-    const currentDay = new Date().getDate().toString().trim();
-    const currentMonth = (new Date().getMonth() + 1).toString().trim();
-    const currentYear = new Date().getFullYear().toString().trim();
+    // Get current date in IST
+    const now = new Date();
+    const nowIST = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
+    const currentDay = nowIST.getDate().toString().trim();
+    const currentMonth = (nowIST.getMonth() + 1).toString().trim();
+    const currentYear = nowIST.getFullYear().toString().trim();
 
     console.log(
       `🔍 Fetching employees with pending attendance for ${date}/${month}/${year} at site ${siteID}`
     );
-    console.log(`Current date is ${currentDay}/${currentMonth}/${currentYear}`);
+    console.log(`Current IST date is ${currentDay}/${currentMonth}/${currentYear}`);
 
-    // Requested date should be same as current date
+    // Requested date should be same as current IST date
     if (date !== currentDay || month !== currentMonth || year !== currentYear) {
       return res.status(400).json({
         success: false,
-        error: "Requested date must be today.",
+        error: "Requested date must be today (IST).",
       });
     }
 
