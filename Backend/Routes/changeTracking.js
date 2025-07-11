@@ -8,6 +8,9 @@ const {
     getFieldChangeStatistics,
 } = require('../Utils/OptimizedChangeTracker');
 
+// Import markEmployeesForRecalculation once at the top
+const { markEmployeesForRecalculation } = require('../Utils/Jobs');
+
 // Import the optimized change tracking model
 const OptimizedChangeTracking = require('../models/OptimizedChangeTrackingSchema');
 const EmployeeSchema = require('../models/EmployeeSchema');
@@ -332,6 +335,9 @@ router.put('/employee/mobapi/attendance/update', authenticateToken, async (req, 
             // Save the change record to the optimized change tracking system
             const changeTrackingRecord = new OptimizedChangeTracking(changeRecord);
             await changeTrackingRecord.save();
+
+            // Mark all future months for recalculation
+            await markEmployeesForRecalculation(siteID, employeeId, currentMonth, currentYear);
         } catch (changeTrackingError) {
             console.error('❌ Error saving change tracking record:', changeTrackingError);
             // Don't fail the request if change tracking fails, just log the error
@@ -441,6 +447,9 @@ router.put('/employee/:employeeID/update', authenticateToken, async (req, res) =
             changedBy,
             remark || 'Employee data update via API'
         );
+
+        // Mark all future months for recalculation
+        await markEmployeesForRecalculation(siteID, employeeID, monthNum, yearNum);
 
         console.log(`✅ Employee ${employeeID} updated successfully with ${result.data.changesTracked} optimized changes tracked`);
 
@@ -567,6 +576,9 @@ router.put('/employee/mobapi/addpayout', authenticateToken, async (req, res) => 
             changedBy,
             `Payment of ₹${newPayout.value} added via mobile app`
         );
+
+        // Mark all future months for recalculation
+        await markEmployeesForRecalculation(siteID, empid, monthNum, yearNum);
         
         console.log(`✅ Payment added and change tracking completed: ${result.data.changesTracked} changes tracked`);
         
@@ -729,6 +741,9 @@ router.put('/attendance/updateattendance', authenticateToken, async (req, res) =
                     updatedBy,
                     `Bulk attendance update for ${monthNum}/${yearNum} by ${updatedBy}`
                 );
+
+                // Mark all future months for recalculation
+                await markEmployeesForRecalculation(siteID, employeeID, monthNum, yearNum);
 
                 results.push({
                     employeeID: employeeID,

@@ -6,6 +6,13 @@
  * - Attendance processing
  * - Data corrections and recalculations
  * - Change tracking integration
+ * - Employment gap handling for carry-forward calculations
+ * 
+ * Key Features:
+ * - Automatic detection and handling of employment gaps
+ * - Enhanced previous balance calculation that searches for the most recent available month
+ * - Gap analysis and reporting functionality
+ * - Robust error handling for missing employee data
  */
 
 const mongoose = require('mongoose');
@@ -173,10 +180,6 @@ const FetchlatestData = async (siteID, EmpID, month, year) => {
 };
 
 
-const calculateBasicfields = (employee) => {
-    
-}
-
 
 /**
  * Correct calculations for an employee starting from the oldest month needing recalculation
@@ -337,19 +340,56 @@ const findOldestRecalculationRecord = async (siteID, EmpID) => {
 
 /**
  * Get previous month's closing balance for carry forward calculation
+ * Handles gaps in employment by finding the most recent month with data
  */
 const getPreviousMonthBalance = async (siteID, EmpID, currentMonth, currentYear) => {
-    const previousMonth = currentMonth === 1 ? 12 : currentMonth - 1;
-    const previousYear = currentMonth === 1 ? currentYear - 1 : currentYear;
+    try {
+        // First, try to find the immediately previous month
+        const previousMonth = currentMonth === 1 ? 12 : currentMonth - 1;
+        const previousYear = currentMonth === 1 ? currentYear - 1 : currentYear;
 
-    const previousMonthData = await mongoose.model('Employee').findOne({ 
-        empid: EmpID, 
-        siteID: siteID, 
-        month: previousMonth, 
-        year: previousYear 
-    });
-    
-    return previousMonthData ? previousMonthData.closing_balance : 0;
+        const immediatelyPreviousData = await mongoose.model('Employee').findOne({ 
+            empid: EmpID, 
+            siteID: siteID, 
+            month: previousMonth, 
+            year: previousYear 
+        });
+        
+        // If immediately previous month exists, return its closing balance
+        if (immediatelyPreviousData) {
+            return immediatelyPreviousData.closing_balance || 0;
+        }
+
+        // If no immediate previous month, search for the most recent month with data
+        // Create a date threshold for the current month
+        const currentMonthStart = new Date(currentYear, currentMonth - 1, 1);
+        
+        // Find the most recent employee record before the current month
+        const mostRecentData = await mongoose.model('Employee').findOne({
+            empid: EmpID,
+            siteID: siteID,
+            $or: [
+                { year: { $lt: currentYear } },
+                { 
+                    year: currentYear, 
+                    month: { $lt: currentMonth } 
+                }
+            ]
+        }).sort({ year: -1, month: -1 }); // Sort by most recent first
+
+        if (mostRecentData) {
+            console.log(`Found gap in employment for ${EmpID}: Using balance from ${mostRecentData.month}/${mostRecentData.year} (${mostRecentData.closing_balance || 0}) for ${currentMonth}/${currentYear}`);
+            return mostRecentData.closing_balance || 0;
+        }
+
+        // If no previous data found at all, return 0
+        console.log(`No previous employment data found for ${EmpID} before ${currentMonth}/${currentYear}`);
+        return 0;
+
+    } catch (error) {
+        console.error(`Error getting previous month balance for ${EmpID}:`, error.message);
+        return 0; // Return 0 as fallback to prevent calculation failures
+    }
 };
 
 /**
@@ -529,6 +569,139 @@ const markEmployeesForRecalculation = async (siteID, employeeID = null, fromMont
     }
 };
 
+/**
+ * Detect employment gaps for an employee within a date range
+ * Useful for reporting and debugging purposes
+ * @param {String} siteID - Site identifier
+ * @param {String} EmpID - Employee identifier
+ * @param {Number} startMonth - Start month for analysis
+ * @param {Number} startYear - Start year for analysis
+ * @param {Number} endMonth - End month for analysis
+ * @param {Number} endYear - End year for analysis
+ * @returns {Object} Gap analysis results
+ */
+const detectEmploymentGaps = async (siteID, EmpID, startMonth, startYear, endMonth, endYear) => {
+    try {
+        // Get all employee records within the date range
+        const employeeRecords = await mongoose.model('Employee').find({
+            empid: EmpID,
+            siteID: siteID,
+            $or: [
+                { year: { $gt: startYear } },
+                { year: startYear, month: { $gte: startMonth } }
+            ],
+            $and: [
+                {
+                    $or: [
+                        { year: { $lt: endYear } },
+                        { year: endYear, month: { $lte: endMonth } }
+                    ]
+                }
+            ]
+        }).sort({ year: 1, month: 1 });
+
+        // Generate expected months array
+        const expectedMonths = [];
+        let currentMonth = startMonth;
+        let currentYear = startYear;
+
+        while (currentYear < endYear || (currentYear === endYear && currentMonth <= endMonth)) {
+            expectedMonths.push({ month: currentMonth, year: currentYear });
+            
+            currentMonth++;
+            if (currentMonth > 12) {
+                currentMonth = 1;
+                currentYear++;
+            }
+        }
+
+        // Find gaps
+        const existingMonths = employeeRecords.map(record => ({
+            month: record.month,
+            year: record.year
+        }));
+
+        const gaps = expectedMonths.filter(expected => 
+            !existingMonths.some(existing => 
+                existing.month === expected.month && existing.year === expected.year
+            )
+        );
+
+        return {
+            employeeID: EmpID,
+            siteID: siteID,
+            dateRange: {
+                start: `${startMonth}/${startYear}`,
+                end: `${endMonth}/${endYear}`
+            },
+            totalExpectedMonths: expectedMonths.length,
+            totalExistingMonths: existingMonths.length,
+            totalGaps: gaps.length,
+            gaps: gaps.map(gap => `${gap.month}/${gap.year}`),
+            hasGaps: gaps.length > 0,
+            existingMonths: existingMonths.map(month => `${month.month}/${month.year}`)
+        };
+
+    } catch (error) {
+        console.error(`Error detecting employment gaps for ${EmpID}:`, error.message);
+        throw error;
+    }
+};
+
+/**
+ * Test function to demonstrate gap handling functionality
+ * @param {String} siteID - Site identifier
+ * @param {String} EmpID - Employee identifier
+ * @param {Number} testMonth - Month to test
+ * @param {Number} testYear - Year to test
+ * @returns {Object} Test results showing gap handling
+ */
+const testGapHandling = async (siteID, EmpID, testMonth, testYear) => {
+    try {
+        console.log(`\n=== Testing Gap Handling for Employee ${EmpID} ===`);
+        
+        // Test the enhanced getPreviousMonthBalance function
+        const previousBalance = await getPreviousMonthBalance(siteID, EmpID, testMonth, testYear);
+        
+        // Detect gaps in the last 12 months
+        const startMonth = testMonth === 12 ? 1 : testMonth + 1;
+        const startYear = testMonth === 12 ? testYear : testYear - 1;
+        
+        const gapAnalysis = await detectEmploymentGaps(
+            siteID, EmpID, 
+            startMonth, startYear, 
+            testMonth, testYear
+        );
+        
+        return {
+            testCase: {
+                employee: EmpID,
+                site: siteID,
+                currentMonth: `${testMonth}/${testYear}`
+            },
+            previousBalance: {
+                value: previousBalance,
+                message: previousBalance === 0 ? 
+                    'No previous employment data found' : 
+                    `Found previous balance: ${previousBalance}`
+            },
+            gapAnalysis: gapAnalysis,
+            recommendations: gapAnalysis.hasGaps ? [
+                'Employee has employment gaps in the specified period',
+                'Previous balance calculation will use the most recent available month',
+                'Consider reviewing employment continuity for this employee'
+            ] : [
+                'No employment gaps detected',
+                'Previous balance calculation is straightforward'
+            ]
+        };
+        
+    } catch (error) {
+        console.error(`Error in gap handling test:`, error.message);
+        throw error;
+    }
+};
+
 // Export all functions for use in other modules
 module.exports = {
     calculateEmployeeData,
@@ -543,6 +716,8 @@ module.exports = {
     getPreviousMonthBalance,
     shouldProcessNextMonth,
     getRecalculationStatus,
-    markEmployeesForRecalculation
+    markEmployeesForRecalculation,
+    detectEmploymentGaps,
+    testGapHandling
 };
 
