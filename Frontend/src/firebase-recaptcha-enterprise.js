@@ -9,9 +9,16 @@ import { app } from './firebase-config'; // Your existing Firebase config
 // This is optional - you can also configure it in Firebase Console
 export const setupAppCheck = () => {
   try {
-    // Replace 'your-recaptcha-enterprise-site-key' with your actual site key
+    // Use environment variable for reCAPTCHA Enterprise site key
+    const recaptchaKey = import.meta.env.VITE_RECAPTCHA_ENTERPRISE_SITE_KEY;
+    
+    if (!recaptchaKey) {
+      console.warn('VITE_RECAPTCHA_ENTERPRISE_SITE_KEY not found in environment variables');
+      return null;
+    }
+    
     const appCheck = initializeAppCheck(app, {
-      provider: new ReCaptchaEnterpriseProvider('your-recaptcha-enterprise-site-key'),
+      provider: new ReCaptchaEnterpriseProvider(recaptchaKey),
       
       // Optional: Enable debug mode for development
       isTokenAutoRefreshEnabled: true,

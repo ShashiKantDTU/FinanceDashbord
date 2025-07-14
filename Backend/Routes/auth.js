@@ -68,13 +68,8 @@ router.post ("/otplogin", async (req, res) => {
     const firebaseUid = decodedToken.uid;
     const phoneNumber = decodedToken.phone_number;
     
-    // Find user in MongoDB by uid or phone number
-    let user = await User.findOne({ 
-      $or: [
-        { uid: firebaseUid },
-        { phoneNumber: phoneNumber }
-      ]
-    });
+    // Find user in MongoDB by phone number only
+    let user = await User.findOne({ phoneNumber: phoneNumber });
     
     if (!user) {
       // Create user if doesn't exist (auto-registration)
