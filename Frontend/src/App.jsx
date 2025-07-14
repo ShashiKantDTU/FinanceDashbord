@@ -12,6 +12,7 @@ import ResetPassword from "./Pages/ResetPassword";
 import { AuthProvider } from './context/AuthContext';
 import { ToastProvider } from './components/ToastProvider';
 import ProtectedRoute from './components/ProtectedRoute';
+import LoginV2 from "./Pages/LoginV2";
 
 function App() {
   
@@ -20,10 +21,11 @@ function App() {
       <ToastProvider>
         <BrowserRouter>
           <Routes>
-            <Route path="/login" element= {<Login/>} />
+            <Route path="/login" element= {<LoginV2/>} />
             <Route path="/signup" element= {<SignUp/>} />
             <Route path="/forgot-password" element= {<ForgotPassword/>} />
             <Route path="/reset-password" element= {<ResetPassword/>} />
+            <Route path="/loginold" element = { <Login/>} />
             <Route path="/" element= {
               <ProtectedRoute>
                 <Home/>

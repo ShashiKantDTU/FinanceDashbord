@@ -27,8 +27,22 @@ const apiRequest = async (endpoint, options = {}) => {
   try {
     const response = await fetch(url, config);
     
-    // If unauthorized, redirect to login
+    // Only redirect on 401 if user was previously authenticated and now gets unauthorized
+    // This handles cases like expired tokens, but not login failures
     if (response.status === 401) {
+      const isAuthEndpoint = endpoint.includes('/auth/login') || 
+                            endpoint.includes('/auth/register') || 
+                            endpoint.includes('/auth/forgot-password') ||
+                            endpoint.includes('/auth/loginv2')|| 
+                            endpoint.includes('/auth/reset-password');
+      
+      // If this is an auth endpoint (login, register, etc.), don't redirect - let the error bubble up
+      if (isAuthEndpoint) {
+        const data = await response.json();
+        throw new Error(data.message || 'Authentication failed');
+      }
+      
+      // For non-auth endpoints, this means the user's session expired - redirect to login
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       window.location.href = '/login';
@@ -54,6 +68,13 @@ export const authAPI = {
     return apiRequest('/api/auth/login', {
       method: 'POST',
       body: JSON.stringify(credentials),
+    });
+  },
+
+  otplogin: async (token) => {
+    return apiRequest('/api/auth/otplogin',{
+      method : 'POST',
+      body: JSON.stringify(token),
     });
   },
 

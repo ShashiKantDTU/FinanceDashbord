@@ -1,4 +1,6 @@
 const express = require("express");
+const admin = require('./firebase')
+const axios = require("axios");
 const crypto = require("crypto");
 const User = require("../models/Userschema");
 const { Supervisor } = require("../models/supervisorSchema");
@@ -50,6 +52,63 @@ router.post("/register", async (req, res) => {
   }
 });
 
+
+// OTP login route
+
+router.post ("/otplogin", async (req, res) => {
+  // check if ID token is provided in req Body
+  console.log("OTP login route hit");
+  const {token: firebaseIdToken} = req.body;
+  if (!firebaseIdToken) {
+    return res.status(400).json({ message: "ID token is required" });
+  }
+  try {
+    // Verify the Firebase ID token
+    const decodedToken = await admin.auth().verifyIdToken(firebaseIdToken);
+    const firebaseUid = decodedToken.uid;
+    const phoneNumber = decodedToken.phone_number;
+    
+    // Find user in MongoDB by uid or phone number
+    let user = await User.findOne({ 
+      $or: [
+        { uid: firebaseUid },
+        { phoneNumber: phoneNumber }
+      ]
+    });
+    
+    if (!user) {
+      // Create user if doesn't exist (auto-registration)
+      user = new User({
+        uid: firebaseUid,
+        phoneNumber: phoneNumber,
+      });
+      await user.save();
+      console.log(`New mobile user created: ${firebaseUid}`);
+    }
+    
+    // Generate JWT token for your app
+    const jwtToken = generateToken({
+      id: user._id,
+      name: user.name,
+      role: "Admin",
+    });
+    console.log(`JWT token generated for user in mobile otp route: ${user._id}`);
+    return res.status(200).json({
+      message: "OTP login successful",
+      token: jwtToken,
+      user: {
+        id: user._id,
+        name: user.name,
+        role: "Admin",
+      },
+    });
+  } catch (error) {
+    console.error("OTP login error:", error);
+    return res.status(401).json({ message: "Invalid or expired ID token", error: error.message });
+  }
+})
+
+
 // Login route
 router.post("/login", async (req, res) => {
   const { email, password } = req.body;
@@ -78,7 +137,6 @@ router.post("/login", async (req, res) => {
         user: {
           id: user._id,
           name: user.name,
-          email: user.email,
           role: "Admin",
         },
       });
@@ -112,7 +170,6 @@ router.post("/login", async (req, res) => {
             user: {
               id: existingSupervisor._id,
               name: existingSupervisor.profileName,
-              email: existingSupervisor.userId,
               role: "Supervisor",
               siteid: existingSupervisor.site[0],
               siteName: site.sitename,
@@ -239,15 +296,15 @@ router.post("/reset-password", async (req, res) => {
 
 // Protected route - Get user profile
 router.get("/profile/:siteId?", authenticateToken, async (req, res) => {
-  console.log('params:', req.params);
+  console.log("params:", req.params);
   try {
     // Check if siteId is provided in the params
     if (!req.params.siteId) {
       // The user information is already attached to req.user by the middleware
       const user = await User.findById(req.user.id)
         .select("-password")
-        .populate('supervisors'); // Populate supervisor details
-      
+        .populate("supervisors"); // Populate supervisor details
+
       if (!user) {
         return res.status(404).json({ message: "User not found" });
       }
@@ -255,7 +312,7 @@ router.get("/profile/:siteId?", authenticateToken, async (req, res) => {
       res.status(200).json({
         message: "Profile retrieved successfully",
         user,
-      });  
+      });
     } else {
       // If siteId is provided, populate user with only that site's supervisors
       const siteId = req.params.siteId;
@@ -263,10 +320,10 @@ router.get("/profile/:siteId?", authenticateToken, async (req, res) => {
       const user = await User.findById(req.user.id)
         .select("-password")
         .populate({
-          path: 'supervisors',
-          match: { site: siteId }
+          path: "supervisors",
+          match: { site: siteId },
         });
-      
+
       if (!user) {
         return res.status(404).json({ message: "User not found" });
       }
@@ -276,7 +333,6 @@ router.get("/profile/:siteId?", authenticateToken, async (req, res) => {
         user,
       });
     }
-    
   } catch (error) {
     res.status(500).json({ message: "Error retrieving profile", error });
   }
@@ -292,27 +348,36 @@ router.get("/verify", authenticateToken, (req, res) => {
 });
 
 //  supervisor credentials route
-router.post("/supervisor-credentials/create", authenticateToken, async (req, res) => {
-
+router.post(
+  "/supervisor-credentials/create",
+  authenticateToken,
+  async (req, res) => {
     try {
       // Check if user is authenticated
-      if (!req.user || !req.user.id || !req.user.role || req.user.role !== "Admin") {
+      if (
+        !req.user ||
+        !req.user.id ||
+        !req.user.role ||
+        req.user.role !== "Admin"
+      ) {
         return res.status(401).json({ message: "Unauthorized" });
       }
       // Check if supervisor name is provided
       if (!req.body.name || req.body.name.trim() === "" || !req.body.siteId) {
-        return res.status(400).json({ message: "Supervisor name and site ID are required" });
+        return res
+          .status(400)
+          .json({ message: "Supervisor name and site ID are required" });
       }
-      
+
       const supervisorName = req.body.name;
       const siteId = req.body.siteId;
-      
+
       // Check if siteId is valid
       const site = await Site.findById(siteId);
       if (!site) {
         return res.status(404).json({ message: "Site not found" });
       }
-      
+
       // Find user by ID
       const user = await User.findById(req.user.id);
       if (!user) {
@@ -350,7 +415,6 @@ router.post("/supervisor-credentials/create", authenticateToken, async (req, res
   }
 );
 
-
 // add a detailed comment to explain the delete route explaining how to use it in frontend
 // This route allows an admin user to delete a supervisor's credentials.
 // To use this route from the frontend, send a DELETE request to /supervisor-credentials/delete/
@@ -361,54 +425,69 @@ router.post("/supervisor-credentials/create", authenticateToken, async (req, res
 //   }
 // }
 
-router.delete("/supervisor-credentials/delete/", authenticateToken, async (req, res) => {
-  try {
-    // Check if user is authenticated
-    if (!req.user || !req.user.id || !req.user.role || req.user.role !== "Admin") {
-      return res.status(401).json({ message: "Unauthorized" });
+router.delete(
+  "/supervisor-credentials/delete/",
+  authenticateToken,
+  async (req, res) => {
+    try {
+      // Check if user is authenticated
+      if (
+        !req.user ||
+        !req.user.id ||
+        !req.user.role ||
+        req.user.role !== "Admin"
+      ) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      // Find supervisor by ID first (don't delete yet)
+      const supervisor = await Supervisor.findOne({
+        userId: req.body.supervisor.userId,
+      });
+      if (!supervisor) {
+        return res.status(404).json({ message: "Supervisor not found" });
+      }
+
+      // Find the user to check if they have permission to delete this supervisor
+      const user = await User.findById(req.user.id);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      // Check if Admin has permission to delete this supervisor
+      const hasPermission = user.supervisors.some(
+        (sup) => sup._id.toString() === supervisor._id.toString()
+      );
+      if (!hasPermission) {
+        return res.status(403).json({
+          message:
+            "Forbidden - You don't have permission to delete this supervisor",
+        });
+      }
+
+      // Now delete the supervisor
+      await Supervisor.findOneAndDelete({ userId: req.body.supervisor.userId });
+
+      // Remove supervisor from user's list
+      if (user) {
+        user.supervisors.pull(supervisor._id);
+        await user.save();
+      }
+      // Return success response
+
+      res.status(200).json({
+        message: "Supervisor credentials deleted successfully",
+      });
+    } catch (error) {
+      console.error("Error deleting supervisor credentials:", error);
+      res.status(500).json({
+        message: "Error deleting supervisor credentials",
+        error:
+          process.env.NODE_ENV === "development" ? error.message : undefined,
+      });
     }
-
-    // Find supervisor by ID first (don't delete yet)
-    const supervisor = await Supervisor.findOne({ userId: req.body.supervisor.userId });
-    if (!supervisor) {
-      return res.status(404).json({ message: "Supervisor not found" });
-    }
-
-    // Find the user to check if they have permission to delete this supervisor
-    const user = await User.findById(req.user.id);
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
-
-    // Check if Admin has permission to delete this supervisor
-    const hasPermission = user.supervisors.some(sup => sup._id.toString() === supervisor._id.toString());
-    if (!hasPermission) {
-      return res.status(403).json({ message: "Forbidden - You don't have permission to delete this supervisor" });
-    }
-
-    // Now delete the supervisor
-    await Supervisor.findOneAndDelete({ userId: req.body.supervisor.userId });
-
-    // Remove supervisor from user's list
-    if (user) {
-      user.supervisors.pull(supervisor._id);
-      await user.save();
-    }
-    // Return success response
-
-    res.status(200).json({
-      message: "Supervisor credentials deleted successfully",
-    });
-  } catch (error) {
-    console.error("Error deleting supervisor credentials:", error);
-    res.status(500).json({
-      message: "Error deleting supervisor credentials",
-      error: process.env.NODE_ENV === "development" ? error.message : undefined,
-    });
   }
-});
-
-
+);
 
 // Change supervisor password route
 
@@ -421,109 +500,139 @@ router.delete("/supervisor-credentials/delete/", authenticateToken, async (req, 
 //   }
 // }
 
-router.post("/supervisor-credentials/change-password", authenticateToken, async (req, res) => {
-  try {
-    // Check if user is authenticated
-    if (!req.user || !req.user.id || !req.user.role || req.user.role !== "Admin") {
-      return res.status(401).json({ message: "Unauthorized" });
+router.post(
+  "/supervisor-credentials/change-password",
+  authenticateToken,
+  async (req, res) => {
+    try {
+      // Check if user is authenticated
+      if (
+        !req.user ||
+        !req.user.id ||
+        !req.user.role ||
+        req.user.role !== "Admin"
+      ) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      // Validate request body
+      const userId = req.body.supervisor?.userId;
+      if (!userId) {
+        return res.status(400).json({ message: "User ID is required" });
+      }
+
+      // Find supervisor by userId
+      const supervisor = await Supervisor.findOne({ userId });
+      if (!supervisor) {
+        return res.status(404).json({ message: "Supervisor not found" });
+      }
+
+      // Find the user to check if they have permission to change this supervisor's password
+      const user = await User.findById(req.user.id);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      // Check if Admin has permission to change this supervisor's password
+      const hasPermission = user.supervisors.some(
+        (sup) => sup._id.toString() === supervisor._id.toString()
+      );
+      if (!hasPermission) {
+        return res.status(403).json({
+          message:
+            "Forbidden - You don't have permission to modify this supervisor",
+        });
+      }
+
+      // Generate a new 6 digit numeric password
+      const newPassword = Math.floor(
+        100000 + Math.random() * 900000
+      ).toString();
+
+      // Update supervisor password
+      supervisor.password = newPassword;
+      await supervisor.save();
+
+      res.status(200).json({
+        message: "Supervisor password changed successfully",
+        newPassword,
+      });
+    } catch (error) {
+      console.error("Error changing supervisor password:", error);
+      res.status(500).json({
+        message: "Error changing supervisor password",
+        error:
+          process.env.NODE_ENV === "development" ? error.message : undefined,
+      });
     }
-
-    // Validate request body
-    const userId = req.body.supervisor?.userId;
-    if (!userId ) {
-      return res.status(400).json({ message: "User ID is required" });
-    }
-
-    // Find supervisor by userId
-    const supervisor = await Supervisor.findOne({ userId });
-    if (!supervisor) {
-      return res.status(404).json({ message: "Supervisor not found" });
-    }
-
-    // Find the user to check if they have permission to change this supervisor's password
-    const user = await User.findById(req.user.id);
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
-
-    // Check if Admin has permission to change this supervisor's password
-    const hasPermission = user.supervisors.some(sup => sup._id.toString() === supervisor._id.toString());
-    if (!hasPermission) {
-      return res.status(403).json({ message: "Forbidden - You don't have permission to modify this supervisor" });
-    }
-
-    // Generate a new 6 digit numeric password
-    const newPassword = Math.floor(100000 + Math.random() * 900000).toString();
-
-    // Update supervisor password
-    supervisor.password = newPassword;
-    await supervisor.save();
-
-    res.status(200).json({
-      message: "Supervisor password changed successfully",
-      newPassword 
-    });
-  } catch (error) {
-    console.error("Error changing supervisor password:", error);
-    res.status(500).json({
-      message: "Error changing supervisor password",
-      error: process.env.NODE_ENV === "development" ? error.message : undefined,
-    });
   }
-});
-
-
+);
 
 // Toggle supervisor status route
 // This route allows an admin user to toggle a supervisor's status between active and inactive.
-router.post("/supervisor-credentials/toggle-status", authenticateToken, async (req, res) => {
-  try {
-    // Check if user is authenticated
-    if (!req.user || !req.user.id || !req.user.role || req.user.role !== "Admin") {
-      return res.status(401).json({ message: "Unauthorized" });
+router.post(
+  "/supervisor-credentials/toggle-status",
+  authenticateToken,
+  async (req, res) => {
+    try {
+      // Check if user is authenticated
+      if (
+        !req.user ||
+        !req.user.id ||
+        !req.user.role ||
+        req.user.role !== "Admin"
+      ) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      // Validate request body
+      const userId = req.body.supervisor?.userId;
+      if (!userId) {
+        return res.status(400).json({ message: "User ID is required" });
+      }
+
+      // Find supervisor by userId
+      const supervisor = await Supervisor.findOne({ userId });
+      if (!supervisor) {
+        return res.status(404).json({ message: "Supervisor not found" });
+      }
+
+      // Find the user to check if they have permission to toggle this supervisor's status
+      const user = await User.findById(req.user.id);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      // Check if Admin has permission to toggle this supervisor's status
+      const hasPermission = user.supervisors.some(
+        (sup) => sup._id.toString() === supervisor._id.toString()
+      );
+      if (!hasPermission) {
+        return res.status(403).json({
+          message:
+            "Forbidden - You don't have permission to modify this supervisor",
+        });
+      }
+
+      // Toggle status
+      supervisor.status =
+        supervisor.status === "active" ? "inactive" : "active";
+      await supervisor.save();
+
+      res.status(200).json({
+        message: `Supervisor status changed to ${supervisor.status}`,
+        supervisor,
+      });
+    } catch (error) {
+      console.error("Error toggling supervisor status:", error);
+      res.status(500).json({
+        message: "Error toggling supervisor status",
+        error:
+          process.env.NODE_ENV === "development" ? error.message : undefined,
+      });
     }
-
-    // Validate request body
-    const userId = req.body.supervisor?.userId;
-    if (!userId) {
-      return res.status(400).json({ message: "User ID is required" });
-    }
-
-    // Find supervisor by userId
-    const supervisor = await Supervisor.findOne({ userId });
-    if (!supervisor) {
-      return res.status(404).json({ message: "Supervisor not found" });
-    }
-
-    // Find the user to check if they have permission to toggle this supervisor's status
-    const user = await User.findById(req.user.id);
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
-
-    // Check if Admin has permission to toggle this supervisor's status
-    const hasPermission = user.supervisors.some(sup => sup._id.toString() === supervisor._id.toString());
-    if (!hasPermission) {
-      return res.status(403).json({ message: "Forbidden - You don't have permission to modify this supervisor" });
-    }
-
-    // Toggle status
-    supervisor.status = supervisor.status === "active" ? "inactive" : "active";
-    await supervisor.save();
-
-    res.status(200).json({
-      message: `Supervisor status changed to ${supervisor.status}`,
-      supervisor,
-    });
-  } catch (error) {
-    console.error("Error toggling supervisor status:", error);
-    res.status(500).json({
-      message: "Error toggling supervisor status",
-      error: process.env.NODE_ENV === "development" ? error.message : undefined,
-    });
   }
-});
-
+);
 
 // Test email endpoint (for debugging only - remove in production)
 router.post("/test-email", async (req, res) => {
@@ -560,6 +669,32 @@ router.post("/test-email", async (req, res) => {
         code: error.code,
         response: error.response,
       },
+    });
+  }
+});
+
+// Temporary debug route to check users in database (remove in production)
+router.get("/debug-users", async (req, res) => {
+  if (process.env.NODE_ENV === "production") {
+    return res
+      .status(404)
+      .json({ message: "Endpoint not available in production" });
+  }
+
+  try {
+    const users = await User.find({}, "name email uid").limit(10);
+    const userCount = await User.countDocuments();
+
+    res.status(200).json({
+      message: "Users in database",
+      totalUsers: userCount,
+      users: users,
+    });
+  } catch (error) {
+    console.error("Debug users error:", error);
+    res.status(500).json({
+      message: "Error fetching users",
+      error: error.message,
     });
   }
 });

@@ -51,7 +51,7 @@ router.post("/addemployee", authenticateToken, async (req, res) => {
     // const currentYear = currentDate.getFullYear();
 
     // Get user info from auth middleware (JWT contains email)
-    const createdBy = req.user?.email || req.user?.userEmail || "unknown-user";
+    const createdBy = req.user.name || req.user?.email || "unknown-user";
 
     // Get the latest employee serial number
     const latestSerial = await latestEmpSerialNumber();
@@ -231,7 +231,7 @@ router.delete("/deleteemployee", authenticateToken, async (req, res) => {
     }
 
     // Get user info from auth middleware
-    const deletedBy = req.user?.email || req.user?.userEmail || "unknown-user";
+    const deletedBy = req.user.name || req.user?.email || "unknown-user";
 
     console.log(
       `🔍 Looking for employee ${empid} for deletion by ${deletedBy}`
@@ -512,7 +512,7 @@ router.post("/importemployees", authenticateToken, async (req, res) => {
     }
 
     // Get user info from auth middleware
-    const importedBy = req.user?.email || req.user?.userEmail || "unknown-user";
+    const importedBy = req.user.name || req.user?.email || "unknown-user";
 
     console.log(
       `🔍 Importing employees from ${sourceMonth}/${sourceYear} to ${targetMonth}/${targetYear} for site ${siteID}`
@@ -1080,11 +1080,31 @@ router.get("/employeewithpendingattendance",
     );
     console.log(`Current IST date is ${currentDay}/${currentMonth}/${currentYear}`);
 
-    // Requested date should be same as current IST date
-    if (date !== currentDay || month !== currentMonth || year !== currentYear) {
+    // Requested date should be within the last three days (including today) in IST
+    // Generate valid dates for today, yesterday, and the day before yesterday (in IST)
+    const validDates = [];
+    for (let i = 0; i < 3; i++) {
+      const d = new Date(nowIST);
+      d.setDate(nowIST.getDate() - i);
+      validDates.push({
+        date: d.getDate().toString(),
+        month: (d.getMonth() + 1).toString(),
+        year: d.getFullYear().toString()
+      });
+    }
+
+    // Check if the provided date matches any of the valid dates
+    const isValidDate = validDates.some(vd =>
+      date === vd.date &&
+      month === vd.month &&
+      year === vd.year
+    );
+
+    if (!isValidDate) {
+      const validDatesStr = validDates.map(vd => `${vd.date}/${vd.month}/${vd.year}`).join(', ');
       return res.status(400).json({
         success: false,
-        error: "Requested date must be today (IST).",
+        error: `Requested date must be within the last three days (including today) in IST. Valid dates: ${validDatesStr}`,
       });
     }
 

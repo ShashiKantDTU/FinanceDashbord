@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { authenticateToken } = require('../Middleware/auth');
+// switched email to name for Info message 
 
 // Import the new optimized change tracking functions
 const { 
@@ -242,27 +243,44 @@ router.put('/employee/mobapi/attendance/update', authenticateToken, async (req, 
         // check if date is Today's date (in IST)
         const now = new Date();
         const nowIST = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
-        const currentDate = nowIST.getDate();
-        const currentMonth = nowIST.getMonth() + 1; // Months are 0-based in JS
-        const currentYear = nowIST.getFullYear();
-
-        if (date.date.toString().trim() !== currentDate.toString() || date.month.toString().trim() !== currentMonth.toString() || date.year.toString().trim() !== currentYear.toString()) {
-            console.log(` Received date is not today's date!  recieved :  ${date.date}/${date.month}/${date.year} current (IST): ${currentDate}/${currentMonth}/${currentYear}` );
-            return res.status(400).json({
-                success: false,
-                message: 'Attendance can only be updated for today\'s date (IST)'
+        
+        // Generate valid dates for today, yesterday, and the day before yesterday (in IST)
+        const validDates = [];
+        for (let i = 0; i < 3; i++) {
+            const d = new Date(nowIST);
+            d.setDate(nowIST.getDate() - i);
+            validDates.push({
+                date: d.getDate().toString(),
+                month: (d.getMonth() + 1).toString(), // Months are 0-based in JS
+                year: d.getFullYear().toString()
             });
         }
-        const employee = await EmployeeSchema.findOne({ empid: employeeId , month: currentMonth, year: currentYear , siteID: siteID });
+
+        // Check if the provided date matches any of the valid dates
+        const isValidDate = validDates.some(vd =>
+            date.date.toString().trim() === vd.date &&
+            date.month.toString().trim() === vd.month &&
+            date.year.toString().trim() === vd.year
+        );
+
+        if (!isValidDate) {
+            const validDatesStr = validDates.map(vd => `${vd.date}/${vd.month}/${vd.year}`).join(', ');
+            console.log(` Received date is not within the last three days!  received :  ${date.date}/${date.month}/${date.year} valid (IST): ${validDatesStr}` );
+            return res.status(400).json({
+                success: false,
+                message: `Attendance can only be updated for the last three days (including today) in IST. Valid dates: ${validDatesStr}`
+            });
+        }
+        const employee = await EmployeeSchema.findOne({ empid: employeeId , month: date.month, year: date.year , siteID: siteID });
         if (!employee) {
-            console.log(`❌ Employee with ID ${employeeId} not found for month ${currentMonth}/${currentYear}`);
+            console.log(`❌ Employee with ID ${employeeId} not found for month ${date.month}/${date.year}`);
             return res.status(404).json({
                 success: false,
-                message: `Employee with ID ${employeeId} not found for month ${currentMonth}/${currentYear}`
+                message: `Employee with ID ${employeeId} not found for month ${date.month}/${date.year}`
             });
         }
         // Update the employee attendance record
-        employee.attendance[currentDate - 1] = attendance; // currentDate is 1-based, array is 0-based
+        employee.attendance[date.date - 1] = attendance; // currentDate is 1-based, array is 0-based
         await employee.save();
 
         const istTime = new Date().toLocaleString('en-IN', { 
@@ -276,7 +294,7 @@ router.put('/employee/mobapi/attendance/update', authenticateToken, async (req, 
             hour12: false
         });
         
-        const displayMessage = `Attendance Added by ${req.user.email || req.user.userEmail || 'unknown-user'} for employee ${employeeId} on ${date.date}/${date.month}/${date.year} marked as ${attendance} at ${istTime}`;
+        const displayMessage = `Attendance Added by ${ req.user.name || req.user.email || 'unknown-user'} for employee Name ${employee.name} & employeeId ${employeeId}  on ${date.date}/${date.month}/${date.year} marked as ${attendance} at ${istTime}`;
 
         // Record and save the change in the Detailed change tracking system
         try {
@@ -317,7 +335,7 @@ router.put('/employee/mobapi/attendance/update', authenticateToken, async (req, 
                 date: `${date.date}/${date.month}/${date.year}` // Store as string for attendance dates
 
             },
-            changedBy: req.user.email || req.user.userEmail || 'unknown-user', // Use email from auth middleware (should be string, not object)
+            changedBy: req.user.name || req.user.email || 'unknown-user', // Use email from auth middleware (should be string, not object)
             remark: `Attendance updated via mobile app on ${new Date().toISOString()}`,
             timestamp: new Date(),
             metadata: {
@@ -407,7 +425,7 @@ router.put('/employee/:employeeID/update', authenticateToken, async (req, res) =
         }
 
         // Get user info from auth middleware
-        const changedBy = req.user?.email || req.user?.userEmail || correctedBy || 'unknown-user';
+        const changedBy = req.user.name ||req.user?.email || correctedBy || 'unknown-user';
 
         console.log(`📝 Employee update request for ${employeeID} - ${monthNum}/${yearNum}`);
         console.log(`👤 Updated by: ${changedBy}`);
@@ -508,7 +526,7 @@ router.put('/employee/mobapi/addpayout', authenticateToken, async (req, res) => 
     try {
         console.log('Mobile API to update payouts hit successfully')
         const { empid, updateData, month, year, siteID } = req.body;
-        const changedBy = req.user?.email || req.user?.userEmail || 'unknown-user';
+        const changedBy = req.user.name ||req.user?.email || 'unknown-user';
         
         // Validate required parameters
         if (!empid || !updateData || !month || !year || !siteID) {
@@ -664,7 +682,7 @@ router.put('/attendance/updateattendance', authenticateToken, async (req, res) =
         const validationErrors = [];
         
         // Get user information from JWT token attached by middleware
-        const updatedBy = req.user?.email || req.user?.name || 'unknown-user';
+        const updatedBy = req.user?.name || req.user?.email ||  'unknown-user';
 
         // PHASE 1: Validate all employees exist before making any changes
         console.log(`🔍 Phase 1: Validating all ${attendanceData.length} employees exist...`);

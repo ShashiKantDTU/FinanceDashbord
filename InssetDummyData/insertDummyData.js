@@ -5,8 +5,8 @@ const mongoose = require('mongoose');
 const MONGODB_URI = 'mongodb://localhost:27017/finance-dashboard';
 
 // Configuration
-const SITE_ID = "6833ff004bd307e45abbfb41";
-const CREATED_BY = "me@123.com";
+const SITE_ID = "6870f208c36ebbb9064d6649";
+const CREATED_BY = "sunnypoddar1919@gmail.com";
 const START_DATE = new Date(2024, 5, 1); // June 2024
 const END_DATE = new Date(2025, 6, 29); // July 29, 2025
 
@@ -358,7 +358,7 @@ const employeeNames = [
 // Generate employees data
 function generateEmployeesData() {
     const employees = [];
-    const numEmployees = 30; // Generate 30 employees
+    const numEmployees = 20; // Generate 20 employees
     
     for (let i = 0; i < numEmployees; i++) {        const empId = `EMP${String(i + 1).padStart(3, '0')}`; // Changed to 3 digits for better formatting
         const name = employeeNames[i % employeeNames.length]; // Use modulo to cycle through names if needed
@@ -456,13 +456,13 @@ async function insertDataToMongoDB() {
         const employeesData = generateEmployeesData();
 
         // Clear existing data (optional - remove if you want to keep existing data)
-        console.log("Clearing existing employee data...");
-        await Employee.deleteMany({});
-        console.log("✅ Existing data cleared!");
+        // console.log("Clearing existing employee data...");
+        // await Employee.deleteMany({});
+        // console.log("✅ Existing data cleared!");
 
         // Insert data in batches for better performance
         console.log("Inserting employee data to MongoDB...");
-        const batchSize = 50;
+        const batchSize = 30;
         let insertedCount = 0;
 
         for (let i = 0; i < employeesData.length; i += batchSize) {

@@ -14,7 +14,7 @@ router.get('/home', authenticateToken, async (req, res) => {
         return res.status(401).json({ 
             error: 'Access denied. Authentication required.' 
         });
-    }    const userdata = await User.findOne({ email: user.email }).populate({
+    }    const userdata = await User.findById(user.id).populate({
         path: 'site',
         select: 'sitename createdBy createdAt updatedAt owner'
     })
@@ -27,7 +27,6 @@ router.get('/home', authenticateToken, async (req, res) => {
     res.status(200).json({ 
         user: {
             name: userdata.name,
-            email: userdata.email,
             role: userdata.role,
             sites: userdata.site
         } 
@@ -53,7 +52,7 @@ router.post('/home/addsite', authenticateToken, async (req, res) => {
             });
         }
         
-        const userdata = await User.findOne({ email: user.email });
+        const userdata = await User.findById(user.id);
         if (!userdata) {
             return res.status(404).json({ 
                 error: 'User not found.' 
@@ -63,7 +62,7 @@ router.post('/home/addsite', authenticateToken, async (req, res) => {
             sitename: sitename,
             CustomProfile: null, // You'll need to handle this properly
             owner: userdata._id,  // Reference to the user
-            createdBy: user.email // Email of creator
+            createdBy: user.name // name of creator
         });
 
         // Save the site to the database
@@ -112,7 +111,7 @@ router.delete('/delete-site', authenticateToken, async (req, res) => {
             });
         }
         
-        const userdata = await User.findOne({ email: user.email });
+        const userdata = await User.findById(user.id);
         if (!userdata) {
             return res.status(404).json({ 
                 error: 'User not found.' 
@@ -128,9 +127,8 @@ router.delete('/delete-site', authenticateToken, async (req, res) => {
         }
 
         // Check if user has permission to delete (either owner or admin)
-        const canDelete = site.createdBy === user.email || 
-                         site.owner.toString() === userdata._id.toString() ||
-                         userdata.role === 'admin';
+        const canDelete = site.createdBy === user.name || 
+                         site.owner.toString() === userdata._id.toString()
         
         if (!canDelete) {
             return res.status(403).json({ 

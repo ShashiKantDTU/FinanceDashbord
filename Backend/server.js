@@ -29,7 +29,7 @@ if (process.env.FRONTEND_URL) {
   allowedOrigins.push(process.env.FRONTEND_URL);
 }
 if (process.env.NODE_ENV === 'development') {
-  allowedOrigins.push('http://localhost:5173');
+  allowedOrigins.push('http://localhost:5173' , 'http://localhost:8081'); // Add your development frontend URL
 }
 const corsOptions = {
   origin: function (origin, callback) {
@@ -59,13 +59,29 @@ const dashboardRoutes = require('./Routes/dashboard');
 const employeeRoutes = require('./Routes/EmployeeDetails');
 const changeTrackingRoutes = require('./Routes/changeTracking');
 const detailedChangeTrackingRoutes = require('./Routes/detailedChangeTracking');
-const optimizedEmployeeRoutes = require('./Routes/optimizedEmployeeRoutes');
+// const optimizedEmployeeRoutes = require('./Routes/optimizedEmployeeRoutes');
 
 
 if (process.env.NODE_ENV === 'development') {
     app.use((req, res, next) => {
         setTimeout(next, 500);
     });
+}
+
+if( process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
+    // Log backend ip address
+    const os = require('os');
+    const networkInterfaces = os.networkInterfaces();
+    const ipAddresses = [];
+    for (const interfaceName in networkInterfaces) {
+        const addresses = networkInterfaces[interfaceName];
+        for (const address of addresses) {
+            if (address.family === 'IPv4' && !address.internal) {
+                ipAddresses.push(address.address);
+            }
+        }
+    }
+    console.log(`Backend IP Addresses: ${ipAddresses.join(', ')}`);
 }
 
 
@@ -75,7 +91,7 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/employee', employeeRoutes);
 app.use('/api/change-tracking', changeTrackingRoutes);
 app.use('/api/detailed-change-tracking', detailedChangeTrackingRoutes);
-app.use('/api/employee-optimized', optimizedEmployeeRoutes);
+// app.use('/api/employee-optimized', optimizedEmployeeRoutes);
 
 // Basic route
 app.get('/', (req, res) => {
@@ -133,7 +149,7 @@ mongoose.connect(mongoURI).then(async () => {
     console.log('Please set EMAIL_USER and EMAIL_PASS in .env file');
   }
   
-  app.listen(PORT, () => {
+  app.listen(PORT,'0.0.0.0', () => {
     console.log(`🚀 Server is running on port ${PORT}`);
     console.log(`🔗 Frontend URL: ${process.env.FRONTEND_URL}`);
   });

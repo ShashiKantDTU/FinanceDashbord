@@ -87,10 +87,19 @@ export const AuthProvider = ({ children }) => {
   // Login function
   const login = (userData) => {
     const { token, user } = userData;
-    if(user.role !== 'Admin') {
-      console.error('Invalid user role:', user.role);
-      return;
+    
+    // Validate that we have required data
+    if (!token || !user) {
+      console.error('Invalid login data: missing token or user');
+      throw new Error('Invalid login data received');
     }
+    
+    // Only accept Admin role - reject supervisors
+    if (user.role !== 'Admin') {
+      console.error('Invalid user role:', user.role);
+      throw new Error('Invalid role. Supervisor credentials are not valid for this application.');
+    }
+    
     localStorage.setItem('token', token);
     localStorage.setItem('user', JSON.stringify(user));
     dispatch({

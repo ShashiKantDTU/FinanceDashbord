@@ -3,7 +3,7 @@ const jwt = require('jsonwebtoken');
 const {fetchLatestSupervisorSerial, generateSixDigitPassword} = require('../models/supervisorSchema');
 const {Supervisor} = require('../models/supervisorSchema');
 // Middleware to authenticate user using JWT
-const authenticateToken = (req, res, next) => {
+const authenticateToken = async (req, res, next) => {
     // Get token from Authorization header
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
@@ -22,12 +22,12 @@ const authenticateToken = (req, res, next) => {
         
         // Attach user information to request object
         req.user = decoded;
-        if (decoded.role === 'supervisor') {
-            // check if the id is active
-            const supervisor = Supervisor.findOne({ userId: decoded.id });
+        if (decoded.role === 'Supervisor') {
+            // check if the supervisor is active
+            const supervisor = await Supervisor.findOne({ userId: decoded.email });
             if (!supervisor || supervisor.status !== 'active') {
-                return res.status(403).json({ 
-                    error: 'Access denied. Supervisor account is inactive.' 
+                return res.status(403).json({
+                    error: 'Access denied. Supervisor account is inactive.'
                 });
             }
         }

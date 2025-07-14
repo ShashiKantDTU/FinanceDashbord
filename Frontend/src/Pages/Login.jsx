@@ -79,25 +79,47 @@ const Login = () => {
       const data = await authAPI.login(formData);
       
       // Use the auth context login function
-      login(data);
-      
-      
-      // Redirect to home page
-      navigate('/');
-    } catch (error) {
-      // Handle specific error types from auth middleware
-      if (error.message?.includes('Invalid token') || error.message?.includes('Token expired')) {
-        setError('Your session has expired. Please try logging in again.');
-      } else if (error.message?.includes('Invalid credentials') || error.message?.includes('password')) {
-        setError('Invalid email or password. Please check your credentials and try again.');
-      } else if (error.message?.includes('User not found')) {
-        setError('No account found with this email address.');
-      } else if (error.message?.includes('Account locked') || error.message?.includes('suspended')) {
-        setError('Your account has been temporarily locked. Please contact support.');
-      } else {
-        setError(error.message || 'Login failed. Please check your connection and try again.');
+      try {
+        login(data);
+        // Redirect to home page only after successful login
+        navigate('/');
+      } catch (authError) {
+        // Handle auth context errors (like invalid role)
+        console.error('Auth context error:', authError);
+        if (authError.message?.includes('Supervisor credentials are not valid')) {
+          setError('Invalid role. Supervisor credentials are not valid for this application.');
+        } else {
+          setError(authError.message || 'Authentication failed. Please try again.');
+        }
+        return;
       }
+    } catch (error) {
       console.error('Login error:', error);
+      // Handle specific error messages from backend auth route
+      const errorMessage = error.message || '';
+      
+      if (errorMessage === 'Email and password are required') {
+        setError('Please fill in both email and password fields.');
+      } else if (errorMessage === 'Invalid email format') {
+        setError('Please enter a valid email address.');
+      } else if (errorMessage === 'Incorrect password') {
+        setError('The password you entered is incorrect. Please try again.');
+      } else if (errorMessage === 'Invalid email or password') {
+        setError('Invalid email or password. Please check your credentials and try again.');
+      } else if (errorMessage === 'Account disabled') {
+        setError('Your account has been disabled. Please contact support for assistance.');
+      } else if (errorMessage === 'Too many attempts. Try again later.') {
+        setError('Too many login attempts. Please wait a few minutes before trying again.');
+      } else if (errorMessage === 'User not found in system') {
+        setError('No account found with this email address.');
+      } else if (errorMessage === 'System configuration error. Please contact your administrator.') {
+        setError('There is a system configuration issue. Please contact support.');
+      } else if (errorMessage === 'Server error occurred during login') {
+        setError('A server error occurred. Please try again later.');
+      } else {
+        // Fallback for any other errors
+        setError(errorMessage || 'Login failed. Please check your connection and try again.');
+      }
     } finally {
       setIsLoading(false);
     }
