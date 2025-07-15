@@ -787,7 +787,7 @@ const SitePage = () => {
                                             <td colSpan="5" className={styles.noData}>
                                                 {isLoading ? (
                                                     <div className={styles.loadingTable}>
-                                                        <CustomSpinner size={60} color="#3b82f6" />
+                                                        <CustomSpinner size={60} color="#059669" />
                                                     </div>
                                                 ) : (
                                                     <div className={styles.noDataFound}>

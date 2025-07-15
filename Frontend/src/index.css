@@ -1,85 +1,90 @@
 :root {
   /* ========================================
-     BACKGROUND COLORS
+     BACKGROUND COLORS - Professional Light Theme
      ======================================== */
-  --color-bg-body: #1a1b23;           /* Primary app background - soft dark blue-gray */
-  --color-bg-primary: #232530;        /* Main content areas */
-  --color-bg-secondary: #2a2d3a;      /* Cards, panels, modals */
-  --color-bg-tertiary: #353a4a;       /* Interactive elements, selected states */
-  --color-bg-quaternary: #434862;     /* Elevated elements */
+  --color-bg-body: #fafbfc;           /* Clean light gray background */
+  --color-bg-primary: #ffffff;        /* Pure white for main content */
+  --color-bg-secondary: #f8f9fa;      /* Very light gray for cards, panels */
+  --color-bg-tertiary: #e9ecef;       /* Light gray for interactive elements */
+  --color-bg-quaternary: #dee2e6;     /* Medium gray for elevated elements */
   
   /* Interactive Background States */
-  --color-bg-hover: #2d3240;          /* Subtle hover states */
-  --color-bg-active: #3a3f52;         /* Active/pressed states */
-  --color-bg-disabled: #1f2128;       /* Disabled elements */
-  --color-bg-input: #272935;          /* Form inputs, text areas */
-  --color-bg-input-focus: #2f3242;    /* Focused form inputs */
+  --color-bg-hover: #f1f3f4;          /* Subtle gray hover states */
+  --color-bg-active: #e8f5e8;         /* Light green active/pressed states */
+  --color-bg-disabled: #f5f5f5;       /* Light disabled elements */
+  --color-bg-input: #ffffff;          /* White form inputs */
+  --color-bg-input-focus: #f0f9ff;    /* Light blue focused inputs */
 
   /* ========================================
-     TEXT COLORS
+     TEXT COLORS - Professional Dark Text
      ======================================== */
-  --color-text-primary: #e8eaed;      /* Primary text - softer high contrast */
-  --color-text-secondary: #b8bcc8;    /* Secondary text - labels, captions */
-  --color-text-tertiary: #8a8e9b;     /* Tertiary text - hints, placeholders */
-  --color-text-quaternary: #5f6368;   /* Disabled text */
-  --color-text-inverse: #1a1b23;      /* Text on light backgrounds */
-  --color-text-link: #8ab4f8;         /* Links and interactive text */
-  --color-text-link-hover: #a8c7fa;   /* Hovered links */
+  --color-text-primary: #1f2937;      /* Dark gray primary text */
+  --color-text-secondary: #4b5563;    /* Medium gray secondary text */
+  --color-text-tertiary: #6b7280;     /* Light gray tertiary text */
+  --color-text-quaternary: #9ca3af;   /* Very light gray disabled text */
+  --color-text-inverse: #ffffff;      /* White text on dark backgrounds */
+  --color-text-link: #059669;         /* Green links */
+  --color-text-link-hover: #047857;   /* Darker green hovered links */
 
   /* ========================================
-     ACCENT & BRAND COLORS
+     ACCENT & BRAND COLORS - Professional Green Theme
      ======================================== */
-  --color-primary: #7aa3f0;           /* Primary brand color - softer blue */
-  --color-primary-hover: #5e8ce8;     /* Primary hover state */
-  --color-primary-active: #4d7dd4;    /* Primary active/pressed */
-  --color-primary-light: rgba(122, 163, 240, 0.15);  /* Light overlay */
-  --color-primary-subtle: rgba(122, 163, 240, 0.08); /* Subtle background */
+  --color-primary: #059669;           /* Professional emerald green */
+  --color-primary-hover: #047857;     /* Darker green hover */
+  --color-primary-active: #065f46;    /* Deep green active/pressed */
+  --color-primary-light: rgba(5, 150, 105, 0.1);   /* Light green overlay */
+  --color-primary-subtle: rgba(5, 150, 105, 0.05); /* Subtle green background */
+  
+  /* Secondary accent - Trust blue */
+  --color-secondary: #0369a1;         /* Professional trust blue */
+  --color-secondary-hover: #0284c7;   /* Lighter trust blue */
+  --color-secondary-light: rgba(3, 105, 161, 0.1); /* Light blue overlay */
 
   /* ========================================
-     SEMANTIC COLORS
+     SEMANTIC COLORS - Professional Light Theme
      ======================================== */
   /* Success States */
-  --color-success: #6ACC6D;           /* Success primary */
-  --color-success-hover: #5CB85C;     /* Success hover */
-  --color-success-light: rgba(106, 204, 109, 0.15);  /* Success background */
-  --color-success-subtle: rgba(106, 204, 109, 0.08); /* Subtle success bg */
+  --color-success: #059669;           /* Emerald green success */
+  --color-success-hover: #047857;     /* Darker green hover */
+  --color-success-light: rgba(5, 150, 105, 0.1);     /* Success background */
+  --color-success-subtle: rgba(5, 150, 105, 0.05);   /* Subtle success bg */
   
   /* Warning States */
-  --color-warning: #FFD54F;           /* Warning primary */
-  --color-warning-hover: #FFC107;     /* Warning hover */
-  --color-warning-light: rgba(255, 213, 79, 0.15);   /* Warning background */
-  --color-warning-subtle: rgba(255, 213, 79, 0.08);  /* Subtle warning bg */
+  --color-warning: #d97706;           /* Professional amber warning */
+  --color-warning-hover: #b45309;     /* Darker amber hover */
+  --color-warning-light: rgba(217, 119, 6, 0.1);     /* Warning background */
+  --color-warning-subtle: rgba(217, 119, 6, 0.05);   /* Subtle warning bg */
   
   /* Error/Danger States */
-  --color-error: #EF5350;             /* Error primary */
-  --color-error-hover: #E53935;       /* Error hover */
-  --color-error-light: rgba(239, 83, 80, 0.15);      /* Error background */
-  --color-error-subtle: rgba(239, 83, 80, 0.08);     /* Subtle error bg */
+  --color-error: #dc2626;             /* Professional red error */
+  --color-error-hover: #b91c1c;       /* Darker red hover */
+  --color-error-light: rgba(220, 38, 38, 0.1);       /* Error background */
+  --color-error-subtle: rgba(220, 38, 38, 0.05);     /* Subtle error bg */
   
   /* Info States */
-  --color-info: #42A5F5;              /* Info primary */
-  --color-info-hover: #2196F3;        /* Info hover */
-  --color-info-light: rgba(66, 165, 245, 0.15);      /* Info background */
-  --color-info-subtle: rgba(66, 165, 245, 0.08);     /* Subtle info bg */
+  --color-info: #0369a1;              /* Professional blue info */
+  --color-info-hover: #0284c7;        /* Lighter blue hover */
+  --color-info-light: rgba(3, 105, 161, 0.1);        /* Info background */
+  --color-info-subtle: rgba(3, 105, 161, 0.05);      /* Subtle info bg */
 
   /* ========================================
-     BORDER COLORS
+     BORDER COLORS - Professional Light Theme
      ======================================== */
-  --color-border-light: #343846;      /* Subtle dividers */
-  --color-border-medium: #434862;     /* Standard borders */
-  --color-border-strong: #5a607a;     /* Emphasized borders */
-  --color-border-focus: #8ab4f8;      /* Focus rings */
-  --color-border-error: #ef5350;      /* Error borders */
-  --color-border-success: #6acc6d;    /* Success borders */
+  --color-border-light: #e5e7eb;      /* Light gray dividers */
+  --color-border-medium: #d1d5db;     /* Standard borders */
+  --color-border-strong: #9ca3af;     /* Emphasized borders */
+  --color-border-focus: #059669;      /* Green focus rings */
+  --color-border-error: #dc2626;      /* Red error borders */
+  --color-border-success: #059669;    /* Green success borders */
 
   /* ========================================
-     ICON COLORS
+     ICON COLORS - Professional Dark Icons
      ======================================== */
-  --color-icon-primary: #d0d4e0;      /* Primary icons */
-  --color-icon-secondary: #b8bcc8;    /* Secondary icons */
-  --color-icon-tertiary: #8a8e9b;     /* Subtle icons */
-  --color-icon-active: #8ab4f8;       /* Active/selected icons */
-  --color-icon-disabled: #5f6368;     /* Disabled icons */
+  --color-icon-primary: #374151;      /* Dark gray primary icons */
+  --color-icon-secondary: #6b7280;    /* Medium gray secondary icons */
+  --color-icon-tertiary: #9ca3af;     /* Light gray subtle icons */
+  --color-icon-active: #059669;       /* Green active/selected icons */
+  --color-icon-disabled: #d1d5db;     /* Light gray disabled icons */
 
   /* ========================================
      TYPOGRAPHY
@@ -152,14 +157,14 @@
   --border-radius-full: 9999px;       /* Fully rounded */
 
   /* ========================================
-     SHADOWS
+     SHADOWS - Professional Light Theme
      ======================================== */
-  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.3);
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
-  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.4);
-  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.5);
-  --shadow-xl: 0 20px 25px rgba(0, 0, 0, 0.6);
-  --shadow-2xl: 0 25px 50px rgba(0, 0, 0, 0.7);
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.07), 0 2px 4px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1), 0 4px 6px rgba(0, 0, 0, 0.05);
+  --shadow-xl: 0 20px 25px rgba(0, 0, 0, 0.1), 0 10px 10px rgba(0, 0, 0, 0.04);
+  --shadow-2xl: 0 25px 50px rgba(0, 0, 0, 0.15);
 
   /* Semantic Shadow Aliases */
   --box-shadow-sm: var(--shadow-sm);
@@ -172,26 +177,35 @@
   /* ========================================
      TRANSITIONS & ANIMATIONS
      ======================================== */
-  /* Durations */
-  --transition-duration-fast: 0.1s;
-  --transition-duration-normal: 0.2s;
-  --transition-duration-slow: 0.3s;
-  --transition-duration-slower: 0.5s;
+  /* Transition Duration Scale */
+  --transition-duration-instant: 0ms;
+  --transition-duration-fast: 100ms;
+  --transition-duration-normal: 200ms;
+  --transition-duration-slow: 300ms;
+  --transition-duration-slower: 500ms;
 
-  /* Timing Functions */
+  /* Transition Timing Functions */
   --transition-timing-linear: linear;
   --transition-timing-ease: ease;
   --transition-timing-ease-in: ease-in;
   --transition-timing-ease-out: ease-out;
   --transition-timing-ease-in-out: ease-in-out;
+  --transition-timing-spring: cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-timing-bounce: cubic-bezier(0.68, -0.55, 0.265, 1.55);
 
-  /* Common Transitions */
-  --transition-all: all var(--transition-duration-normal) var(--transition-timing-ease-in-out);
-  --transition-colors: color var(--transition-duration-normal) var(--transition-timing-ease-in-out),
-                      background-color var(--transition-duration-normal) var(--transition-timing-ease-in-out),
-                      border-color var(--transition-duration-normal) var(--transition-timing-ease-in-out);
-  --transition-transform: transform var(--transition-duration-normal) var(--transition-timing-ease-in-out);
-  --transition-opacity: opacity var(--transition-duration-normal) var(--transition-timing-ease-in-out);
+  /* Pre-built Transition Combinations */
+  --transition-default: all var(--transition-duration-normal) var(--transition-timing-spring);
+  --transition-fast: all var(--transition-duration-fast) var(--transition-timing-spring);
+  --transition-slow: all var(--transition-duration-slow) var(--transition-timing-spring);
+  --transition-color: color var(--transition-duration-fast) var(--transition-timing-ease);
+  --transition-background: background-color var(--transition-duration-fast) var(--transition-timing-ease);
+  --transition-transform: transform var(--transition-duration-normal) var(--transition-timing-spring);
+  --transition-shadow: box-shadow var(--transition-duration-normal) var(--transition-timing-ease);
+
+  /* Animation Durations */
+  --animation-duration-fast: 200ms;
+  --animation-duration-normal: 400ms;
+  --animation-duration-slow: 600ms;
 
   /* ========================================
      Z-INDEX SCALE
@@ -227,6 +241,266 @@
   --box-shadow-hover: var(--shadow-lg);
 }
 
+
+/* ========================================
+   PROFESSIONAL HEADER DESIGN SYSTEM
+   ======================================== */
+
+/* Professional Page Header - Main Style */
+.professional-header {
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.98) 0%,
+    rgba(248, 250, 252, 0.95) 25%,
+    rgba(241, 245, 249, 0.95) 50%,
+    rgba(248, 250, 252, 0.95) 75%,
+    rgba(255, 255, 255, 0.98) 100%
+  );
+  backdrop-filter: blur(25px);
+  -webkit-backdrop-filter: blur(25px);
+  border: 1px solid rgba(5, 150, 105, 0.2);
+  border-radius: var(--border-radius-xl);
+  box-shadow: 
+    0 12px 40px rgba(5, 150, 105, 0.15),
+    0 6px 20px rgba(0, 0, 0, 0.08),
+    0 2px 8px rgba(5, 150, 105, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    inset 0 -1px 0 rgba(5, 150, 105, 0.05);
+  padding: var(--space-lg) var(--space-xl);
+  margin-bottom: var(--space-lg);
+  position: relative;
+  overflow: hidden;
+  transition: all var(--transition-duration-normal) var(--transition-timing-spring);
+}
+
+.professional-header::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(
+    90deg,
+    var(--color-primary) 0%,
+    var(--color-secondary) 25%,
+    #0891b2 50%,
+    var(--color-secondary) 75%,
+    var(--color-primary) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 3s ease-in-out infinite;
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform var(--transition-duration-slow) var(--transition-timing-spring);
+}
+
+@keyframes shimmer {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+.professional-header::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(
+    135deg,
+    rgba(5, 150, 105, 0.02) 0%,
+    transparent 30%,
+    transparent 70%,
+    rgba(8, 145, 178, 0.02) 100%
+  );
+  pointer-events: none;
+}
+
+.professional-header:hover::before {
+  transform: scaleX(1);
+}
+
+.professional-header:hover {
+  transform: translateY(-3px);
+  box-shadow: 
+    0 16px 50px rgba(5, 150, 105, 0.2),
+    0 8px 25px rgba(0, 0, 0, 0.12),
+    0 4px 12px rgba(5, 150, 105, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    inset 0 -1px 0 rgba(5, 150, 105, 0.08);
+  border-color: rgba(5, 150, 105, 0.25);
+}
+
+/* Header Layout */
+.professional-header-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-lg);
+  position: relative;
+  z-index: 2;
+}
+
+/* Title Section */
+.professional-title-section {
+  flex: 1;
+  min-width: 0;
+}
+
+.professional-title {
+  font-size: var(--font-size-3xl);
+  font-weight: var(--font-weight-bold);
+  margin: 0 0 var(--space-1) 0;
+  background: linear-gradient(
+    135deg,
+    var(--color-primary) 0%,
+    var(--color-secondary) 50%,
+    var(--color-primary) 100%
+  );
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  letter-spacing: -0.02em;
+  line-height: var(--line-height-tight);
+  position: relative;
+  animation: slideInFromLeft var(--transition-duration-slow) var(--transition-timing-spring);
+}
+
+.professional-subtitle {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  margin: 0;
+  font-weight: var(--font-weight-medium);
+  opacity: 0.8;
+  animation: slideInFromLeft var(--transition-duration-slow) var(--transition-timing-spring) 0.1s both;
+}
+
+/* Controls Section */
+.professional-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  flex-shrink: 0;
+  animation: slideInFromRight var(--transition-duration-slow) var(--transition-timing-spring) 0.2s both;
+}
+
+/* Stats Section (optional) */
+.professional-stats {
+  display: flex;
+  gap: var(--space-lg);
+  margin-top: var(--space-md);
+  padding-top: var(--space-md);
+  border-top: 1px solid rgba(5, 150, 105, 0.1);
+  animation: fadeInUp var(--transition-duration-slow) var(--transition-timing-spring) 0.3s both;
+}
+
+.professional-stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-sm);
+  background: rgba(5, 150, 105, 0.05);
+  border-radius: var(--border-radius-md);
+  transition: all var(--transition-duration-fast) var(--transition-timing-spring);
+}
+
+.professional-stat-item:hover {
+  transform: translateY(-1px);
+  background: rgba(5, 150, 105, 0.08);
+}
+
+.professional-stat-value {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-primary);
+  margin: 0;
+}
+
+.professional-stat-label {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
+  font-weight: var(--font-weight-medium);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: 0;
+}
+
+/* Animations */
+@keyframes slideInFromLeft {
+  0% {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideInFromRight {
+  0% {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes fadeInUp {
+  0% {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ========================================
+   GLOBAL ANIMATIONS FOR PROFESSIONAL UI
+   ======================================== */
+
+/* Slide animations for elements */
+@keyframes slideDown {
+  0% {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+/* Responsive Design */
+@media (max-width: 768px) {
+  .professional-header {
+    padding: var(--space-md);
+  }
+  
+  .professional-header-content {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-md);
+  }
+  
+  .professional-title {
+    font-size: var(--font-size-2xl);
+  }
+  
+  .professional-controls {
+    justify-content: center;
+  }
+  
+  .professional-stats {
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+}
 
 html , body , #root {
   height: 100%;

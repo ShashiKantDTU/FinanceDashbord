@@ -1,4 +1,4 @@
-/* NotificationIcon.module.css - Professional notification bell styling */
+/* NotificationIcon.module.css - Modern notification bell styling */
 
 /* ===========================================
    NOTIFICATION CONTAINER
@@ -15,23 +15,24 @@
 
 .notificationButton {
     position: relative;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, #059669 0%, #0d9488 100%);
     border: none;
     border-radius: 12px;
-    width: 48px;
-    height: 48px;
+    width: 44px;
+    height: 44px;
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+    box-shadow: 0 4px 12px rgba(5, 150, 105, 0.25);
     overflow: hidden;
 }
 
 .notificationButton:hover {
     transform: translateY(-2px);
-    box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+    box-shadow: 0 8px 20px rgba(5, 150, 105, 0.35);
+    background: linear-gradient(135deg, #047857 0%, #0f766e 100%);
 }
 
 .notificationButton:active {
@@ -41,7 +42,7 @@
 
 .notificationButton:focus {
     outline: none;
-    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3), 0 0 0 3px rgba(102, 126, 234, 0.2);
+    box-shadow: 0 4px 12px rgba(5, 150, 105, 0.25), 0 0 0 3px rgba(5, 150, 105, 0.15);
 }
 
 /* Special state for new changes */
@@ -51,10 +52,10 @@
 
 @keyframes newChangesGlow {
     0%, 100% {
-        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        box-shadow: 0 4px 12px rgba(5, 150, 105, 0.25);
     }
     50% {
-        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3), 0 0 20px rgba(16, 185, 129, 0.6);
+        box-shadow: 0 4px 12px rgba(5, 150, 105, 0.25), 0 0 20px rgba(5, 150, 105, 0.5);
     }
 }
 
@@ -173,7 +174,7 @@
     right: 0;
     bottom: 0;
     border-radius: 12px;
-    background: radial-gradient(circle, rgba(16, 185, 129, 0.3) 0%, transparent 70%);
+    background: radial-gradient(circle, rgba(5, 150, 105, 0.3) 0%, transparent 70%);
     z-index: 1;
     animation: pulseOverlay 2s ease-in-out infinite;
 }
@@ -293,7 +294,7 @@
    =========================================== */
 
 .notificationButton:focus-visible {
-    outline: 2px solid #3b82f6;
+    outline: 2px solid #059669;
     outline-offset: 2px;
 }
 

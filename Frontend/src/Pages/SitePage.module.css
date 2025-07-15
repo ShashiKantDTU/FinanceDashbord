@@ -32,11 +32,71 @@
    =========================================== */
 
 .header {
-    background: var(--color-bg-secondary);
-    border-radius: var(--border-radius-lg);
-    padding: 0.5rem;
-    box-shadow: var(--box-shadow-card);
-    border: 1px solid var(--color-border-light);
+    background: linear-gradient(
+        135deg,
+        rgba(255, 255, 255, 0.98) 0%,
+        rgba(248, 250, 252, 0.95) 25%,
+        rgba(241, 245, 249, 0.95) 50%,
+        rgba(248, 250, 252, 0.95) 75%,
+        rgba(255, 255, 255, 0.98) 100%
+    );
+    backdrop-filter: blur(25px);
+    -webkit-backdrop-filter: blur(25px);
+    border: 1px solid rgba(5, 150, 105, 0.2);
+    border-radius: var(--border-radius-xl);
+    box-shadow: 
+        0 12px 40px rgba(5, 150, 105, 0.15),
+        0 6px 20px rgba(0, 0, 0, 0.08),
+        0 2px 8px rgba(5, 150, 105, 0.1),
+        inset 0 1px 0 rgba(255, 255, 255, 0.9),
+        inset 0 -1px 0 rgba(5, 150, 105, 0.05);
+    padding: var(--space-lg) var(--space-xl);
+    box-sizing: border-box;
+    height: 100px;
+    margin-bottom: var(--space-lg);
+    position: relative;
+    overflow: hidden;
+    transition: all var(--transition-duration-normal) var(--transition-timing-spring);
+}
+
+.header::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(90deg, 
+        transparent 0%,
+        rgba(5, 150, 105, 0.03) 25%,
+        rgba(5, 150, 105, 0.05) 50%,
+        rgba(5, 150, 105, 0.03) 75%,
+        transparent 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 2.5s ease-in-out infinite;
+    pointer-events: none;
+    z-index: 1;
+}
+
+.header:hover {
+    transform: translateY(-3px);
+    box-shadow: 
+        0 16px 50px rgba(5, 150, 105, 0.2),
+        0 8px 25px rgba(0, 0, 0, 0.12),
+        0 4px 12px rgba(5, 150, 105, 0.15),
+        inset 0 1px 0 rgba(255, 255, 255, 0.95),
+        inset 0 -1px 0 rgba(5, 150, 105, 0.08);
+    border-color: rgba(5, 150, 105, 0.25);
+}
+
+.header:hover {
+    transform: translateY(-2px);
+    box-shadow: 
+        0 12px 40px rgba(5, 150, 105, 0.12),
+        0 6px 20px rgba(0, 0, 0, 0.06),
+        inset 0 1px 0 rgba(255, 255, 255, 0.9);
+    border-color: rgba(5, 150, 105, 0.15);
 }
 
 .headerTop {
@@ -48,21 +108,32 @@
 
 .headerText {
     flex: 1;
+    animation: slideInFromLeft var(--transition-duration-slow) var(--transition-timing-spring);
 }
 
 .headerText h1 {
-    margin: 0 0 0.125rem 0;
-    font-size: 1.25rem;
-    font-weight: var(--font-weight-semibold);
-    color: var(--color-text-default);
-    letter-spacing: -0.025em;
-    line-height: 1.1;
+    margin: 0 0 var(--space-1) 0;
+    font-size: var(--font-size-2xl);
+    font-weight: var(--font-weight-bold);
+    background: linear-gradient(
+        135deg,
+        var(--color-primary) 0%,
+        var(--color-secondary) 50%,
+        var(--color-primary) 100%
+    );
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    letter-spacing: -0.02em;
+    line-height: var(--line-height-tight);
 }
 
 .headerText p {
     margin: 0;
     color: var(--color-text-secondary);
-    font-size: 0.75rem;
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+    opacity: 0.8;
     line-height: 1.3;
     max-width: 400px;
 }
@@ -76,6 +147,7 @@
     align-items: center;
     gap: 1rem;
     flex-shrink: 0;
+    animation: slideInFromRight var(--transition-duration-slow) var(--transition-timing-spring) 0.2s both;
 }
 
 /* Change Tracking Button */
@@ -278,6 +350,7 @@
     flex-direction: column;
     gap: 0.5rem;
     flex: 1;
+    min-height: 0;
 }
 
 .statsRow {
@@ -404,9 +477,7 @@
     flex: 1;
     display: flex;
     flex-direction: column;
-    height: 100vh;
-    min-height: 100vh;
-    max-height: 100vh;
+    min-height: calc(100vh - 20px);
     box-shadow: var(--box-shadow-card);
     border: 1px solid var(--color-border-light);
 }
@@ -483,29 +554,6 @@
     background: var(--color-bg-secondary);
 }
 
-@media (max-width: 480px) {
-    .searchInput {
-        font-size: 0.7rem;
-        padding: 0.5rem 0.5rem 0.5rem 1.875rem;
-    }
-    
-    .searchInput::placeholder {
-        font-size: 0.7rem;
-    }
-    
-    .searchBar {
-        margin-bottom: 0.75rem;
-    }
-    
-    .searchIcon {
-        font-size: 0.7rem;
-    }
-    
-    .filterButton {
-        padding: 0.375rem 0.25rem;
-        min-width: 40px;
-    }
-}
 
 /* ===========================================
    FILTER CONTROLS
@@ -571,124 +619,6 @@
     background: var(--color-accent-secondary);
 }
 
-/* ===========================================
-   RESPONSIVE STYLING FOR SEARCH AND FILTERS
-   =========================================== */
-@media screen and (max-width: 900px) {
-    .tableControls {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 0.75rem;
-    }
-    
-    .searchBar {
-        max-width: 100%;
-        width: 100%;
-    }
-    
-    .filterControls {
-        max-width: 100%;
-        width: 100%;
-        justify-content: space-between;
-    }
-}
-
-@media screen and (max-width: 600px) {
-    .searchBar {
-        margin-bottom: 0.5rem;
-    }
-    
-    .filterControls {
-        width: 100%;
-    }
-    
-    .filterButton {
-        flex: 1;
-        text-align: center;
-    }
-}
-
-@media (max-width: 480px) {
-    .sitePageContent {
-        padding: 0.375rem;
-        gap: 0.375rem;
-    }
-    
-    .header {
-        padding: 0.5rem;
-    }
-    
-    .headerText h1 {
-        font-size: 1rem;
-    }
-    
-    .statCard {
-        padding: 0.5rem;
-    }
-    
-    .statNumber {
-        font-size: 1.25rem;
-    }
-    
-    .statIcon {
-        width: 32px;
-        height: 32px;
-    }
-      .tableContainer {
-        height: calc(100vh - 140px);
-        min-height: calc(100vh - 140px);
-        max-height: calc(100vh - 140px);
-    }
-    
-    .employeeTable {
-        font-size: 0.8125rem;
-    }
-    
-    .employeeTable th,
-    .employeeTable td {
-        padding: 0.375rem 0.5rem;
-        font-size: 0.8125rem;
-    }
-    
-    .employeeTable tbody tr {
-        height: 2.75rem;
-        min-height: 2.75rem;
-    }
-    
-    .actionButton {
-        padding: 0.125rem 0.375rem;
-        font-size: 0.625rem;
-        margin: 0 0.0625rem;
-    }
-    
-    .tableHeader {
-        padding: 0.5rem;
-        gap: 0.5rem;
-    }
-    
-    .tableControls {
-        gap: 0.5rem;
-    }
-    
-    .filterControls {
-        padding: 0.25rem 0.125rem;
-        gap: 0.25rem;
-        justify-content: space-between;
-    }
-    
-    /* Make filter buttons more compact */
-    .filterButton {
-        padding: 0.375rem 0.25rem;
-        min-width: 30%;
-        font-size: 0.65rem;
-    }
-    
-    /* Ensure export button fits well */
-    .exportButton {
-        padding: 0.375rem 0.5rem;
-        font-size: 0.65rem;
-    }
-}
 
 /* ===========================================
    TABLE STYLING
@@ -698,9 +628,7 @@
     flex: 1;
     overflow: auto;
     border-radius: 0;
-    height: auto;
-    min-height: 0;
-    max-height: none;
+    min-height: 300px;
 }
 
 .employeeTable {
@@ -1046,261 +974,4 @@
     outline: none;
     border-color: var(--color-accent-primary);
     box-shadow: 0 0 0 3px rgba(107, 159, 239, 0.2);
-}
-
-/* ===========================================
-   RESPONSIVE DESIGN
-   =========================================== */
-
-@media (max-width: 1200px) {
-    .sitePageContent {
-        padding: 0.75rem;
-    }
-    
-    .header {
-        padding: 0.75rem;
-    }
-    
-    .headerTop {
-        gap: 0.75rem;
-    }
-    
-    .headerText h1 {
-        font-size: 1.25rem;
-    }
-}
-
-@media (max-width: 768px) {
-    .sitePageContent {
-        padding: 0.5rem;
-        gap: 0.5rem;
-    }
-    
-    .header {
-        padding: 0.75rem;
-    }
-    
-    .headerTop {
-        flex-direction: column;
-        align-items: stretch;
-        gap: 0.75rem;
-    }
-    
-    .headerControls {
-        flex-direction: row;
-        justify-content: space-between;
-        align-items: center;
-        gap: 0.75rem;
-    }
-    
-    .headerText h1 {
-        font-size: 1.125rem;
-    }
-    
-    .monthButton {
-        flex: 1;
-        justify-content: center;
-        min-width: auto;
-    }
-    
-    .calendarDropdown {
-        right: 0;
-        left: 0;
-        min-width: auto;
-    }
-    
-    .statsRow {
-        grid-template-columns: 1fr;
-        gap: 0.5rem;
-    }
-    
-    .tableControls {
-        flex-direction: column;
-        align-items: stretch;
-        gap: 0.75rem;
-    }
-    
-    .searchBar {
-        max-width: none;
-        width: 100%;
-    }
-    
-    .filterControls {
-        justify-content: space-between;
-        width: 100%;
-    }
-    
-    .exportButton {
-        align-self: flex-end;
-        width: 100%;
-        justify-content: center;
-    }
-    
-    .tableHeader {
-        padding: 0.75rem;
-    }
-    
-    /* Footer responsive adjustments */
-    .combinedFooter {
-        flex-direction: column;
-        align-items: center;
-        gap: 0.75rem;
-        padding: 0.75rem;
-    }
-    
-    .paginationControls {
-        max-width: none;
-        width: 100%;
-        order: 1;
-    }
-    
-    .footerInfo {
-        order: 2;
-        width: 100%;
-        justify-content: center;
-    }
-    
-    .itemsPerPageSelector {
-        order: 3;
-        width: 100%;
-        justify-content: center;
-    }
-      .tableContainer {
-        height: calc(100vh - 120px);
-        min-height: calc(100vh - 120px);
-        max-height: calc(100vh - 120px);
-    }
-    
-    .employeeTable th,
-    .employeeTable td {
-        padding: 0.5rem 0.625rem;
-        font-size: 0.875rem;
-    }
-    
-    .employeeTable tbody tr {
-        height: 3rem;
-        min-height: 3rem;
-    }
-      .tableFooter {
-        flex-direction: column;
-        align-items: stretch;
-        text-align: center;
-        padding: 0.5rem;
-        min-height: 80px;
-    }
-    
-    .combinedFooter {
-        flex-direction: column;
-        align-items: stretch;
-        text-align: center;
-        padding: 0.5rem;
-        min-height: 72px;
-        gap: 0.5rem;
-    }
-    
-    .paginationControls {
-        max-width: none;
-        justify-content: center;
-    }
-    
-    .footerInfo {
-        text-align: center;
-        order: 1;
-    }
-    
-    .paginationControls {
-        order: 2;
-    }
-    
-    .itemsPerPageSelector {
-        justify-content: center;
-        order: 3;
-    }
-    
-    .pagination {
-        padding: 0.5rem;
-        min-height: 60px;
-    }
-}
-
-@media (max-width: 480px) {
-    .sitePageContent {
-        padding: 0.375rem;
-        gap: 0.375rem;
-    }
-    
-    .header {
-        padding: 0.5rem;
-    }
-    
-    .headerText h1 {
-        font-size: 1rem;
-    }
-    
-    .statCard {
-        padding: 0.5rem;
-    }
-    
-    .statNumber {
-        font-size: 1.25rem;
-    }
-    
-    .statIcon {
-        width: 32px;
-        height: 32px;
-    }
-      .tableContainer {
-        height: calc(100vh - 140px);
-        min-height: calc(100vh - 140px);
-        max-height: calc(100vh - 140px);
-    }
-    
-    .employeeTable {
-        font-size: 0.8125rem;
-    }
-    
-    .employeeTable th,
-    .employeeTable td {
-        padding: 0.375rem 0.5rem;
-        font-size: 0.8125rem;
-    }
-    
-    .employeeTable tbody tr {
-        height: 2.75rem;
-        min-height: 2.75rem;
-    }
-    
-    .actionButton {
-        padding: 0.125rem 0.375rem;
-        font-size: 0.625rem;
-        margin: 0 0.0625rem;
-    }
-    
-    .tableHeader {
-        padding: 0.5rem;
-        gap: 0.5rem;
-    }
-    
-    .tableControls {
-        gap: 0.5rem;
-    }
-    
-    .filterControls {
-        padding: 0.25rem 0.125rem;
-        gap: 0.25rem;
-        justify-content: space-between;
-    }
-    
-    /* Make filter buttons more compact */
-    .filterButton {
-        padding: 0.375rem 0.25rem;
-        min-width: 30%;
-        font-size: 0.65rem;
-    }
-    
-    /* Ensure export button fits well */
-    .exportButton {
-        padding: 0.375rem 0.5rem;
-        font-size: 0.65rem;
-    }
 }

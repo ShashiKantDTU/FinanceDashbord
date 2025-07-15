@@ -1,12 +1,13 @@
-/* Payments Container (Main Wrapper) */
+/* Payments Container (Main Wrapper) - Enhanced with Transitions */
 .PaymentsContainer{
   display: flex;
   flex-direction: row;
   height: 100vh;
   overflow: hidden;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* Payments Table Layout - Professional & Responsive */
+/* Payments Table Layout - Professional & Responsive with Smooth Transitions */
 .container {
   padding: 0.25rem;
   background: var(--color-bg-body);
@@ -16,35 +17,108 @@
   color: var(--color-text-default);
   font-family: var(--font-family-primary);
   width: 100%;
- 
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* Ultra Compact Header Section - Performance Optimized */
+/* Ultra Compact Header Section - Enhanced Professional Design */
 .headerUltraCompact {
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.98) 0%,
+    rgba(248, 250, 252, 0.95) 25%,
+    rgba(241, 245, 249, 0.95) 50%,
+    rgba(248, 250, 252, 0.95) 75%,
+    rgba(255, 255, 255, 0.98) 100%
+  );
+  backdrop-filter: blur(25px);
+  -webkit-backdrop-filter: blur(25px);
+  border: 1px solid rgba(5, 150, 105, 0.2);
+  border-radius: var(--border-radius-xl);
+  box-shadow: 
+    0 12px 40px rgba(5, 150, 105, 0.15),
+    0 6px 20px rgba(0, 0, 0, 0.08),
+    0 2px 8px rgba(5, 150, 105, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    inset 0 -1px 0 rgba(5, 150, 105, 0.05);
+  padding: var(--space-lg) var(--space-xl);
+  margin-bottom: var(--space-lg);
+  position: relative;
+  overflow: hidden;
+  transition: all var(--transition-duration-normal) var(--transition-timing-spring);
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 0.5rem;
-  padding: 0.4rem 0.75rem;
-  background: var(--color-bg-primary);
-  border-radius: var(--border-radius-md);
-  border: 1px solid var(--color-border-light);
-  min-height: 40px;
+  min-height: 60px;
+}
+
+.headerUltraCompact::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(
+    90deg,
+    var(--color-primary) 0%,
+    var(--color-secondary) 25%,
+    #0891b2 50%,
+    var(--color-secondary) 75%,
+    var(--color-primary) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 3s ease-in-out infinite;
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform var(--transition-duration-slow) var(--transition-timing-spring);
+}
+
+@keyframes shimmer {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+.headerUltraCompact:hover::before {
+  transform: scaleX(1);
+}
+
+.headerUltraCompact:hover {
+  transform: translateY(-3px);
+  box-shadow: 
+    0 16px 50px rgba(5, 150, 105, 0.2),
+    0 8px 25px rgba(0, 0, 0, 0.12),
+    0 4px 12px rgba(5, 150, 105, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    inset 0 -1px 0 rgba(5, 150, 105, 0.08);
+  border-color: rgba(5, 150, 105, 0.25);
 }
 
 .titleSection {
   flex: 1;
   min-width: 0;
+  transition: transform var(--transition-duration-fast) var(--transition-timing-spring);
+  animation: slideInFromLeft var(--transition-duration-slow) var(--transition-timing-spring);
 }
 
 .titleCompact {
-  font-size: 1.1rem;
-  font-weight: var(--font-weight-semibold);
-  margin: 0;
-  color: var(--color-accent-primary);
+  font-size: var(--font-size-2xl);
+  font-weight: var(--font-weight-bold);
+  margin: 0 0 var(--space-1) 0;
+  background: linear-gradient(
+    135deg,
+    var(--color-primary) 0%,
+    var(--color-secondary) 50%,
+    var(--color-primary) 100%
+  );
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  letter-spacing: -0.02em;
+  line-height: var(--line-height-tight);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  transition: all var(--transition-duration-fast) var(--transition-timing-spring);
 }
 
 .statsRowCompact {
@@ -63,10 +137,15 @@
   border-radius: var(--border-radius-sm);
   border: 1px solid var(--color-border-light);
   min-width: 60px;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
 }
 
 .statItemCompact:hover {
   background: var(--color-bg-tertiary);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(5, 150, 105, 0.1);
+  border-color: rgba(5, 150, 105, 0.3);
 }
 
 .statValueCompact {
@@ -75,6 +154,7 @@
   color: var(--color-accent-primary);
   line-height: 1;
   margin-bottom: 0.1rem;
+  transition: color 0.2s ease;
 }
 
 .statLabelCompact {
@@ -84,9 +164,10 @@
   text-transform: uppercase;
   letter-spacing: 0.05em;
   line-height: 1;
+  transition: color 0.2s ease;
 }
 
-/* Mini Controls Section - Performance Optimized */
+/* Mini Controls Section - Enhanced with Professional Transitions */
 .controlsMini {
   display: flex;
   justify-content: space-between;
@@ -98,8 +179,13 @@
   border: 1px solid var(--color-border-light);
   gap: 0.75rem;
   min-height: 35px;
-  position: relative;
-  z-index: 100;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+}
+
+.controlsMini:hover {
+  box-shadow: 0 2px 8px rgba(5, 150, 105, 0.06);
+  border-color: rgba(5, 150, 105, 0.15);
 }
 
 .monthSelectorMini {
@@ -120,16 +206,24 @@
   font-size: 0.8rem;
   color: var(--color-text-default);
   white-space: nowrap;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .monthButtonMini:hover {
   background: var(--color-bg-tertiary);
   border-color: var(--color-accent-primary);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(5, 150, 105, 0.15);
 }
 
 .calendarIconMini {
   font-size: 0.7rem;
   color: var(--color-accent-primary);
+  transition: transform 0.2s ease;
+}
+
+.monthButtonMini:hover .calendarIconMini {
+  transform: scale(1.1);
 }
 
 .searchBoxMini {
@@ -137,6 +231,7 @@
   flex: 1;
   max-width: 300px;
   margin: 0 1rem;
+  transition: transform 0.2s ease;
 }
 
 .searchInputMini {
@@ -147,16 +242,25 @@
   background: var(--color-bg-secondary);
   color: var(--color-text-default);
   font-size: 0.8rem;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .searchInputMini:focus {
   outline: none;
   border-color: var(--color-accent-primary);
+  box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.1);
+  background: var(--color-bg-primary);
+  transform: scale(1.02);
 }
 
 .searchInputMini::placeholder {
   color: var(--color-text-secondary);
   opacity: 0.7;
+  transition: opacity 0.2s ease;
+}
+
+.searchInputMini:focus::placeholder {
+  opacity: 0.5;
 }
 
 .searchIconMini {
@@ -167,6 +271,11 @@
   font-size: 0.7rem;
   color: var(--color-text-secondary);
   pointer-events: none;
+  transition: color 0.2s ease;
+}
+
+.searchInputMini:focus + .searchIconMini {
+  color: var(--color-accent-primary);
 }
 
 .resultCountMini {
@@ -175,6 +284,7 @@
   font-weight: var(--font-weight-medium);
   white-space: nowrap;
   flex-shrink: 0;
+  transition: color 0.2s ease;
 }
 
 .loadingTextMini {
@@ -425,11 +535,13 @@
   width: 100%;
   border-collapse: collapse;
   font-size: var(--font-size-sm);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .paymentsTable thead {
   background: var(--color-bg-secondary);
   border-bottom: 2px solid var(--color-border-medium);
+  transition: background-color 0.2s ease;
 }
 
 .paymentsTable th {
@@ -440,6 +552,7 @@
   border-right: 1px solid var(--color-border-light);
   position: relative;
   letter-spacing: 0.025em;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .paymentsTable th:last-child {
@@ -449,17 +562,19 @@
 .sortable {
   cursor: pointer;
   user-select: none;
-  transition: background-color 0.2s ease;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
 }
 
 .sortable:hover {
   background: var(--color-bg-hover);
+  color: var(--color-accent-primary);
+  transform: translateY(-1px);
 }
 
 .employeeRow {
   border-bottom: 1px solid var(--color-border-light);
-  transition: background-color 0.2s ease;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
 }
 
@@ -469,28 +584,38 @@
 
 .employeeRow:hover {
   background: var(--color-bg-hover);
+  transform: translateX(2px);
+  box-shadow: 0 2px 8px rgba(5, 150, 105, 0.08);
+  border-color: rgba(5, 150, 105, 0.2);
 }
 
 .paymentsTable td {
   padding: 1rem 0.75rem;
   border-right: 1px solid var(--color-border-light);
   vertical-align: middle;
+  transition: all 0.2s ease;
 }
 
 .paymentsTable td:last-child {
   border-right: none;
 }
 
-/* Employee Specific Cells - Performance Optimized */
+/* Employee Specific Cells - Enhanced with Transitions */
 .employeeId {
   font-family: var(--font-family-monospace);
   font-weight: var(--font-weight-semibold);
   color: var(--color-accent-primary);
+  transition: color 0.2s ease;
+}
+
+.employeeRow:hover .employeeId {
+  color: var(--color-primary);
 }
 
 .employeeName {
   font-weight: var(--font-weight-semibold);
   color: var(--color-text-default);
+  transition: color 0.2s ease;
 }
 
 .attendanceBadge {
@@ -500,6 +625,12 @@
   border-radius: 12px;
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-medium);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.attendanceBadge:hover {
+  transform: scale(1.05);
+  box-shadow: 0 2px 6px rgba(5, 150, 105, 0.3);
 }
 
 /* Amount Styling - Performance Optimized */
@@ -538,24 +669,48 @@
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-medium);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: 
+    all var(--transition-duration-normal) var(--transition-timing-spring),
+    transform var(--transition-duration-fast) var(--transition-timing-spring),
+    box-shadow var(--transition-duration-normal) var(--transition-timing-ease);
   background: var(--color-bg-tertiary);
   color: var(--color-text-secondary);
   border: 1px solid var(--color-border-medium);
   white-space: nowrap;
   opacity: 0.7;
+  position: relative;
+  overflow: hidden;
+}
+
+.detailBtn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+  transition: left var(--transition-duration-slow) var(--transition-timing-ease);
 }
 
 .detailBtn:hover {
   background: var(--color-accent-primary);
   color: white;
   opacity: 1;
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+.detailBtn:hover::before {
+  left: 100%;
 }
 
 .detailBtn.active {
   background: var(--color-accent-primary);
   color: white;
   opacity: 1;
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
 }
 
 .advanceCell,
@@ -585,34 +740,106 @@
   background: #fef3c7;
   color: #92400e;
   border: 1px solid #fbbf24;
+  transition: 
+    all var(--transition-duration-normal) var(--transition-timing-spring),
+    transform var(--transition-duration-fast) var(--transition-timing-spring),
+    box-shadow var(--transition-duration-normal) var(--transition-timing-ease);
 }
 
 .advancesBtn:hover,
 .advancesBtn.active {
   background: #fbbf24;
   color: white;
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
 }
 
 .deductionsBtn {
   background: #fee2e2;
   color: #991b1b;
   border: 1px solid #f87171;
+  transition: 
+    all var(--transition-duration-normal) var(--transition-timing-spring),
+    transform var(--transition-duration-fast) var(--transition-timing-spring),
+    box-shadow var(--transition-duration-normal) var(--transition-timing-ease);
 }
 
 .deductionsBtn:hover,
 .deductionsBtn.active {
   background: #f87171;
   color: white;
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
 }
 
-/* Expanded Row Styles - Performance Optimized */
+/* Expanded Row Styles - Performance Optimized with Smooth Transitions */
 .expandedRow {
   background: var(--color-bg-secondary);
+  opacity: 0;
+  max-height: 0;
+  overflow: hidden;
+  transition: 
+    max-height var(--transition-duration-slow) var(--transition-timing-spring),
+    opacity var(--transition-duration-normal) var(--transition-timing-ease),
+    background-color var(--transition-duration-fast) var(--transition-timing-ease);
+  animation: expandRowAnimation var(--transition-duration-slow) var(--transition-timing-spring) forwards;
+}
+
+@keyframes expandRowAnimation {
+  0% {
+    opacity: 0;
+    max-height: 0;
+    transform: translateY(-15px) scale(0.98);
+  }
+  30% {
+    opacity: 0.4;
+    max-height: 150px;
+    transform: translateY(-8px) scale(0.99);
+  }
+  70% {
+    opacity: 0.8;
+    max-height: 400px;
+    transform: translateY(-2px) scale(1);
+  }
+  100% {
+    opacity: 1;
+    max-height: 1000px;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Professional exit animation for smoother transitions */
+@keyframes collapseRowAnimation {
+  0% {
+    opacity: 1;
+    max-height: 1000px;
+    transform: translateY(0) scale(1);
+  }
+  30% {
+    opacity: 0.8;
+    max-height: 300px;
+    transform: translateY(-2px) scale(1);
+  }
+  70% {
+    opacity: 0.3;
+    max-height: 80px;
+    transform: translateY(-8px) scale(0.99);
+  }
+  100% {
+    opacity: 0;
+    max-height: 0;
+    transform: translateY(-15px) scale(0.98);
+  }
 }
 
 .expandedContent {
   padding: 1.5rem;
   border-top: 1px solid var(--color-border-medium);
+  transform: translateY(0);
+  transition: 
+    transform var(--transition-duration-normal) var(--transition-timing-spring),
+    padding var(--transition-duration-fast) var(--transition-timing-ease),
+    border-color var(--transition-duration-fast) var(--transition-timing-ease);
 }
 
 .expandedTitle {
@@ -620,6 +847,20 @@
   color: var(--color-text-default);
   font-size: 1.1rem;
   font-weight: var(--font-weight-semibold);
+  opacity: 0;
+  transform: translateX(-10px);
+  animation: slideInTitle var(--transition-duration-normal) var(--transition-timing-spring) 0.15s both;
+}
+
+@keyframes slideInTitle {
+  0% {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
 .detailsGrid {
@@ -627,6 +868,18 @@
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 1rem;
   margin-bottom: 1rem;
+  animation: fadeInGrid var(--transition-duration-slow) var(--transition-timing-spring) 0.1s both;
+}
+
+@keyframes fadeInGrid {
+  0% {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .detailItem {
@@ -634,11 +887,40 @@
   padding: 1rem;
   border-radius: var(--border-radius-sm);
   border: 1px solid var(--color-border-light);
-  transition: border-color 0.2s ease;
+  transition: 
+    border-color var(--transition-duration-normal) var(--transition-timing-ease),
+    transform var(--transition-duration-fast) var(--transition-timing-spring),
+    box-shadow var(--transition-duration-normal) var(--transition-timing-ease),
+    background-color var(--transition-duration-fast) var(--transition-timing-ease);
+  opacity: 0;
+  transform: translateY(15px);
+  animation: fadeInItem var(--transition-duration-normal) var(--transition-timing-spring) 0.2s both;
+}
+
+@keyframes fadeInItem {
+  0% {
+    opacity: 0;
+    transform: translateY(15px) scale(0.98);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.detailItem:nth-child(even) {
+  animation-delay: 0.25s;
+}
+
+.detailItem:nth-child(3n) {
+  animation-delay: 0.3s;
 }
 
 .detailItem:hover {
-  border-color: var(--color-accent-primary);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--color-border-focus);
+  background-color: var(--color-bg-hover);
 }
 
 .detailHeader {
@@ -1381,23 +1663,32 @@
 .editBtn, .saveBtn, .cancelBtn {
   padding: 0.5rem;
   border: none;
-  border-radius: var(--border-radius-sm);  cursor: pointer;
+  border-radius: var(--border-radius-sm);
+  cursor: pointer;
   font-size: 0.875rem;
-  transition: all 0.3s;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   min-width: 2rem;
   display: flex;
   align-items: center;
   justify-content: center;
+  position: relative;
+  overflow: hidden;
 }
 
 .editBtn {
   background: var(--color-primary);
   color: white;
+  box-shadow: 0 2px 4px rgba(5, 150, 105, 0.2);
 }
 
 .editBtn:hover:not(:disabled) {
   background: var(--color-primary-hover);
-  transform: scale(1.05);
+  transform: translateY(-2px) scale(1.05);
+  box-shadow: 0 4px 12px rgba(5, 150, 105, 0.3);
+}
+
+.editBtn:active:not(:disabled) {
+  transform: translateY(0) scale(0.98);
 }
 
 .editBtn:disabled {
@@ -1405,26 +1696,40 @@
   color: var(--color-text-tertiary);
   cursor: not-allowed;
   opacity: 0.5;
+  transform: none;
+  box-shadow: none;
 }
 
 .saveBtn {
   background: var(--color-success);
   color: white;
+  box-shadow: 0 2px 4px rgba(5, 150, 105, 0.2);
 }
 
 .saveBtn:hover {
   background: var(--color-success-hover);
-  transform: scale(1.05);
+  transform: translateY(-2px) scale(1.05);
+  box-shadow: 0 4px 12px rgba(5, 150, 105, 0.3);
+}
+
+.saveBtn:active {
+  transform: translateY(0) scale(0.98);
 }
 
 .cancelBtn {
-  background: var(--color-danger);
+  background: var(--color-error);
   color: white;
+  box-shadow: 0 2px 4px rgba(220, 38, 38, 0.2);
 }
 
 .cancelBtn:hover {
-  background: var(--color-danger-hover);
-  transform: scale(1.05);
+  background: var(--color-error-hover);
+  transform: translateY(-2px) scale(1.05);
+  box-shadow: 0 4px 12px rgba(220, 38, 38, 0.3);
+}
+
+.cancelBtn:active {
+  transform: translateY(0) scale(0.98);
 }
 
 /* Expanded Header for Edit Mode */

@@ -380,7 +380,7 @@ const Settings = () => {
                 <section className={styles.contentSection}>
                     {loading ? (
                         <div className={styles.loadingState}>
-                            <CustomSpinner size={70} color="#3b82f6" />
+                            <CustomSpinner size={70} color="#059669" />
                         </div>
                     ) : supervisors.length === 0 ? (
                         <div className={styles.emptyState}>

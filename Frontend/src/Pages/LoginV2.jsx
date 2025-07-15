@@ -8,6 +8,8 @@ import { initializeApp } from 'firebase/app';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { authAPI } from '../utils/api';
+// Import the logo image
+import LoginPageLogo from '../assets/LoginPageLogo.png';
 
 // Firebase config using environment variables
 const firebaseConfig = {
@@ -25,7 +27,6 @@ const validateFirebaseConfig = () => {
   const missingFields = requiredFields.filter(field => !firebaseConfig[field]);
   
   if (missingFields.length > 0) {
-    console.error('Missing Firebase configuration:', missingFields);
     throw new Error(`Firebase configuration incomplete. Missing: ${missingFields.join(', ')}`);
   }
 };
@@ -38,13 +39,18 @@ const initializeFirebaseAuth = () => {
   try {
     validateFirebaseConfig();
     
-    if (!window._firebaseInitialized) {
+    // Only initialize once
+    if (!_firebaseApp) {
       _firebaseApp = initializeApp(firebaseConfig);
-      window._firebaseInitialized = true;
     }
     
-    auth = getAuth();
+    // Get auth instance
+    auth = getAuth(_firebaseApp);
     
+    // Ensure phone authentication is enabled
+    if (!auth) {
+      throw new Error('Failed to initialize Firebase Auth');
+    }
     
     return auth;
     
@@ -58,10 +64,10 @@ const initializeFirebaseAuth = () => {
 auth = initializeFirebaseAuth();
 
 const features = [
-  { icon: <FaRocket color="#6358DC" size={22} />, title: 'Fast & Reliable', desc: 'Lightning fast access to your dashboard.' },
-  { icon: <FaLock color="#6358DC" size={22} />, title: 'Secure', desc: 'Your data is protected with industry standards.' },
-  { icon: <FaUserFriends color="#6358DC" size={22} />, title: 'Collaboration', desc: 'Work with your team in real time.' },
-  { icon: <FaCheckCircle color="#6358DC" size={22} />, title: 'Easy to Use', desc: 'Intuitive design for everyone.' },
+  { icon: <FaRocket color="#10B981" size={24} />, title: 'Auto-calculated payments', desc: 'Accurate labour payment, based on daily attendance and all advances given.' },
+  { icon: <FaUserFriends color="#10B981" size={24} />, title: 'All labour records. One app', desc: 'Track haazri, payment, and reports – everything auto-managed.' },
+  { icon: <FaCheckCircle color="#10B981" size={24} />, title: 'Supervisor access. Fully synced', desc: 'Supervisors mark attendance. You get live updates on your phone.' },
+  { icon: <FaLock color="#10B981" size={24} />, title: 'PDF report in one tap', desc: 'Download monthly labour summaries instantly.' },
 ];
 
 const RESEND_OTP_SECONDS = 60;
@@ -85,8 +91,10 @@ const LoginV2 = () => {
   useEffect(() => {
     const checkFirebaseReady = () => {
       try {
-        const currentAuth = getAuth();
-        if (window._firebaseInitialized && currentAuth && currentAuth.app) {
+        // Re-initialize if needed
+        const currentAuth = initializeFirebaseAuth();
+        
+        if (currentAuth && currentAuth.app) {
           setFirebaseReady(true);
           return true;
         } else {
@@ -96,13 +104,20 @@ const LoginV2 = () => {
       } catch (error) {
         console.error('Firebase initialization error:', error);
         setFirebaseReady(false);
-        setError('Firebase configuration error. Please contact support.');
+        
+        // Show user-friendly error based on the type of error
+        if (error.message.includes('Missing')) {
+          setError('Firebase configuration is incomplete. Please contact support.');
+        } else {
+          setError('Firebase initialization failed. Please refresh the page and try again.');
+        }
         return false;
       }
     };
 
     const isReady = checkFirebaseReady();
     
+    // If not ready, try again after a short delay
     if (!isReady) {
       const timeout = setTimeout(() => {
         checkFirebaseReady();
@@ -188,6 +203,7 @@ const LoginV2 = () => {
     setLoading(true);
     setError('');
     
+    // Get fresh auth instance
     const currentAuth = getAuth();
     
     if (!currentAuth || !currentAuth.app) {
@@ -216,38 +232,28 @@ const LoginV2 = () => {
       // Brief delay to ensure DOM is ready
       await new Promise(resolve => setTimeout(resolve, 100));
       
-      // Create RecaptchaVerifier with compatibility handling
+      // Create RecaptchaVerifier with proper Firebase v9+ syntax
       try {
+        // Initialize RecaptchaVerifier with auth instance as first parameter (Firebase v9+ requirement)
         window.recaptchaVerifier = new RecaptchaVerifier(currentAuth, 'recaptcha-container', {
           size: 'invisible',
           callback: () => {
-            // TODO: Remove after deployment test
-            console.log('reCAPTCHA verified successfully');
+            // reCAPTCHA solved, allow signInWithPhoneNumber
           },
           'expired-callback': () => {
-            setError('Recaptcha expired. Please try again.');
+            // Response expired. Ask user to solve reCAPTCHA again
+            setError('Verification expired. Please try again.');
+            setLoading(false);
+          },
+          'error-callback': () => {
+            setError('Verification failed. Please try again.');
             setLoading(false);
           }
         });
       } catch {
-        // Fallback: Try without auth parameter
-        try {
-          window.recaptchaVerifier = new RecaptchaVerifier('recaptcha-container', {
-            size: 'invisible',
-            callback: () => {
-              // TODO: Remove after deployment test
-              console.log('reCAPTCHA verified successfully (fallback method)');
-            },
-            'expired-callback': () => {
-              setError('Recaptcha expired. Please try again.');
-              setLoading(false);
-            }
-          });
-        } catch {
-          setError('Failed to initialize verification. Please refresh the page and try again.');
-          setLoading(false);
-          return;
-        }
+        setError('Unable to initialize phone verification. Please check your Firebase configuration.');
+        setLoading(false);
+        return;
       }
       
       const appVerifier = window.recaptchaVerifier;
@@ -262,12 +268,23 @@ const LoginV2 = () => {
           setSuccess(`OTP sent to ${phoneNumber}`);
         })
         .catch((err) => {
-          if (err.code === 'auth/too-many-requests') {
+          // Handle specific Firebase Auth errors
+          if (err.code === 'auth/invalid-app-credential') {
+            setError('App verification failed. Please ensure phone authentication is enabled in Firebase Console.');
+          } else if (err.code === 'auth/too-many-requests') {
             setError('Too many attempts. Please try again later.');
           } else if (err.code === 'auth/invalid-phone-number') {
             setError('Invalid phone number format.');
           } else if (err.code === 'auth/quota-exceeded') {
             setError('SMS quota exceeded. Please try again later.');
+          } else if (err.code === 'auth/captcha-check-failed') {
+            setError('Verification failed. Please refresh the page and try again.');
+          } else if (err.code === 'auth/missing-app-credential') {
+            setError('App verification failed. Please contact support.');
+          } else if (err.code === 'auth/operation-not-allowed') {
+            setError('Phone authentication is not enabled. Please contact support.');
+          } else if (err.code === 'auth/unauthorized-domain') {
+            setError('Domain not authorized for phone authentication. Please contact support.');
           } else {
             setError(err.message || 'Failed to send OTP. Please try again.');
           }
@@ -384,7 +401,7 @@ const LoginV2 = () => {
   };
 
   return (
-    <div style={{ width: '100vw', height: '100vh', display: 'flex', background: 'linear-gradient(120deg, #F4F4F4 60%, #E8EAF6 100%)' }}>
+    <div style={{ width: '100vw', height: '100vh', display: 'flex', background: 'linear-gradient(135deg, #F0FDF4 0%, #ECFDF5 50%, #D1FAE5 100%)' }}>
       {/* Left column: Animated marketing/feature area */}
       <motion.div
         variants={leftColVariants}
@@ -392,30 +409,85 @@ const LoginV2 = () => {
         animate="animate"
         style={{
           flex: 1,
-          background: '#fff',
+          background: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)',
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'flex-start',
           justifyContent: 'center',
           padding: '7vh 6vw',
           minWidth: 0,
+          borderRight: '1px solid #E5E7EB',
         }}
       >
-        <motion.h1
+        <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.7 }}
-          style={{ fontFamily: 'Poppins, Inter, sans-serif', fontWeight: 900, fontSize: '2.3rem', color: '#6358DC', marginBottom: 16, lineHeight: 1.1 }}
+          style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: 16, 
+            marginBottom: 8 
+          }}
         >
-          Welcome to Design School
-        </motion.h1>
+          <motion.img
+            src={LoginPageLogo}
+            alt="Site Haazri Logo"
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.7, delay: 0.1 }}
+            style={{
+              width: '120px',
+              height: '120px',
+              objectFit: 'contain',
+              filter: 'drop-shadow(0 2px 8px rgba(16, 185, 129, 0.15))'
+            }}
+          />
+          <h1
+            style={{ 
+              fontFamily: 'Poppins, Inter, sans-serif', 
+              fontWeight: 900, 
+              fontSize: '2.8rem', 
+              color: '#065F46', 
+              margin: 0, 
+              lineHeight: 1.1,
+              letterSpacing: '-0.02em',
+              textShadow: '0 2px 4px rgba(16, 185, 129, 0.1)'
+            }}
+          >
+            Site Haazri
+          </h1>
+        </motion.div>
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.7, delay: 0.15 }}
-          style={{ color: '#2F2F2F', fontWeight: 500, fontSize: '1.18rem', marginBottom: 36, opacity: 0.85, lineHeight: 1.3 }}
+          style={{ 
+            color: '#10B981', 
+            fontWeight: 700, 
+            fontSize: '1.3rem', 
+            marginBottom: 12, 
+            opacity: 0.9, 
+            lineHeight: 1.2,
+            letterSpacing: '-0.01em'
+          }}
         >
-          Unlock your productivity with our modern dashboard.
+          Smart Labour Management
+        </motion.div>
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.7, delay: 0.25 }}
+          style={{ 
+            color: '#374151', 
+            fontWeight: 500, 
+            fontSize: '1.1rem', 
+            marginBottom: 40, 
+            opacity: 0.8, 
+            lineHeight: 1.4 
+          }}
+        >
+          Daily Labour Report. Automatic work summaries based on haazri.
         </motion.div>
         <div style={{ width: '100%' }}>
           {features.map((f, i) => (
@@ -429,8 +501,8 @@ const LoginV2 = () => {
             >
               <div>{f.icon}</div>
               <div>
-                <div style={{ fontWeight: 700, color: '#222', fontSize: '1.13rem' }}>{f.title}</div>
-                <div style={{ color: '#666', fontSize: '1.01rem', opacity: 0.85 }}>{f.desc}</div>
+                <div style={{ fontWeight: 800, color: '#065F46', fontSize: '1.2rem', marginBottom: 4, letterSpacing: '-0.01em' }}>{f.title}</div>
+                <div style={{ color: '#6B7280', fontSize: '1.05rem', opacity: 0.9, lineHeight: 1.4 }}>{f.desc}</div>
               </div>
             </motion.div>
           ))}
@@ -442,7 +514,7 @@ const LoginV2 = () => {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        background: 'linear-gradient(120deg, #f3f4f8 80%, #e0e3ee 100%)', // softer, less bright
+        background: 'linear-gradient(135deg, #F0FDF4 0%, #ECFDF5 50%, #D1FAE5 100%)',
         minWidth: 0,
         height: '100vh',
       }}>
@@ -453,9 +525,9 @@ const LoginV2 = () => {
           style={{
             width: '100%',
             maxWidth: 420,
-            background: 'rgba(255,255,255,0.85)',
+            background: 'rgba(255,255,255,0.95)',
             borderRadius: 24,
-            boxShadow: '0 12px 48px 0 rgba(99,88,220,0.18), 0 1.5px 8px 0 rgba(99,88,220,0.08)',
+            boxShadow: '0 20px 60px 0 rgba(16, 185, 129, 0.15), 0 4px 16px 0 rgba(16, 185, 129, 0.1)',
             padding: '2.5rem 2rem',
             display: 'flex',
             flexDirection: 'column',
@@ -463,30 +535,74 @@ const LoginV2 = () => {
             alignItems: 'stretch',
             minHeight: 420,
             overflow: 'auto',
-            border: '1.5px solid #e3e6f0',
-            backdropFilter: 'blur(8px)',
-            WebkitBackdropFilter: 'blur(8px)',
+            border: '2px solid rgba(16, 185, 129, 0.1)',
+            backdropFilter: 'blur(10px)',
+            WebkitBackdropFilter: 'blur(10px)',
             transition: 'box-shadow 0.2s, background 0.2s',
           }}
         >
-          <h2 style={{ fontFamily: 'Poppins, Inter, sans-serif', fontWeight: 800, fontSize: '1.45rem', marginBottom: 6, color: '#2F2F2F', letterSpacing: '-0.5px', lineHeight: 1.1, textAlign: 'center' }}>Welcome to Design School</h2>
-          <div style={{ color: '#6358DC', fontWeight: 500, fontSize: '0.98rem', marginBottom: '1.2vh', opacity: 0.85, lineHeight: 1.1, textAlign: 'center' }}>Sign in to your account</div>
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.1 }}
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              marginBottom: 12
+            }}
+          >
+            
+            <h2 style={{ 
+              fontFamily: 'Poppins, Inter, sans-serif', 
+              fontWeight: 800, 
+              fontSize: '1.6rem', 
+              margin: 0, 
+              color: '#065F46', 
+              letterSpacing: '-0.02em', 
+              lineHeight: 1.1, 
+              textAlign: 'center',
+              textShadow: '0 1px 2px rgba(16, 185, 129, 0.1)'
+            }}>Site Haazri</h2>
+          </motion.div>
+          <div style={{ 
+            color: '#10B981', 
+            fontWeight: 600, 
+            fontSize: '1.05rem', 
+            marginBottom: '1.2vh', 
+            opacity: 0.9, 
+            lineHeight: 1.1, 
+            textAlign: 'center' 
+          }}>Sign in to your account</div>
           <div style={{ display: 'flex', gap: '0.5vw', marginBottom: '1.2vh' }}>
-            <button onClick={() => setMode('email')} style={{ flex: 1, background: mode === 'email' ? '#6358DC' : '#ECECEC', color: mode === 'email' ? '#fff' : '#2F2F2F', border: 'none', borderRadius: 7, padding: '0.5em 0', fontWeight: 700, fontSize: '0.93rem', cursor: 'pointer', transition: 'all 0.2s' }}>Email Login</button>
+            <button onClick={() => setMode('email')} style={{ 
+              flex: 1, 
+              background: mode === 'email' ? 'linear-gradient(135deg, #10B981 0%, #059669 100%)' : '#F3F4F6', 
+              color: mode === 'email' ? '#fff' : '#374151', 
+              border: mode === 'email' ? '2px solid #10B981' : '2px solid #E5E7EB', 
+              borderRadius: 10, 
+              padding: '0.65em 0', 
+              fontWeight: 700, 
+              fontSize: '0.95rem', 
+              cursor: 'pointer', 
+              transition: 'all 0.3s ease',
+              boxShadow: mode === 'email' ? '0 4px 12px rgba(16, 185, 129, 0.2)' : 'none'
+            }}>Email Login</button>
             <button 
               onClick={() => firebaseReady && setMode('mobile')} 
               disabled={!firebaseReady}
               style={{ 
                 flex: 1, 
-                background: mode === 'mobile' ? '#6358DC' : (!firebaseReady ? '#CCCCCC' : '#ECECEC'), 
-                color: mode === 'mobile' ? '#fff' : (!firebaseReady ? '#888' : '#2F2F2F'), 
-                border: 'none', 
-                borderRadius: 7, 
-                padding: '0.5em 0', 
+                background: mode === 'mobile' ? 'linear-gradient(135deg, #10B981 0%, #059669 100%)' : (!firebaseReady ? '#E5E7EB' : '#F3F4F6'), 
+                color: mode === 'mobile' ? '#fff' : (!firebaseReady ? '#9CA3AF' : '#374151'), 
+                border: mode === 'mobile' ? '2px solid #10B981' : (!firebaseReady ? '2px solid #E5E7EB' : '2px solid #E5E7EB'), 
+                borderRadius: 10, 
+                padding: '0.65em 0', 
                 fontWeight: 700, 
-                fontSize: '0.93rem', 
+                fontSize: '0.95rem', 
                 cursor: firebaseReady ? 'pointer' : 'not-allowed', 
-                transition: 'all 0.2s' 
+                transition: 'all 0.3s ease',
+                boxShadow: mode === 'mobile' ? '0 4px 12px rgba(16, 185, 129, 0.2)' : 'none'
               }}
             >
               Mobile OTP {!firebaseReady && '(Loading...)'}
@@ -503,18 +619,31 @@ const LoginV2 = () => {
                 onSubmit={handleEmailLogin}
                 style={{ display: 'flex', flexDirection: 'column', gap: '0.7vh', marginTop: 2 }}
               >
-                <label style={{ fontWeight: 600, marginBottom: 2, display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.93rem', color: '#6358DC' }}><MdEmail /> Email</label>
-                <input type="email" value={email} onChange={e => setEmail(e.target.value)} required placeholder="example@gmail.com" style={{ padding: '0.6em', borderRadius: 7, border: '1.2px solid #ECECEC', fontSize: '0.93rem', background: '#FAFAFA', fontWeight: 500 }} />
-                <label style={{ fontWeight: 600, marginBottom: 2, display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.93rem', color: '#6358DC' }}><MdLock /> Password</label>
-                <input type="password" value={password} onChange={e => setPassword(e.target.value)} required placeholder="***********" style={{ padding: '0.6em', borderRadius: 7, border: '1.2px solid #ECECEC', fontSize: '0.93rem', background: '#FAFAFA', fontWeight: 500 }} />
+                <label style={{ fontWeight: 600, marginBottom: 2, display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.95rem', color: '#065F46' }}><MdEmail /> Email</label>
+                <input type="email" value={email} onChange={e => setEmail(e.target.value)} required placeholder="example@gmail.com" style={{ padding: '0.75em', borderRadius: 10, border: '2px solid #E5E7EB', fontSize: '0.95rem', background: '#FAFAFA', fontWeight: 500, transition: 'border-color 0.2s', outline: 'none' }} onFocus={e => e.target.style.borderColor = '#10B981'} onBlur={e => e.target.style.borderColor = '#E5E7EB'} />
+                <label style={{ fontWeight: 600, marginBottom: 2, display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.95rem', color: '#065F46' }}><MdLock /> Password</label>
+                <input type="password" value={password} onChange={e => setPassword(e.target.value)} required placeholder="***********" style={{ padding: '0.75em', borderRadius: 10, border: '2px solid #E5E7EB', fontSize: '0.95rem', background: '#FAFAFA', fontWeight: 500, transition: 'border-color 0.2s', outline: 'none' }} onFocus={e => e.target.style.borderColor = '#10B981'} onBlur={e => e.target.style.borderColor = '#E5E7EB'} />
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                    <input type="checkbox" id="remember" style={{ accentColor: '#6358DC' }} />
-                    <label htmlFor="remember" style={{ fontSize: '0.93rem', color: '#2F2F2F' }}>Remember me</label>
+                    <input type="checkbox" id="remember" style={{ accentColor: '#10B981', transform: 'scale(1.1)' }} />
+                    <label htmlFor="remember" style={{ fontSize: '0.95rem', color: '#374151', fontWeight: 500 }}>Remember me</label>
                   </div>
-                  <a href="#" style={{ color: '#6358DC', fontWeight: 600, fontSize: '0.93rem', textDecoration: 'none' }}>Forgot Password?</a>
+                  <a href="#" style={{ color: '#10B981', fontWeight: 700, fontSize: '0.95rem', textDecoration: 'none', transition: 'color 0.2s' }}>Forgot Password?</a>
                 </div>
-                <button type="submit" disabled={loading} style={{ background: '#6358DC', color: '#fff', border: 'none', borderRadius: 7, padding: '0.7em 0', fontWeight: 700, fontSize: '1rem', marginTop: 8, cursor: 'pointer', boxShadow: '0 4px 15px 0 rgba(99,88,220,0.11)', transition: 'background 0.2s' }}>{loading ? 'Logging in...' : 'Login'}</button>
+                <button type="submit" disabled={loading} style={{ 
+                  background: loading ? '#9CA3AF' : 'linear-gradient(135deg, #10B981 0%, #059669 100%)', 
+                  color: '#fff', 
+                  border: 'none', 
+                  borderRadius: 10, 
+                  padding: '0.8em 0', 
+                  fontWeight: 700, 
+                  fontSize: '1.05rem', 
+                  marginTop: 12, 
+                  cursor: loading ? 'not-allowed' : 'pointer', 
+                  boxShadow: loading ? 'none' : '0 6px 20px rgba(16, 185, 129, 0.25)', 
+                  transition: 'all 0.3s ease',
+                  transform: loading ? 'none' : 'translateY(0)',
+                }}>{loading ? 'Logging in...' : 'Login'}</button>
               </motion.form>
             )}
             {mode === 'mobile' && (
@@ -527,7 +656,7 @@ const LoginV2 = () => {
                 onSubmit={otpSent ? handleVerifyOtp : handleSendOtp}
                 style={{ display: 'flex', flexDirection: 'column', gap: '0.7vh', marginTop: 2 }}
               >
-                <label style={{ fontWeight: 600, marginBottom: 2, display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.93rem', color: '#6358DC' }}><FaMobileAlt /> Mobile Number</label>
+                <label style={{ fontWeight: 600, marginBottom: 2, display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.95rem', color: '#065F46' }}><FaMobileAlt /> Mobile Number</label>
                 <input 
                   type="tel" 
                   value={mobile} 
@@ -545,13 +674,17 @@ const LoginV2 = () => {
                   placeholder="Enter 10 digit mobile (6-9 XXXXXXXXX)" 
                   maxLength={10}
                   style={{ 
-                    padding: '0.6em', 
-                    borderRadius: 7, 
-                    border: `1.2px solid ${error.includes('mobile number') ? '#F36F56' : '#ECECEC'}`, 
-                    fontSize: '0.93rem', 
+                    padding: '0.75em', 
+                    borderRadius: 10, 
+                    border: `2px solid ${error.includes('mobile number') ? '#EF4444' : '#E5E7EB'}`, 
+                    fontSize: '0.95rem', 
                     background: '#FAFAFA', 
-                    fontWeight: 500 
-                  }} 
+                    fontWeight: 500,
+                    transition: 'border-color 0.2s',
+                    outline: 'none'
+                  }}
+                  onFocus={e => e.target.style.borderColor = error.includes('mobile number') ? '#EF4444' : '#10B981'}
+                  onBlur={e => e.target.style.borderColor = error.includes('mobile number') ? '#EF4444' : '#E5E7EB'}
                 />
                 <div id="recaptcha-container"></div>
                 {/* Resend OTP button and timer */}
@@ -561,16 +694,17 @@ const LoginV2 = () => {
                     onClick={handleSendOtp}
                     disabled={loading || resendTimer > 0}
                     style={{
-                      background: resendTimer > 0 ? '#ECECEC' : '#6358DC',
-                      color: resendTimer > 0 ? '#888' : '#fff',
+                      background: resendTimer > 0 ? '#E5E7EB' : 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
+                      color: resendTimer > 0 ? '#9CA3AF' : '#fff',
                       border: 'none',
-                      borderRadius: 7,
-                      padding: '0.5em 0',
+                      borderRadius: 10,
+                      padding: '0.6em 0',
                       fontWeight: 700,
-                      fontSize: '0.93rem',
-                      marginBottom: 6,
+                      fontSize: '0.95rem',
+                      marginBottom: 8,
                       cursor: resendTimer > 0 ? 'not-allowed' : 'pointer',
-                      transition: 'all 0.2s',
+                      transition: 'all 0.3s ease',
+                      boxShadow: resendTimer > 0 ? 'none' : '0 4px 12px rgba(16, 185, 129, 0.2)',
                     }}
                   >
                     {resendTimer > 0 ? `Resend OTP in ${resendTimer}s` : 'Resend OTP'}
@@ -578,39 +712,79 @@ const LoginV2 = () => {
                 )}
                 {otpSent && (
                   <>
-                    <label style={{ fontWeight: 600, marginBottom: 2, fontSize: '0.93rem', color: '#6358DC' }}>OTP</label>
-                    <input type="text" value={otp} onChange={e => setOtp(e.target.value.replace(/\D/g, ''))} required placeholder="Enter OTP" maxLength={6} style={{ padding: '0.6em', borderRadius: 7, border: '1.2px solid #ECECEC', fontSize: '0.93rem', background: '#FAFAFA', fontWeight: 500 }} />
+                    <label style={{ fontWeight: 600, marginBottom: 2, fontSize: '0.95rem', color: '#065F46' }}>OTP</label>
+                    <input 
+                      type="text" 
+                      value={otp} 
+                      onChange={e => setOtp(e.target.value.replace(/\D/g, ''))} 
+                      required 
+                      placeholder="Enter OTP" 
+                      maxLength={6} 
+                      style={{ 
+                        padding: '0.75em', 
+                        borderRadius: 10, 
+                        border: '2px solid #E5E7EB', 
+                        fontSize: '0.95rem', 
+                        background: '#FAFAFA', 
+                        fontWeight: 500,
+                        transition: 'border-color 0.2s',
+                        outline: 'none'
+                      }}
+                      onFocus={e => e.target.style.borderColor = '#10B981'}
+                      onBlur={e => e.target.style.borderColor = '#E5E7EB'}
+                    />
                   </>
                 )}
-                <button type="submit" disabled={loading} style={{ background: '#6358DC', color: '#fff', border: 'none', borderRadius: 7, padding: '0.7em 0', fontWeight: 700, fontSize: '1rem', marginTop: 8, cursor: 'pointer', boxShadow: '0 4px 15px 0 rgba(99,88,220,0.11)', transition: 'background 0.2s' }}>{loading ? (otpSent ? 'Verifying...' : 'Sending OTP...') : (otpSent ? 'Verify OTP' : 'Send OTP')}</button>
+                <button type="submit" disabled={loading} style={{ 
+                  background: loading ? '#9CA3AF' : 'linear-gradient(135deg, #10B981 0%, #059669 100%)', 
+                  color: '#fff', 
+                  border: 'none', 
+                  borderRadius: 10, 
+                  padding: '0.8em 0', 
+                  fontWeight: 700, 
+                  fontSize: '1.05rem', 
+                  marginTop: 12, 
+                  cursor: loading ? 'not-allowed' : 'pointer', 
+                  boxShadow: loading ? 'none' : '0 6px 20px rgba(16, 185, 129, 0.25)', 
+                  transition: 'all 0.3s ease'
+                }}>{loading ? (otpSent ? 'Verifying...' : 'Sending OTP...') : (otpSent ? 'Verify OTP' : 'Send OTP')}</button>
               </motion.form>
             )}
           </AnimatePresence>
-          {error && <div style={{ color: '#F36F56', marginTop: '0.8vh', fontWeight: 600, fontSize: '0.93rem' }}>{error}</div>}
-          {success && <div style={{ color: '#28B446', marginTop: '0.8vh', fontWeight: 600, fontSize: '0.93rem' }}>{success}</div>}
+          {error && <div style={{ color: '#EF4444', marginTop: '0.8vh', fontWeight: 600, fontSize: '0.95rem', background: '#FEF2F2', padding: '8px 12px', borderRadius: 8, border: '1px solid #FECACA' }}>{error}</div>}
+          {success && <div style={{ color: '#059669', marginTop: '0.8vh', fontWeight: 600, fontSize: '0.95rem', background: '#F0FDF4', padding: '8px 12px', borderRadius: 8, border: '1px solid #BBF7D0' }}>{success}</div>}
 
           {/* OR separator above Google login button */}
-          <div style={{ textAlign: 'center', margin: '1.2vh 0 0.7vh 0', color: '#BFBFBF', fontWeight: 600, fontSize: '0.93rem' }}>OR</div>
+          <div style={{ textAlign: 'center', margin: '1.5vh 0 1vh 0', color: '#9CA3AF', fontWeight: 600, fontSize: '0.95rem' }}>OR</div>
 
           {/* Google Login Button - moved to bottom */}
           <button style={{
             width: '100%',
             margin: '0 0 0.7vh 0',
             background: '#fff',
-            border: '1.2px solid #ECECEC',
-            borderRadius: 7,
-            padding: '0.7em 0',
+            border: '2px solid #E5E7EB',
+            borderRadius: 10,
+            padding: '0.8em 0',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             gap: 12,
             fontWeight: 600,
-            fontSize: '0.97rem',
-            color: '#222',
-            boxShadow: '0 2px 8px 0 rgba(0,0,0,0.07)',
-            transition: 'box-shadow 0.2s',
+            fontSize: '1rem',
+            color: '#374151',
+            boxShadow: '0 4px 12px 0 rgba(0,0,0,0.05)',
+            transition: 'all 0.3s ease',
             cursor: 'pointer',
-          }}>
+          }}
+          onMouseEnter={e => {
+            e.target.style.borderColor = '#10B981';
+            e.target.style.boxShadow = '0 6px 16px rgba(16, 185, 129, 0.1)';
+          }}
+          onMouseLeave={e => {
+            e.target.style.borderColor = '#E5E7EB';
+            e.target.style.boxShadow = '0 4px 12px 0 rgba(0,0,0,0.05)';
+          }}
+          >
             {/* Google logo in original colors */}
             <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
               <g clipPath="url(#clip0_993_771)">
@@ -625,11 +799,11 @@ const LoginV2 = () => {
                 </clipPath>
               </defs>
             </svg>
-            <span style={{ color: '#222', fontWeight: 600 }}>Sign in with Google</span>
+            <span style={{ color: '#374151', fontWeight: 600 }}>Sign in with Google</span>
           </button>
 
-          <div style={{ marginTop: '1.2vh', textAlign: 'center', color: '#2F2F2F', fontSize: '0.93rem', marginBottom: 2 }}>
-            Don’t have an account? <a href="#" style={{ color: '#6358DC', fontWeight: 700, textDecoration: 'none' }}>Register</a>
+          <div style={{ marginTop: '1.5vh', textAlign: 'center', color: '#6B7280', fontSize: '0.95rem', marginBottom: 2 }}>
+            Don't have an account? <a href="#" style={{ color: '#10B981', fontWeight: 700, textDecoration: 'none', transition: 'color 0.2s' }}>Register</a>
           </div>
         </motion.div>
       </div>

@@ -225,9 +225,13 @@ const Payments = () => {
 
     const toggleRowExpansion = (employeeId, type) => {
         const key = `${employeeId}_${type}`;
+        const otherType = type === 'advances' ? 'deductions' : 'advances';
+        const otherKey = `${employeeId}_${otherType}`;
+        
         setExpandedRows(prev => ({
             ...prev,
-            [key]: !prev[key]
+            [key]: !prev[key],
+            [otherKey]: false // Always close the other section
         }));
     };
 
@@ -688,7 +692,7 @@ const Payments = () => {
                     </div>
                     
                     <div className={styles.loadingSpinner}>
-                        <CustomSpinner size={70} color="#3b82f6" />
+                        <CustomSpinner size={70} color="#059669" />
                         <p>Loading payment data...</p>
                     </div>
                 </div>
@@ -818,7 +822,7 @@ const Payments = () => {
                         )}
                         {loading && (
                             <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '10px' }}>
-                                <CustomSpinner size={40} color="#3b82f6" />
+                                <CustomSpinner size={40} color="#059669" />
                             </div>
                         )}
                     </div>
