@@ -1376,10 +1376,14 @@ router.get("/employee/:siteID/:empid/:month/:year",
       // Calculate additional data using Jobs utility
       const calculationResult = calculateEmployeeData(latestEmployeeData);
 
-      console.log(
-        "Step 2 out of 2: Calculated employee data:",
-        calculationResult
-      );
+      // Extract calculation fields from _calculationData
+      const {
+        totalAttendance,
+        totalDays,
+        totalOvertime,
+        overtimeDays
+      } = calculationResult._calculationData || {};
+
       // Get additional fields for frontend compatibility
       const totalAdditionalReqPays =
         latestEmployeeData.additional_req_pays?.reduce(
@@ -1401,10 +1405,10 @@ router.get("/employee/:siteID/:empid/:month/:year",
         totalPayouts: totalPayouts,
         carryForward: carryForward,
         closing_balance: calculationResult.closing_balance,
-        totalAttendance: calculationResult.totalAttendance,
-        totalDays: calculationResult.totalDays,
-        totalovertime: calculationResult.totalOvertime,
-        overtimeDays: calculationResult.overtimeDays,
+        totalAttendance: totalAttendance,
+        totalDays: totalDays,
+        totalovertime: totalOvertime,
+        overtimeDays: overtimeDays,
         totalAdditionalReqPays: totalAdditionalReqPays,
         // Additional status fields
         hasPendingPayouts: calculationResult.closing_balance !== 0,
