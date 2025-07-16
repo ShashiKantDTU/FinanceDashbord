@@ -7,6 +7,7 @@ import DashboardHeader from "./DashboardHeader";
 import StatsGrid from "./StatsGrid";
 import SiteList from "./SiteList";
 import AddSiteModal from "./AddSiteModal";
+import EditSiteModal from "./EditSiteModal";
 import CustomSpinner from '../components/CustomSpinner';
 import styles from './Home.module.css';
 
@@ -21,6 +22,8 @@ const Home = () => {
     sortBy: "name",
   });
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [siteBeingEdited, setSiteBeingEdited] = useState(null);
   const [viewMode, setViewMode] = useState(() => {
     try {
       const storedViewMode = localStorage.getItem("viewMode");
@@ -162,6 +165,39 @@ const Home = () => {
     }
   }, [showSuccess, showError, updateState, state.sites]);
 
+  // Handler to open edit modal
+  const handleEditSite = useCallback((site) => {
+    setSiteBeingEdited(site);
+    setIsEditModalOpen(true);
+  }, []);
+
+  // Handler to update site name in state (now with API call)
+  const handleEditSiteSubmit = useCallback(async (newName) => {
+    if (!siteBeingEdited) return;
+    try {
+      const response = await api.put('/api/dashboard/edit-site-name', {
+        siteId: siteBeingEdited._id,
+        newSiteName: newName
+      });
+      if (response && response.site) {
+        updateState({
+          sites: state.sites.map(s =>
+            s._id === siteBeingEdited._id ? response.site : s
+          )
+        });
+        showSuccess(`Site name updated to "${response.site.sitename}"`);
+      } else {
+        throw new Error('No site returned from server');
+      }
+    } catch (error) {
+      const errorMessage = error.message || 'Failed to update site name. Please try again.';
+      showError(errorMessage);
+    } finally {
+      setIsEditModalOpen(false);
+      setSiteBeingEdited(null);
+    }
+  }, [siteBeingEdited, state.sites, updateState, showSuccess, showError]);
+
   const filteredAndSortedSites = useMemo(() => {
     let filtered = state.sites;
     
@@ -217,6 +253,7 @@ const Home = () => {
           onDeleteSite={deleteSite}
           viewMode={viewMode}
           onViewModeChange={setViewMode}
+          onEditSite={handleEditSite}
         />
       </main>
 
@@ -224,6 +261,14 @@ const Home = () => {
         <AddSiteModal
           onClose={() => setIsModalOpen(false)}
           onSubmit={addNewSite}
+        />
+      )}
+      {isEditModalOpen && siteBeingEdited && (
+        <EditSiteModal
+          isOpen={isEditModalOpen}
+          onClose={() => { setIsEditModalOpen(false); setSiteBeingEdited(null); }}
+          onSubmit={handleEditSiteSubmit}
+          site={siteBeingEdited}
         />
       )}
     </div>

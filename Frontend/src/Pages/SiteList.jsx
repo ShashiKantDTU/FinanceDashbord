@@ -1,7 +1,7 @@
 import SiteCard from './SiteCard';
 import styles from './Home.module.css';
 
-const SiteList = ({ sites, onDeleteSite, viewMode = "grid", onViewModeChange }) => (
+const SiteList = ({ sites, onDeleteSite, viewMode = "grid", onViewModeChange, onEditSite }) => (
   <div className={styles.siteListContainer}>
     <div className={styles.siteListHeader}>
       <div className={styles.siteListTitleSection}>
@@ -44,6 +44,7 @@ const SiteList = ({ sites, onDeleteSite, viewMode = "grid", onViewModeChange }) 
             key={site._id} 
             site={site} 
             onDelete={() => onDeleteSite(site)}
+            onEdit={() => onEditSite(site)}
             index={index}
             viewMode={viewMode}
           />

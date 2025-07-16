@@ -155,5 +155,62 @@ router.delete('/delete-site', authenticateToken, async (req, res) => {
     }
 });
 
+// Edit site name route
+router.put('/edit-site-name', authenticateToken, async (req, res) => {
+    try {
+        const user = req.user;
+        if (!user) {
+            return res.status(401).json({
+                error: 'Access denied. Authentication required.'
+            });
+        }
+
+        const { siteId, newSiteName } = req.body;
+        if (!siteId || !newSiteName) {
+            return res.status(400).json({
+                error: 'Site ID and new site name are required.'
+            });
+        }
+
+        // Find the site
+        const site = await Site.findById(siteId);
+        if (!site) {
+            return res.status(404).json({
+                error: 'Site not found.'
+            });
+        }
+
+        // Check if user is the creator or admin
+        const isCreator = (site.createdBy === user.name || site.createdBy === user.email);
+        const isAdmin = user.role && user.role.toLowerCase() === 'admin';
+        if (!isCreator && !isAdmin) {
+            return res.status(403).json({
+                error: 'You do not have permission to edit this site name.'
+            });
+        }
+
+        // Only admins can edit site name (additional condition)
+        if (!isAdmin) {
+            return res.status(403).json({
+                error: 'Only admins can edit a site name.'
+            });
+        }
+
+        // Update the site name
+        site.sitename = newSiteName.trim();
+        await site.save();
+
+        res.status(200).json({
+            message: 'Site name updated successfully',
+            site: site
+        });
+    } catch (error) {
+        res.status(500).json({
+            error: 'Error updating site name',
+            details: error.message
+        });
+    }
+});
+
 module.exports = router;
 

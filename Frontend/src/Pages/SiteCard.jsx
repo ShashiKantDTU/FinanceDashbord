@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import styles from './Home.module.css';
 
-const SiteCard = ({ site, onDelete, index, viewMode = "grid" }) => {
+const SiteCard = ({ site, onDelete, onEdit, index, viewMode = "grid" }) => {
   const [showDropdown, setShowDropdown] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -55,17 +55,20 @@ const SiteCard = ({ site, onDelete, index, viewMode = "grid" }) => {
             </button>
             {showDropdown && (
               <div className={styles.dropdown}>
-                <Link
-                  to={`/site/${site._id}/edit`}
+                <button
                   className={styles.dropdownItem}
-                  onClick={() => setShowDropdown(false)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowDropdown(false);
+                    if (onEdit) onEdit();
+                  }}
                 >
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
                     <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" stroke="currentColor" strokeWidth="2"/>
                     <path d="m18.5 2.5 3 3L12 15l-4 1 1-4 9.5-9.5z" stroke="currentColor" strokeWidth="2"/>
                   </svg>
                   Edit Site
-                </Link>
+                </button>
                 <hr className={styles.dropdownDivider} />
                 <button
                   className={`${styles.dropdownItem} ${styles.danger}`}
