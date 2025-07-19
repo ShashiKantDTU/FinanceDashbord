@@ -192,7 +192,7 @@ router.delete("/deleteemployee", authenticateToken, async (req, res) => {
   try {
     console.log("🗑️ Delete employee request:", req.body);
 
-    const { empid, name, month, year, deletePreviousMonth } = req.body;
+    const { empid, name, month, year, deletePreviousMonth = false } = req.body;
 
     // Validate required fields
     if (!empid || empid.trim() === "") {
@@ -1032,17 +1032,20 @@ router.get("/employeewithpendingattendance",
   authenticateToken,
   async (req, res) => {
     // check for required query parameters
-    const date = req.query.date?.toString().trim();
-    const month = req.query.month?.toString().trim();
-    const year = req.query.year?.toString().trim();
+    const dateStr = req.query.date?.toString().trim();
+    const monthStr = req.query.month?.toString().trim();
+    const yearStr = req.query.year?.toString().trim();
     const siteID = req.query.siteID?.toString().trim();
-    if (!date || !month || !year || !siteID) {
+    if (!dateStr || !monthStr || !yearStr || !siteID) {
       return res.status(400).json({
         success: false,
         error: "Date, month, year, and siteID are required.",
       });
     }
-    // Validate date, month, year
+    // Convert to numbers for validation
+    const date = Number(dateStr);
+    const month = Number(monthStr);
+    const year = Number(yearStr);
     if (isNaN(date) || isNaN(month) || isNaN(year)) {
       return res.status(400).json({
         success: false,
@@ -1095,9 +1098,9 @@ router.get("/employeewithpendingattendance",
 
     // Check if the provided date matches any of the valid dates
     const isValidDate = validDates.some(vd =>
-      date === vd.date &&
-      month === vd.month &&
-      year === vd.year
+      dateStr === vd.date &&
+      monthStr === vd.month &&
+      yearStr === vd.year
     );
 
     if (!isValidDate) {
@@ -1117,17 +1120,8 @@ router.get("/employeewithpendingattendance",
     }
 
     // check if site belongs to requested user
-    const role = req.user?.role.toLowerCase();
+    const role = req.user?.role?.toLowerCase();
 
-    if (role !== "admin" && role !== "supervisor") {
-      return res.status(403).json({
-        success: false,
-        error: "Forbidden. You do not have access to this resource.",
-      });
-    }
-
-    console.log(`user object:`, req.user);
-    // If supervisor, check if they have access to the site
     if (role === "supervisor") {
       const supervisorsite = req.user.site[0]?.toString().trim();
       if (supervisorsite !== siteID) {
@@ -1136,18 +1130,11 @@ router.get("/employeewithpendingattendance",
           error: "Forbidden. You do not have access to this site.",
         });
       }
-      if (supervisorsite !== siteID) {
-        return res.status(403).json({
-          success: false,
-          error: "Forbidden. You do not have access to this site.",
-        });
-      }
-
       // list of all employees with pending attendance for the given date, month, year and siteID
       console.log(
         `🔍 Fetching employees with pending attendance for ${date}/${month}/${year} at site ${siteID}`
       );
-      const pendingAttendanceList = await pendingAttendance(
+      const { pendingEmployees, markedEmployees } = await pendingAttendance(
         date,
         month,
         year,
@@ -1155,34 +1142,39 @@ router.get("/employeewithpendingattendance",
       );
       return res.status(200).json({
         success: true,
-        data: pendingAttendanceList,
+        data: {
+          pendingEmployees,
+          markedEmployees,
+        },
       });
-    } else {
-      if (role !== "admin") {
-        return res.status(403).json({
+    } else if (role === "admin") {
+      // Ensure siteID is ObjectId for admin site access check
+      const mongoose = require("mongoose");
+      let siteObjectId;
+      try {
+        siteObjectId = new mongoose.Types.ObjectId(siteID);
+      } catch (e) {
+        return res.status(400).json({
           success: false,
-          error: "Forbidden. You do not have access to this resource.",
+          error: "Invalid siteID format.",
         });
       }
-
       // check if admin has access to the site
       const Adminuser = await User.findOne({
         _id: req.user.id,
-        site: siteID,
+        site: siteObjectId,
       });
-
       if (!Adminuser) {
         return res.status(403).json({
           success: false,
           error: "Forbidden. You do not have access to this site.",
         });
       }
-
       // list of all employees with pending attendance for the given date, month, year and siteID
       console.log(
         `🔍 Fetching employees with pending attendance for ${date}/${month}/${year} at site ${siteID}`
       );
-      const pendingAttendanceList = await pendingAttendance(
+      const { pendingEmployees, markedEmployees } = await pendingAttendance(
         date,
         month,
         year,
@@ -1190,7 +1182,15 @@ router.get("/employeewithpendingattendance",
       );
       return res.status(200).json({
         success: true,
-        data: pendingAttendanceList,
+        data: {
+          pendingEmployees,
+          markedEmployees,
+        },
+      });
+    } else {
+      return res.status(403).json({
+        success: false,
+        error: "Forbidden. You do not have access to this resource.",
       });
     }
   }
@@ -1217,13 +1217,46 @@ router.get("/availableforimport", authenticateToken, async (req, res) => {
     );
 
     // Get all employees from source month/year
-    const sourceEmployees = await employeeSchema
+    const rawSourceEmployees = await employeeSchema
       .find({
         month: parseInt(sourceMonth),
         year: parseInt(sourceYear),
         siteID: siteID.trim(),
       })
       .select("empid name rate closing_balance createdBy");
+
+    // Use FetchlatestData for each employee to get the latest data
+    const sourceEmployees = await Promise.all(
+      rawSourceEmployees.map(async (emp) => {
+        try {
+          const latestData = await FetchlatestData(
+            siteID.trim(),
+            emp.empid,
+            parseInt(sourceMonth),
+            parseInt(sourceYear)
+          );
+          return {
+            empid: emp.empid,
+            name: emp.name,
+            rate: emp.rate,
+            closing_balance: latestData.closing_balance,
+            createdBy: emp.createdBy,
+            // ...add any other fields you need
+          };
+        } catch (err) {
+          // If FetchlatestData fails, fallback to raw data
+          return {
+            empid: emp.empid,
+            name: emp.name,
+            rate: emp.rate,
+            closing_balance: emp.closing_balance,
+            createdBy: emp.createdBy,
+            fetchError: true,
+            fetchErrorMessage: err.message,
+          };
+        }
+      })
+    );
 
     if (!sourceEmployees || sourceEmployees.length === 0) {
       return res.status(200).json({
@@ -1260,6 +1293,8 @@ router.get("/availableforimport", authenticateToken, async (req, res) => {
       createdBy: employee.createdBy,
       availableForImport: !unavailableEmployeeIds.includes(employee.empid),
       alreadyExistsInTarget: unavailableEmployeeIds.includes(employee.empid),
+      fetchError: employee.fetchError || false,
+      fetchErrorMessage: employee.fetchErrorMessage || undefined,
     }));
 
     const availableCount = availableEmployees.filter(

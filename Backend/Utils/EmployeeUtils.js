@@ -51,7 +51,7 @@ const latestEmpSerialNumber = async () => {
  * @param {Number} month - The month to check for attendance
  * @param {Number} year - The year to check for attendance
  * @param {String} siteID - The site ID to filter employees
- * @returns {Array} - List of employees with pending attendance
+ * @returns {Object} - { pendingEmployees: [...], markedEmployees: [...] }
  */
 const pendingAttendance = async (date, month, year, siteID) => {
   try {
@@ -63,8 +63,9 @@ const pendingAttendance = async (date, month, year, siteID) => {
 
     const modifiedEmployees = [];
     const pendingEmployees = [];
+    const markedEmployees = [];
 
-    // Identify only those employees missing attendance on the given date
+    // Identify employees with and without attendance on the given date
     employees.forEach((emp) => {
       const dayAttendance = emp.attendance[date - 1];
       if (dayAttendance === undefined || dayAttendance === null || dayAttendance === "") {
@@ -79,13 +80,15 @@ const pendingAttendance = async (date, month, year, siteID) => {
         }
         // Mark this employee as pending for today's attendance
         pendingEmployees.push(emp);
+      } else {
+        // Employee has marked attendance for this date
+        markedEmployees.push(emp);
       }
     });
 
     // Save all modified employees to database
     if (modifiedEmployees.length > 0) {
       console.log(`📅 Saving ${modifiedEmployees.length} employees with updated attendance to database`);
-      
       const savePromises = modifiedEmployees.map(async (emp) => {
         try {
           await emp.save();
@@ -95,13 +98,10 @@ const pendingAttendance = async (date, month, year, siteID) => {
           return { empid: emp.empid, success: false, error: saveError.message };
         }
       });
-      
       const saveResults = await Promise.all(savePromises);
       const successCount = saveResults.filter(result => result.success).length;
       const failureCount = saveResults.filter(result => !result.success).length;
-      
       console.log(`📊 Attendance save summary: ${successCount} successful, ${failureCount} failed`);
-      
       if (failureCount > 0) {
         const failedEmployees = saveResults.filter(result => !result.success);
         console.warn(`⚠️ Failed to save attendance for employees:`, failedEmployees);
@@ -110,7 +110,10 @@ const pendingAttendance = async (date, month, year, siteID) => {
       console.log(`ℹ️ No employees required attendance updates for ${date}/${month}/${year}`);
     }
 
-    return pendingEmployees.filter(emp => emp !== undefined); // Remove undefined entries
+    return {
+      pendingEmployees: pendingEmployees.filter(emp => emp !== undefined),
+      markedEmployees: markedEmployees.filter(emp => emp !== undefined),
+    };
   } catch (error) {
     console.error("Error fetching pending attendance:", error);
     throw new Error("Error fetching pending attendance");
