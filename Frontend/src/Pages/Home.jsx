@@ -9,6 +9,7 @@ import AddSiteModal from "./AddSiteModal";
 import EditSiteModal from "./EditSiteModal";
 import CustomSpinner from '../components/CustomSpinner';
 import styles from './Home.module.css';
+import logo from '../assets/LoginPageLogo.png';
 
 const Home = () => {
   const { user } = useAuth();
@@ -46,8 +47,7 @@ const Home = () => {
         updateState({ sites: response.user.sites });
         if (response.user.sites.length > 0) {
           showInfo(
-            `Loaded ${response.user.sites.length} site${
-              response.user.sites.length > 1 ? "s" : ""
+            `Loaded ${response.user.sites.length} site${response.user.sites.length > 1 ? "s" : ""
             }`
           );
         }
@@ -83,7 +83,7 @@ const Home = () => {
       });
 
       if (response && response.site) {
-        updateState({ 
+        updateState({
           sites: [...state.sites, response.site]
         });
         setIsModalOpen(false);
@@ -102,7 +102,7 @@ const Home = () => {
 
   const deleteSite = useCallback(async (site) => {
     console.log("Delete function called for site:", site.sitename);
-    
+
     const firstConfirm = window.confirm(
       `⚠️ DANGER: You are about to PERMANENTLY DELETE "${site.sitename}"\n\n` +
       `This action will:\n` +
@@ -121,7 +121,7 @@ const Home = () => {
       `Site name to delete: "${site.sitename}"\n\n` +
       `Type the site name exactly as shown above:`
     );
-    
+
     if (siteName !== site.sitename) {
       if (siteName !== null) {
         alert(
@@ -152,7 +152,7 @@ const Home = () => {
       });
 
       if (response) {
-        updateState({ 
+        updateState({
           sites: state.sites.filter(s => s._id !== site._id)
         });
         showSuccess(`Site "${site.sitename}" deleted successfully!`);
@@ -199,14 +199,14 @@ const Home = () => {
 
   const filteredAndSortedSites = useMemo(() => {
     let filtered = state.sites;
-    
+
     if (state.searchTerm) {
-      filtered = filtered.filter(site => 
+      filtered = filtered.filter(site =>
         site.sitename.toLowerCase().includes(state.searchTerm.toLowerCase()) ||
         site.createdBy.toLowerCase().includes(state.searchTerm.toLowerCase())
       );
     }
-    
+
     return filtered.sort((a, b) => {
       switch (state.sortBy) {
         case "name":
@@ -235,7 +235,7 @@ const Home = () => {
   return (
     <div className={styles.dashboardContainer}>
       <div className={styles.auroraBackground}></div>
-      
+
       <DashboardHeader
         user={user}
         searchTerm={state.searchTerm}
@@ -246,14 +246,40 @@ const Home = () => {
       />
 
       <main className={styles.mainContent}>
-        <SiteList 
-          sites={filteredAndSortedSites} 
+        <SiteList
+          sites={filteredAndSortedSites}
           onDeleteSite={deleteSite}
           viewMode={viewMode}
           onViewModeChange={setViewMode}
           onEditSite={handleEditSite}
         />
       </main>
+
+      <footer className={styles.footer}>
+        <div className={styles.footerContent}>
+          <div className={styles.footerBranding}>
+            <div className={styles.footerLogo}>
+              <img
+                src={logo}
+                alt="SiteHaazri.in Logo"
+                className={styles.footerLogoImage}
+              />
+              <span className={styles.footerBrandName}>SiteHaazri.in</span>
+            </div>
+            <p className={styles.footerTagline}>
+              Streamline your site management with powerful tools and insights
+            </p>
+          </div>
+          <div className={styles.footerInfo}>
+            <p className={styles.footerCopyright}>
+              © 2025 SiteHaazri.in. All rights reserved.
+            </p>
+            <p className={styles.footerVersion}>
+              Version 1.0.0
+            </p>
+          </div>
+        </div>
+      </footer>
 
       {isModalOpen && (
         <AddSiteModal

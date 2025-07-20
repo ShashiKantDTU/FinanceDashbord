@@ -1,5 +1,6 @@
 import LogoutButton from "../components/LogoutButton_new";
 import styles from './Home.module.css';
+import logo from '../assets/LoginPageLogo.png';
 
 const DashboardHeader = ({ 
   user, 
@@ -10,11 +11,25 @@ const DashboardHeader = ({
   onAddSiteClick 
 }) => (
   <header className={styles.header}>
-    <div>
-      <h1 className={styles.headerTitle}>Dashboard</h1>
-      <p className={styles.headerSubtitle}>
-        Welcome back, {user?.name || user?.email || "User"}
-      </p>
+    <div className={styles.headerLeft}>
+      <div className={styles.brandingSection}>
+        <div className={styles.brandLogo}>
+          <img 
+            src={logo} 
+            alt="SiteHaazri.in Logo" 
+            className={styles.logoImage}
+          />
+          <div className={styles.brandText}>
+            <h1 className={styles.brandName}>SiteHaazri.in</h1>
+            <p className={styles.brandTagline}>Site Management Made Easy</p>
+          </div>
+        </div>
+      </div>
+      <div className={styles.welcomeSection}>
+        <p className={styles.welcomeMessage}>
+          Welcome back, {user?.name || user?.email || "User"}
+        </p>
+      </div>
     </div>
     <div className={styles.headerControls}>
       <input
