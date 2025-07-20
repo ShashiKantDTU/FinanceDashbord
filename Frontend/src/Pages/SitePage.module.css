@@ -55,7 +55,7 @@
     height: 100px;
     margin-bottom: var(--space-lg);
     position: relative;
-    overflow: hidden;
+    overflow: visible;
     transition: all var(--transition-duration-normal) var(--transition-timing-spring);
 }
 
@@ -189,7 +189,7 @@
 
 .monthSelector {
     position: relative;
-    z-index: 100;
+    z-index: 1000;
 }
 
 .monthButton {
@@ -237,18 +237,15 @@
 }
 
 .calendarDropdown {
-    position: absolute;
-    top: 100%;
-    right: 0;
-    background: var(--color-bg-secondary);
+    position: fixed;
+    background: var(--color-bg-primary);
     border: 1px solid var(--color-border-medium);
     border-radius: var(--border-radius-lg);
-    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
     z-index: 9999;
-    margin-top: 0.5rem;
-    padding: 0.75rem;
-    min-width: 280px;
-    backdrop-filter: blur(10px);
+    padding: 8px;
+    width: 280px;
+    backdrop-filter: blur(4px);
 }
 
 .calendarHeader {

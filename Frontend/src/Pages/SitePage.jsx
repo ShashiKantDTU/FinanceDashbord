@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import ReactDOM from 'react-dom';
 import { Link } from 'react-router-dom';
 import { FaSearch, FaFilter, FaChevronLeft, FaChevronRight, FaDownload, FaCalendarAlt, FaChartLine } from 'react-icons/fa';
 import { useParams } from 'react-router-dom';
@@ -63,7 +64,10 @@ const SitePage = () => {
     // Calendar picker states
     const [showCalendar, setShowCalendar] = useState(false);
     const [calendarYear, setCalendarYear] = useState(new Date().getFullYear());
+    const [calendarPosition, setCalendarPosition] = useState({ top: 0, left: 0 });
     const calendarRef = useRef(null);
+    const portalCalendarRef = useRef(null);
+    const monthButtonRef = useRef(null);
 
     // Search and filtering states
     const [searchQuery, setSearchQuery] = useState('');
@@ -294,6 +298,20 @@ const SitePage = () => {
     const handleNotificationPanelClose = useCallback(() => {
         setIsNotificationPanelOpen(false);
     }, []);
+
+    /**
+     * Handles calendar toggle with position calculation
+     */
+    const handleCalendarToggle = useCallback(() => {
+        if (!showCalendar && monthButtonRef.current) {
+            const rect = monthButtonRef.current.getBoundingClientRect();
+            setCalendarPosition({
+                top: rect.bottom + window.scrollY + 8,
+                left: rect.right - 280 + window.scrollX // 280px is calendar width, align to right
+            });
+        }
+        setShowCalendar(!showCalendar);
+    }, [showCalendar]);
     
     
     // ===========================================
@@ -451,7 +469,10 @@ const SitePage = () => {
      */
     useEffect(() => {
         const handleClickOutside = (event) => {
-            if (calendarRef.current && !calendarRef.current.contains(event.target)) {
+            const isClickInsideButton = monthButtonRef.current && monthButtonRef.current.contains(event.target);
+            const isClickInsideCalendar = portalCalendarRef.current && portalCalendarRef.current.contains(event.target);
+            
+            if (!isClickInsideButton && !isClickInsideCalendar) {
                 setShowCalendar(false);
             }
         };
@@ -508,9 +529,10 @@ const SitePage = () => {
                             {/* Month/Year Selector with Calendar */}
                             <div className={styles.monthSelector} ref={calendarRef}>
                                 <button 
+                                    ref={monthButtonRef}
                                     type="button"
                                     className={styles.monthButton}
-                                    onClick={() => setShowCalendar(!showCalendar)}
+                                    onClick={handleCalendarToggle}
                                     disabled={isLoading}
                                     aria-label="Select month and year"
                                 >
@@ -535,8 +557,15 @@ const SitePage = () => {
                                 </button>
                                 
                                 {/* Calendar Dropdown */}
-                                {showCalendar && (
-                                    <div className={styles.calendarDropdown}>
+                                {showCalendar && ReactDOM.createPortal(
+                                    <div 
+                                        ref={portalCalendarRef}
+                                        className={styles.calendarDropdown}
+                                        style={{
+                                            top: `${calendarPosition.top}px`,
+                                            left: `${calendarPosition.left}px`
+                                        }}
+                                    >
                                         {/* Calendar Header with Year Navigation */}
                                         <div className={styles.calendarHeader}>
                                             <button 
@@ -602,7 +631,8 @@ const SitePage = () => {
                                                 );
                                             })}
                                         </div>
-                                    </div>
+                                    </div>,
+                                    document.body
                                 )}
                             </div>
                         </div>

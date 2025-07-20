@@ -19,7 +19,7 @@
   bottom: 0;
   width: 100%;
   height: 100%;
-  background-image: 
+  background-image:
     radial-gradient(ellipse at 20% 30%, rgba(34, 197, 94, 0.06) 0%, transparent 60%),
     radial-gradient(ellipse at 80% 40%, rgba(59, 130, 246, 0.05) 0%, transparent 60%),
     radial-gradient(ellipse at 50% 60%, rgba(16, 185, 129, 0.04) 0%, transparent 60%);
@@ -44,16 +44,14 @@
 
 /* --- Enhanced Professional Header --- */
 .header {
-  background: linear-gradient(
-    135deg,
-    rgba(255, 255, 255, 0.95) 0%,
-    rgba(248, 250, 252, 0.92) 100%
-  );
+  background: linear-gradient(135deg,
+      rgba(255, 255, 255, 0.95) 0%,
+      rgba(248, 250, 252, 0.92) 100%);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border: 1px solid rgba(226, 232, 240, 0.8);
   border-radius: 16px;
-  box-shadow: 
+  box-shadow:
     0 8px 32px rgba(0, 0, 0, 0.06),
     0 4px 16px rgba(0, 0, 0, 0.04),
     inset 0 1px 0 rgba(255, 255, 255, 0.8);
@@ -147,11 +145,9 @@
 
 /* --- Footer Branding --- */
 .footer {
-  background: linear-gradient(
-    135deg,
-    rgba(255, 255, 255, 0.9) 0%,
-    rgba(248, 250, 252, 0.85) 100%
-  );
+  background: linear-gradient(135deg,
+      rgba(255, 255, 255, 0.9) 0%,
+      rgba(248, 250, 252, 0.85) 100%);
   backdrop-filter: blur(15px);
   -webkit-backdrop-filter: blur(15px);
   border: 1px solid rgba(226, 232, 240, 0.6);
@@ -242,13 +238,12 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: linear-gradient(90deg, 
-    transparent 0%,
-    rgba(5, 150, 105, 0.03) 25%,
-    rgba(5, 150, 105, 0.05) 50%,
-    rgba(5, 150, 105, 0.03) 75%,
-    transparent 100%
-  );
+  background: linear-gradient(90deg,
+      transparent 0%,
+      rgba(5, 150, 105, 0.03) 25%,
+      rgba(5, 150, 105, 0.05) 50%,
+      rgba(5, 150, 105, 0.03) 75%,
+      transparent 100%);
   background-size: 200% 100%;
   animation: shimmer 2.5s ease-in-out infinite;
   pointer-events: none;
@@ -257,7 +252,7 @@
 
 .header:hover {
   transform: translateY(-3px);
-  box-shadow: 
+  box-shadow:
     0 16px 50px rgba(5, 150, 105, 0.2),
     0 8px 25px rgba(0, 0, 0, 0.12),
     0 4px 12px rgba(5, 150, 105, 0.15),
@@ -268,7 +263,7 @@
 
 .header:hover {
   transform: translateY(-2px);
-  box-shadow: 
+  box-shadow:
     0 12px 40px rgba(5, 150, 105, 0.12),
     0 6px 20px rgba(0, 0, 0, 0.06),
     inset 0 1px 0 rgba(255, 255, 255, 0.9);
@@ -304,7 +299,8 @@
 }
 
 /* --- Professional Light Controls --- */
-.searchInput, .sortSelect {
+.searchInput,
+.sortSelect {
   background-color: #ffffff;
   border: 1px solid #e2e8f0;
   color: #1e293b;
@@ -316,7 +312,8 @@
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
-.searchInput:focus, .sortSelect:focus {
+.searchInput:focus,
+.sortSelect:focus {
   outline: none;
   border-color: #10b981;
   box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1), 0 4px 12px rgba(0, 0, 0, 0.1);
@@ -554,7 +551,8 @@
   gap: 1rem;
 }
 
-.siteCard, .siteCardList {
+.siteCard,
+.siteCardList {
   background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
   backdrop-filter: blur(20px);
   border: 1px solid #e2e8f0;
@@ -584,7 +582,8 @@
   transition: transform 0.5s ease;
 }
 
-.siteCard:hover, .siteCardList:hover {
+.siteCard:hover,
+.siteCardList:hover {
   transform: translateY(-4px);
   border-color: rgba(5, 150, 105, 0.2);
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.08);
@@ -835,23 +834,47 @@
 
 /* --- Animations --- */
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes slideDown {
-  from { opacity: 0; transform: translateY(-30px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(-30px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @keyframes slideUp {
-  from { opacity: 0; transform: translateY(30px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* --- Modal Styles --- */
@@ -1025,82 +1048,83 @@
   .dashboardContainer {
     padding: 0.75rem;
   }
-  
+
   .mainContent {
     gap: 1.5rem;
   }
-  
+
   .header {
     flex-direction: column;
     align-items: stretch;
     gap: 0.75rem;
   }
-  
+
   .headerLeft {
     flex-direction: column;
     gap: 1rem;
     align-items: center;
     text-align: center;
   }
-  
+
   .brandLogo {
     justify-content: center;
   }
-  
+
   .brandName {
     font-size: 1.25rem;
   }
-  
+
   .headerControls {
     justify-content: center;
   }
-  
+
   .footerContent {
     flex-direction: column;
     text-align: center;
     gap: 1.5rem;
   }
-  
+
   .footerInfo {
     align-items: center;
   }
-  
-  .searchInput, .sortSelect {
+
+  .searchInput,
+  .sortSelect {
     min-width: auto;
     flex: 1;
   }
-  
+
   .siteGrid {
     grid-template-columns: 1fr;
   }
-  
+
   .statsGrid {
     justify-content: center;
   }
-  
+
   .statsCard {
     min-width: 240px;
     max-width: 100%;
   }
-  
+
   .siteListHeader {
     flex-direction: column;
     align-items: stretch;
   }
-  
+
   .modalContent {
     margin: 1rem;
     max-width: calc(100vw - 2rem);
   }
-  
+
   .modalForm {
     padding: 1.25rem;
   }
-  
+
   .modalActions {
     flex-direction: column;
   }
-  
+
   .cancelButton,
   .submitButton {
     width: 100%;
