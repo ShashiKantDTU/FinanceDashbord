@@ -1,5 +1,5 @@
 import { Analytics } from "@vercel/analytics/react"
-import { BrowserRouter , Route, Routes } from "react-router-dom";
+import { BrowserRouter, Route, Routes } from "react-router-dom";
 import Home from './Pages/Home';
 import Settings from './Pages/Settings';
 import SitePage from './Pages/SitePage';
@@ -16,52 +16,52 @@ import ProtectedRoute from './components/ProtectedRoute';
 import LoginV2 from "./Pages/LoginV2";
 
 function App() {
-  
+
   return (
     <AuthProvider>
       <ToastProvider>
         <BrowserRouter>
           <Routes>
-            <Route path="/login" element= {<LoginV2/>} />
-            <Route path="/signup" element= {<SignUp/>} />
-            <Route path="/forgot-password" element= {<ForgotPassword/>} />
-            <Route path="/reset-password" element= {<ResetPassword/>} />
-            <Route path="/loginold" element = { <Login/>} />
-            <Route path="/" element= {
+            <Route path="/login" element={<LoginV2 />} />
+            <Route path="/signup" element={<SignUp />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
+            <Route path="/loginold" element={<Login />} />
+            <Route path="/" element={
               <ProtectedRoute>
-                <Home/>
+                <Home />
               </ProtectedRoute>
             } />
-            <Route path="/site/:siteID" element= {
-                <ProtectedRoute>
-                  <SitePage/>
-                </ProtectedRoute>
-              } />
-              <Route path="/attendance/:siteID" element= {
-                <ProtectedRoute>
-                  <Attendance/>
-                </ProtectedRoute>
-              } />
-              <Route path="/payments/:siteID" element= {
-                <ProtectedRoute>
-                  <Payments/>
-                </ProtectedRoute>
-              } />
-              <Route path="/change-tracking/:siteID" element= {
-                <ProtectedRoute>
-                  <ChangeTracking/>
-                </ProtectedRoute>
-              } />
-            <Route path="/settings/:siteID" element= {
+            <Route path="/site/:siteID" element={
               <ProtectedRoute>
-                <Settings/>
+                <SitePage />
               </ProtectedRoute>
             } />
-              {/* Add more routes as needed */}
-            </Routes>
-          </BrowserRouter>
-        </ToastProvider>
-      </AuthProvider>
+            <Route path="/attendance/:siteID" element={
+              <ProtectedRoute>
+                <Attendance />
+              </ProtectedRoute>
+            } />
+            <Route path="/payments/:siteID" element={
+              <ProtectedRoute>
+                <Payments />
+              </ProtectedRoute>
+            } />
+            <Route path="/change-tracking/:siteID" element={
+              <ProtectedRoute>
+                <ChangeTracking />
+              </ProtectedRoute>
+            } />
+            <Route path="/settings/:siteID" element={
+              <ProtectedRoute>
+                <Settings />
+              </ProtectedRoute>
+            } />
+            {/* Add more routes as needed */}
+          </Routes>
+        </BrowserRouter>
+      </ToastProvider>
+    </AuthProvider>
   )
 }
 

@@ -4,7 +4,6 @@ import { useToast } from "../components/ToastProvider";
 import api from "../utils/api";
 
 import DashboardHeader from "./DashboardHeader";
-import StatsGrid from "./StatsGrid";
 import SiteList from "./SiteList";
 import AddSiteModal from "./AddSiteModal";
 import EditSiteModal from "./EditSiteModal";
@@ -247,7 +246,6 @@ const Home = () => {
       />
 
       <main className={styles.mainContent}>
-        <StatsGrid sites={state.sites} />
         <SiteList 
           sites={filteredAndSortedSites} 
           onDeleteSite={deleteSite}
