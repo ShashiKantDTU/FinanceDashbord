@@ -1359,7 +1359,7 @@ router.get("/allemployeelist", authenticateToken, async (req, res) => {
         year: parseInt(year),
         siteID: siteID.trim(),
       })
-      .select("empid name month year siteID");
+      .select("empid name month year siteID payouts");
 
     return res.status(200).json({
       success: true,
