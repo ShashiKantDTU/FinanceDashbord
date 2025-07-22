@@ -143,7 +143,9 @@ const FetchlatestData = async (siteID, EmpID, month, year) => {
         });
         
         if (!employee) {
-            throw new Error(`Employee ${EmpID} not found for ${month}/${year} at site ${siteID}`);
+            const error = new Error(`Employee ${EmpID} not found for ${month}/${year} at site ${siteID}`);
+            error.status = 404;
+            throw error;
         }
 
         // Check if recalculation is needed

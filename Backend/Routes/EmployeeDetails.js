@@ -1454,7 +1454,17 @@ router.get("/employee/:siteID/:empid/:month/:year",
       console.warn(
         `⚠️  Error processing employee ${empid}: ${employeeError.message}`
       );
-      // Return basic employee data with error flag
+      
+      // Check if it's a 404 error (employee not found)
+      if (employeeError.status === 404) {
+        return res.status(404).json({
+          success: false,
+          error: "Employee not found.",
+          message: employeeError.message,
+        });
+      }
+      
+      // Return other errors as 500
       return res.status(500).json({
         success: false,
         error: "Error fetching employee data.",
