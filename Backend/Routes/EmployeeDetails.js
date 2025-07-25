@@ -10,7 +10,83 @@ const { trackOptimizedChanges } = require("../Utils/OptimizedChangeTracker");
 const { latestEmpSerialNumber } = require("../Utils/EmployeeUtils");
 const { authenticateToken } = require("../Middleware/auth");
 const { pendingAttendance } = require("../Utils/EmployeeUtils");
+const { markEmployeesForRecalculation } = require("../Utils/Jobs");
 const router = express.Router();
+
+/**
+ * Helper function to mark future months for recalculation after employee deletion
+ * @param {String} siteID - Site identifier
+ * @param {String} empid - Employee identifier
+ * @param {Number} month - Month that was deleted
+ * @param {Number} year - Year that was deleted
+ * @param {String} deletedBy - User who performed the deletion
+ * @returns {Object} Recalculation result with success/error info
+ */
+const handleRecalculationMarking = async (siteID, empid, month, year, deletedBy) => {
+  try {
+    // Calculate the next month after the deleted month
+    let nextMonth = parseInt(month) + 1;
+    let nextYear = parseInt(year);
+    
+    if (nextMonth > 12) {
+      nextMonth = 1;
+      nextYear += 1;
+    }
+    
+    // Only mark future months if the next month is not in the future
+    const currentDate = new Date();
+    const currentMonth = currentDate.getMonth() + 1;
+    const currentYear = currentDate.getFullYear();
+    
+    // Check if there are any future months to mark
+    if (nextYear > currentYear || (nextYear === currentYear && nextMonth > currentMonth)) {
+      console.log(`📅 No future months to mark for recalculation - deleted month ${month}/${year} is current or future`);
+      return {
+        success: true,
+        recalculationMarked: {
+          futureRecordsMarked: 0,
+          reason: "No future months exist after the deleted month",
+          markedBy: deletedBy,
+          markedAt: new Date()
+        }
+      };
+    }
+    
+    console.log(`🔄 Marking future months for recalculation for employee ${empid} starting from ${nextMonth}/${nextYear}`);
+    
+    const recalculationResult = await markEmployeesForRecalculation(
+      siteID,
+      empid,
+      nextMonth,
+      nextYear
+    );
+    
+    console.log(`📊 Marked ${recalculationResult.modifiedCount} future records for recalculation`);
+    
+    return {
+      success: true,
+      recalculationMarked: {
+        futureRecordsMarked: recalculationResult.modifiedCount,
+        startingFromMonth: `${nextMonth}/${nextYear}`,
+        reason: "Employee deletion affects carry-forward calculations for future months",
+        markedBy: deletedBy,
+        markedAt: new Date()
+      }
+    };
+  } catch (recalculationError) {
+    console.warn("⚠️ Failed to mark future months for recalculation:", recalculationError.message);
+    
+    return {
+      success: false,
+      recalculationWarning: {
+        error: "Failed to mark future months for recalculation",
+        details: recalculationError.message,
+        impact: "Future months may have incorrect carry-forward balances until manually recalculated",
+        recommendation: "Manually trigger recalculation for this employee's future months"
+      }
+    };
+  }
+};
 
 // Create new employee endpoint (requires name, siteID, and wage)
 router.post("/addemployee", authenticateToken, async (req, res) => {
@@ -187,7 +263,8 @@ router.post("/addemployee", authenticateToken, async (req, res) => {
   }
 });
 
-// Delete employee endpoint with ChangeTracker integration
+// Delete employee endpoint with ChangeTracker integration and recalculation marking
+// When deleting a specific month, all future months need recalculation due to carry-forward impact
 router.delete("/deleteemployee", authenticateToken, async (req, res) => {
   try {
     console.log("🗑️ Delete employee request:", req.body);
@@ -321,6 +398,9 @@ router.delete("/deleteemployee", authenticateToken, async (req, res) => {
       console.log(
         `✅ Deleted ${deleteResult.deletedCount} records for employee ${empid}`
       );
+
+      // Note: No need to mark future months for recalculation when deleting all records
+      // since there are no future records to recalculate
     } else {
       // Delete only the specific month/year record
       console.log(`🗑️ Deleting specific record: ${empid} for ${month}/${year}`);
@@ -393,6 +473,25 @@ router.delete("/deleteemployee", authenticateToken, async (req, res) => {
       ];
 
       console.log(`✅ Deleted employee ${empid} for ${month}/${year}`);
+
+      // Mark all future months for recalculation since deleting this month affects carry-forward calculations
+      const recalculationResult = await handleRecalculationMarking(
+        employeeRecord.siteID,
+        empid.trim(),
+        parseInt(month),
+        parseInt(year),
+        deletedBy
+      );
+      
+      // Add recalculation info to the change tracking results
+      const lastChangeTrackingIndex = changeTrackingResults.length - 1;
+      if (lastChangeTrackingIndex >= 0) {
+        if (recalculationResult.success) {
+          changeTrackingResults[lastChangeTrackingIndex].recalculationMarked = recalculationResult.recalculationMarked;
+        } else {
+          changeTrackingResults[lastChangeTrackingIndex].recalculationWarning = recalculationResult.recalculationWarning;
+        }
+      }
     }
 
     // Prepare response
@@ -414,7 +513,7 @@ router.delete("/deleteemployee", authenticateToken, async (req, res) => {
       },
       message: deletePreviousMonth
         ? `Employee ${name} (${empid}) completely deleted from the system including all historical data. ${deletedEmployees.length} records deleted.`
-        : `Employee ${name} (${empid}) deleted for ${month}/${year}. 1 record deleted.`,
+        : `Employee ${name} (${empid}) deleted for ${month}/${year}. Future months marked for recalculation to update carry-forward balances.`,
     };
 
     // Check if any change tracking failed
@@ -427,6 +526,33 @@ router.delete("/deleteemployee", authenticateToken, async (req, res) => {
           "Employee deleted successfully but some change tracking entries failed",
         failedTrackings: failedTrackings,
       };
+    }
+
+    // Check for recalculation warnings (only for specific month deletion)
+    if (!deletePreviousMonth) {
+      const recalculationWarnings = changeTrackingResults.filter(
+        (result) => result.recalculationWarning
+      );
+      if (recalculationWarnings.length > 0) {
+        deletionSummary.warnings = deletionSummary.warnings || {};
+        deletionSummary.warnings.recalculationIssues = {
+          message: "Employee deleted but future month recalculation marking failed",
+          details: recalculationWarnings.map(w => w.recalculationWarning),
+          recommendation: "Manually trigger recalculation for this employee's future months"
+        };
+      }
+
+      // Add recalculation success info
+      const recalculationSuccess = changeTrackingResults.filter(
+        (result) => result.recalculationMarked
+      );
+      if (recalculationSuccess.length > 0) {
+        deletionSummary.data.recalculationInfo = {
+          futureMonthsMarked: recalculationSuccess[0].recalculationMarked.futureRecordsMarked,
+          reason: recalculationSuccess[0].recalculationMarked.reason,
+          note: "Future months will be automatically recalculated when accessed to ensure correct carry-forward balances"
+        };
+      }
     }
 
     return res.status(200).json(deletionSummary);
