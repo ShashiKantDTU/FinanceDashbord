@@ -12,12 +12,19 @@ dist
 dist-ssr
 *.local
 
-# Environment variables
+# Environment variables - NEVER COMMIT THESE
 .env
 .env.local
+.env.development
 .env.development.local
-.env.test.local
+.env.production
 .env.production.local
+.env.test
+.env.test.local
+
+# Firebase config files with sensitive keys
+firebase-config.js
+**/firebase-config.js
 
 # Editor directories and files
 .vscode/*
