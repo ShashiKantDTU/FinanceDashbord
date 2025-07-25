@@ -4,64 +4,14 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { FaMobileAlt, FaCheckCircle, FaRocket, FaLock, FaUserFriends } from 'react-icons/fa';
 import { MdEmail, MdLock } from 'react-icons/md';
 import { getAuth, RecaptchaVerifier, signInWithPhoneNumber } from 'firebase/auth';
-import { initializeApp } from 'firebase/app';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { authAPI } from '../utils/api';
+// Import Firebase config from centralized location
+import { auth } from '../firebase-config';
 // Import the logo image
 import LoginPageLogo from '../assets/LoginPageLogo.png';
-
-// Firebase config using environment variables
-const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID,
-};
-
-// Validate Firebase config
-const validateFirebaseConfig = () => {
-  const requiredFields = ['apiKey', 'authDomain', 'projectId', 'appId'];
-  const missingFields = requiredFields.filter(field => !firebaseConfig[field]);
-  
-  if (missingFields.length > 0) {
-    throw new Error(`Firebase configuration incomplete. Missing: ${missingFields.join(', ')}`);
-  }
-};
-
-// Initialize Firebase app
-let _firebaseApp;
-let auth = null;
-
-const initializeFirebaseAuth = () => {
-  try {
-    validateFirebaseConfig();
-    
-    // Only initialize once
-    if (!_firebaseApp) {
-      _firebaseApp = initializeApp(firebaseConfig);
-    }
-    
-    // Get auth instance
-    auth = getAuth(_firebaseApp);
-    
-    // Ensure phone authentication is enabled
-    if (!auth) {
-      throw new Error('Failed to initialize Firebase Auth');
-    }
-    
-    return auth;
-    
-  } catch (error) {
-    console.error('Firebase initialization failed:', error);
-    return null;
-  }
-};
-
-// Initialize immediately
-auth = initializeFirebaseAuth();
+// Production-ready Firebase phone authentication
 
 const features = [
   { icon: <FaRocket color="#10B981" size={24} />, title: 'Auto-calculated payments', desc: 'Accurate labour payment, based on daily attendance and all advances given.' },
@@ -91,10 +41,8 @@ const LoginV2 = () => {
   useEffect(() => {
     const checkFirebaseReady = () => {
       try {
-        // Re-initialize if needed
-        const currentAuth = initializeFirebaseAuth();
-        
-        if (currentAuth && currentAuth.app) {
+        // Check if Firebase auth is properly initialized
+        if (auth && auth.app) {
           setFirebaseReady(true);
           return true;
         } else {
@@ -104,25 +52,19 @@ const LoginV2 = () => {
       } catch (error) {
         console.error('Firebase initialization error:', error);
         setFirebaseReady(false);
-        
-        // Show user-friendly error based on the type of error
-        if (error.message.includes('Missing')) {
-          setError('Firebase configuration is incomplete. Please contact support.');
-        } else {
-          setError('Firebase initialization failed. Please refresh the page and try again.');
-        }
+        setError('Firebase initialization failed. Please refresh the page and try again.');
         return false;
       }
     };
 
     const isReady = checkFirebaseReady();
-    
+
     // If not ready, try again after a short delay
     if (!isReady) {
       const timeout = setTimeout(() => {
         checkFirebaseReady();
       }, 1000);
-      
+
       return () => clearTimeout(timeout);
     }
   }, []);
@@ -202,22 +144,23 @@ const LoginV2 = () => {
     e.preventDefault();
     setLoading(true);
     setError('');
-    
-    // Get fresh auth instance
-    const currentAuth = getAuth();
-    
-    if (!currentAuth || !currentAuth.app) {
+
+    // Use centralized auth instance
+    if (!auth || !auth.app) {
       setError('Firebase authentication is not available. Please refresh the page and try again.');
       setLoading(false);
       return;
     }
-    
+
+    // Set language for reCAPTCHA and SMS to English for production
+    auth.languageCode = 'en';
+
     if (!validateMobileNumber(mobile)) {
       setError('Please enter a valid 10-digit mobile number starting with 6, 7, 8, or 9');
       setLoading(false);
       return;
     }
-    
+
     try {
       // Clean up existing recaptcha verifier
       if (window.recaptchaVerifier) {
@@ -228,17 +171,28 @@ const LoginV2 = () => {
         }
         window.recaptchaVerifier = null;
       }
-      
-      // Brief delay to ensure DOM is ready
+
+      // Brief delay to ensure DOM is ready and reCAPTCHA script is loaded
       await new Promise(resolve => setTimeout(resolve, 100));
       
+      // Check if reCAPTCHA is available
+      if (typeof window.grecaptcha === 'undefined') {
+        setError('reCAPTCHA is not loaded. Please refresh the page and try again.');
+        setLoading(false);
+        return;
+      }
+
       // Create RecaptchaVerifier with proper Firebase v9+ syntax
       try {
         // Initialize RecaptchaVerifier with auth instance as first parameter (Firebase v9+ requirement)
-        window.recaptchaVerifier = new RecaptchaVerifier(currentAuth, 'recaptcha-container', {
+        // Try using the submit button first, fallback to container if needed
+        const containerId = !otpSent ? 'send-otp-button' : 'recaptcha-container';
+
+        window.recaptchaVerifier = new RecaptchaVerifier(auth, containerId, {
           size: 'invisible',
           callback: () => {
             // reCAPTCHA solved, allow signInWithPhoneNumber
+            // Production: Remove console logs for security
           },
           'expired-callback': () => {
             // Response expired. Ask user to solve reCAPTCHA again
@@ -250,16 +204,20 @@ const LoginV2 = () => {
             setLoading(false);
           }
         });
-      } catch {
-        setError('Unable to initialize phone verification. Please check your Firebase configuration.');
+      } catch (recaptchaError) {
+        // Production: Only log detailed errors in development
+        if (import.meta.env.DEV) {
+          console.error('reCAPTCHA initialization error:', recaptchaError);
+        }
+        setError('Unable to initialize phone verification. Please refresh the page and try again.');
         setLoading(false);
         return;
       }
-      
+
       const appVerifier = window.recaptchaVerifier;
       const phoneNumber = '+91' + mobile;
-      
-      await signInWithPhoneNumber(currentAuth, phoneNumber, appVerifier)
+
+      await signInWithPhoneNumber(auth, phoneNumber, appVerifier)
         .then((confirmationResult) => {
           window.confirmationResult = confirmationResult;
           setOtpSent(true);
@@ -268,6 +226,19 @@ const LoginV2 = () => {
           setSuccess(`OTP sent to ${phoneNumber}`);
         })
         .catch((err) => {
+          // Reset reCAPTCHA on error as recommended by Firebase docs
+          if (window.recaptchaVerifier) {
+            try {
+              window.recaptchaVerifier.render().then((widgetId) => {
+                if (window.grecaptcha) {
+                  window.grecaptcha.reset(widgetId);
+                }
+              });
+            } catch {
+              // Non-critical error, continue with error handling
+            }
+          }
+
           // Handle specific Firebase Auth errors
           if (err.code === 'auth/invalid-app-credential') {
             setError('App verification failed. Please ensure phone authentication is enabled in Firebase Console.');
@@ -324,14 +295,14 @@ const LoginV2 = () => {
     setLoading(true);
     setError('');
     setSuccess('');
-    
+
     // Validate OTP
     if (!otp || otp.length !== 6) {
       setError('Please enter a valid 6-digit OTP');
       setLoading(false);
       return;
     }
-    
+
     try {
       // 1. Confirm OTP with Firebase
       if (!window.confirmationResult) {
@@ -341,25 +312,25 @@ const LoginV2 = () => {
         setLoading(false);
         return;
       }
-      
+
       const result = await window.confirmationResult.confirm(otp);
       const firebaseUser = result.user;
-      
+
       // 2. Get Firebase ID token
       const idToken = await firebaseUser.getIdToken();
-      
+
       // 3. Send ID token to backend to get app JWT
       const data = await authAPI.otplogin({ token: idToken });
-      
+
       // 4. Use AuthContext to log in with backend JWT
       login(data);
       setSuccess('Login successful!');
-      
+
       // Clean up
       setOtp('');
       setOtpSent(false);
       window.confirmationResult = null;
-      
+
       navigate('/');
     } catch (err) {
       // Handle specific Firebase auth errors
@@ -423,11 +394,11 @@ const LoginV2 = () => {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.7 }}
-          style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: 16, 
-            marginBottom: 8 
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 16,
+            marginBottom: 8
           }}
         >
           <motion.img
@@ -444,12 +415,12 @@ const LoginV2 = () => {
             }}
           />
           <h1
-            style={{ 
-              fontFamily: 'Poppins, Inter, sans-serif', 
-              fontWeight: 900, 
-              fontSize: '2.8rem', 
-              color: '#065F46', 
-              margin: 0, 
+            style={{
+              fontFamily: 'Poppins, Inter, sans-serif',
+              fontWeight: 900,
+              fontSize: '2.8rem',
+              color: '#065F46',
+              margin: 0,
               lineHeight: 1.1,
               letterSpacing: '-0.02em',
               textShadow: '0 2px 4px rgba(16, 185, 129, 0.1)'
@@ -462,12 +433,12 @@ const LoginV2 = () => {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.7, delay: 0.15 }}
-          style={{ 
-            color: '#10B981', 
-            fontWeight: 700, 
-            fontSize: '1.3rem', 
-            marginBottom: 12, 
-            opacity: 0.9, 
+          style={{
+            color: '#10B981',
+            fontWeight: 700,
+            fontSize: '1.3rem',
+            marginBottom: 12,
+            opacity: 0.9,
             lineHeight: 1.2,
             letterSpacing: '-0.01em'
           }}
@@ -478,13 +449,13 @@ const LoginV2 = () => {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.7, delay: 0.25 }}
-          style={{ 
-            color: '#374151', 
-            fontWeight: 500, 
-            fontSize: '1.1rem', 
-            marginBottom: 40, 
-            opacity: 0.8, 
-            lineHeight: 1.4 
+          style={{
+            color: '#374151',
+            fontWeight: 500,
+            fontSize: '1.1rem',
+            marginBottom: 40,
+            opacity: 0.8,
+            lineHeight: 1.4
           }}
         >
           Daily Labour Report. Automatic work summaries based on haazri.
@@ -552,55 +523,55 @@ const LoginV2 = () => {
               marginBottom: 12
             }}
           >
-            
-            <h2 style={{ 
-              fontFamily: 'Poppins, Inter, sans-serif', 
-              fontWeight: 800, 
-              fontSize: '1.6rem', 
-              margin: 0, 
-              color: '#065F46', 
-              letterSpacing: '-0.02em', 
-              lineHeight: 1.1, 
+
+            <h2 style={{
+              fontFamily: 'Poppins, Inter, sans-serif',
+              fontWeight: 800,
+              fontSize: '1.6rem',
+              margin: 0,
+              color: '#065F46',
+              letterSpacing: '-0.02em',
+              lineHeight: 1.1,
               textAlign: 'center',
               textShadow: '0 1px 2px rgba(16, 185, 129, 0.1)'
             }}>Site Haazri</h2>
           </motion.div>
-          <div style={{ 
-            color: '#10B981', 
-            fontWeight: 600, 
-            fontSize: '1.05rem', 
-            marginBottom: '1.2vh', 
-            opacity: 0.9, 
-            lineHeight: 1.1, 
-            textAlign: 'center' 
+          <div style={{
+            color: '#10B981',
+            fontWeight: 600,
+            fontSize: '1.05rem',
+            marginBottom: '1.2vh',
+            opacity: 0.9,
+            lineHeight: 1.1,
+            textAlign: 'center'
           }}>Sign in to your account</div>
           <div style={{ display: 'flex', gap: '0.5vw', marginBottom: '1.2vh' }}>
-            <button onClick={() => setMode('email')} style={{ 
-              flex: 1, 
-              background: mode === 'email' ? 'linear-gradient(135deg, #10B981 0%, #059669 100%)' : '#F3F4F6', 
-              color: mode === 'email' ? '#fff' : '#374151', 
-              border: mode === 'email' ? '2px solid #10B981' : '2px solid #E5E7EB', 
-              borderRadius: 10, 
-              padding: '0.65em 0', 
-              fontWeight: 700, 
-              fontSize: '0.95rem', 
-              cursor: 'pointer', 
+            <button onClick={() => setMode('email')} style={{
+              flex: 1,
+              background: mode === 'email' ? 'linear-gradient(135deg, #10B981 0%, #059669 100%)' : '#F3F4F6',
+              color: mode === 'email' ? '#fff' : '#374151',
+              border: mode === 'email' ? '2px solid #10B981' : '2px solid #E5E7EB',
+              borderRadius: 10,
+              padding: '0.65em 0',
+              fontWeight: 700,
+              fontSize: '0.95rem',
+              cursor: 'pointer',
               transition: 'all 0.3s ease',
               boxShadow: mode === 'email' ? '0 4px 12px rgba(16, 185, 129, 0.2)' : 'none'
             }}>Email Login</button>
-            <button 
-              onClick={() => firebaseReady && setMode('mobile')} 
+            <button
+              onClick={() => firebaseReady && setMode('mobile')}
               disabled={!firebaseReady}
-              style={{ 
-                flex: 1, 
-                background: mode === 'mobile' ? 'linear-gradient(135deg, #10B981 0%, #059669 100%)' : (!firebaseReady ? '#E5E7EB' : '#F3F4F6'), 
-                color: mode === 'mobile' ? '#fff' : (!firebaseReady ? '#9CA3AF' : '#374151'), 
-                border: mode === 'mobile' ? '2px solid #10B981' : (!firebaseReady ? '2px solid #E5E7EB' : '2px solid #E5E7EB'), 
-                borderRadius: 10, 
-                padding: '0.65em 0', 
-                fontWeight: 700, 
-                fontSize: '0.95rem', 
-                cursor: firebaseReady ? 'pointer' : 'not-allowed', 
+              style={{
+                flex: 1,
+                background: mode === 'mobile' ? 'linear-gradient(135deg, #10B981 0%, #059669 100%)' : (!firebaseReady ? '#E5E7EB' : '#F3F4F6'),
+                color: mode === 'mobile' ? '#fff' : (!firebaseReady ? '#9CA3AF' : '#374151'),
+                border: mode === 'mobile' ? '2px solid #10B981' : (!firebaseReady ? '2px solid #E5E7EB' : '2px solid #E5E7EB'),
+                borderRadius: 10,
+                padding: '0.65em 0',
+                fontWeight: 700,
+                fontSize: '0.95rem',
+                cursor: firebaseReady ? 'pointer' : 'not-allowed',
                 transition: 'all 0.3s ease',
                 boxShadow: mode === 'mobile' ? '0 4px 12px rgba(16, 185, 129, 0.2)' : 'none'
               }}
@@ -630,17 +601,17 @@ const LoginV2 = () => {
                   </div>
                   <a href="#" style={{ color: '#10B981', fontWeight: 700, fontSize: '0.95rem', textDecoration: 'none', transition: 'color 0.2s' }}>Forgot Password?</a>
                 </div>
-                <button type="submit" disabled={loading} style={{ 
-                  background: loading ? '#9CA3AF' : 'linear-gradient(135deg, #10B981 0%, #059669 100%)', 
-                  color: '#fff', 
-                  border: 'none', 
-                  borderRadius: 10, 
-                  padding: '0.8em 0', 
-                  fontWeight: 700, 
-                  fontSize: '1.05rem', 
-                  marginTop: 12, 
-                  cursor: loading ? 'not-allowed' : 'pointer', 
-                  boxShadow: loading ? 'none' : '0 6px 20px rgba(16, 185, 129, 0.25)', 
+                <button type="submit" disabled={loading} style={{
+                  background: loading ? '#9CA3AF' : 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: 10,
+                  padding: '0.8em 0',
+                  fontWeight: 700,
+                  fontSize: '1.05rem',
+                  marginTop: 12,
+                  cursor: loading ? 'not-allowed' : 'pointer',
+                  boxShadow: loading ? 'none' : '0 6px 20px rgba(16, 185, 129, 0.25)',
                   transition: 'all 0.3s ease',
                   transform: loading ? 'none' : 'translateY(0)',
                 }}>{loading ? 'Logging in...' : 'Login'}</button>
@@ -657,9 +628,9 @@ const LoginV2 = () => {
                 style={{ display: 'flex', flexDirection: 'column', gap: '0.7vh', marginTop: 2 }}
               >
                 <label style={{ fontWeight: 600, marginBottom: 2, display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.95rem', color: '#065F46' }}><FaMobileAlt /> Mobile Number</label>
-                <input 
-                  type="tel" 
-                  value={mobile} 
+                <input
+                  type="tel"
+                  value={mobile}
                   onChange={e => {
                     const value = e.target.value.replace(/\D/g, '');
                     if (value.length <= 10) {
@@ -669,16 +640,16 @@ const LoginV2 = () => {
                         setError('');
                       }
                     }
-                  }} 
-                  required 
-                  placeholder="Enter 10 digit mobile (6-9 XXXXXXXXX)" 
+                  }}
+                  required
+                  placeholder="Enter 10 digit mobile (6-9 XXXXXXXXX)"
                   maxLength={10}
-                  style={{ 
-                    padding: '0.75em', 
-                    borderRadius: 10, 
-                    border: `2px solid ${error.includes('mobile number') ? '#EF4444' : '#E5E7EB'}`, 
-                    fontSize: '0.95rem', 
-                    background: '#FAFAFA', 
+                  style={{
+                    padding: '0.75em',
+                    borderRadius: 10,
+                    border: `2px solid ${error.includes('mobile number') ? '#EF4444' : '#E5E7EB'}`,
+                    fontSize: '0.95rem',
+                    background: '#FAFAFA',
                     fontWeight: 500,
                     transition: 'border-color 0.2s',
                     outline: 'none'
@@ -686,7 +657,8 @@ const LoginV2 = () => {
                   onFocus={e => e.target.style.borderColor = error.includes('mobile number') ? '#EF4444' : '#10B981'}
                   onBlur={e => e.target.style.borderColor = error.includes('mobile number') ? '#EF4444' : '#E5E7EB'}
                 />
-                <div id="recaptcha-container"></div>
+                {/* reCAPTCHA container - only visible if needed for debugging */}
+                <div id="recaptcha-container" style={{ display: 'none' }}></div>
                 {/* Resend OTP button and timer */}
                 {otpSent && (
                   <button
@@ -713,19 +685,19 @@ const LoginV2 = () => {
                 {otpSent && (
                   <>
                     <label style={{ fontWeight: 600, marginBottom: 2, fontSize: '0.95rem', color: '#065F46' }}>OTP</label>
-                    <input 
-                      type="text" 
-                      value={otp} 
-                      onChange={e => setOtp(e.target.value.replace(/\D/g, ''))} 
-                      required 
-                      placeholder="Enter OTP" 
-                      maxLength={6} 
-                      style={{ 
-                        padding: '0.75em', 
-                        borderRadius: 10, 
-                        border: '2px solid #E5E7EB', 
-                        fontSize: '0.95rem', 
-                        background: '#FAFAFA', 
+                    <input
+                      type="text"
+                      value={otp}
+                      onChange={e => setOtp(e.target.value.replace(/\D/g, ''))}
+                      required
+                      placeholder="Enter OTP"
+                      maxLength={6}
+                      style={{
+                        padding: '0.75em',
+                        borderRadius: 10,
+                        border: '2px solid #E5E7EB',
+                        fontSize: '0.95rem',
+                        background: '#FAFAFA',
                         fontWeight: 500,
                         transition: 'border-color 0.2s',
                         outline: 'none'
@@ -735,19 +707,26 @@ const LoginV2 = () => {
                     />
                   </>
                 )}
-                <button type="submit" disabled={loading} style={{ 
-                  background: loading ? '#9CA3AF' : 'linear-gradient(135deg, #10B981 0%, #059669 100%)', 
-                  color: '#fff', 
-                  border: 'none', 
-                  borderRadius: 10, 
-                  padding: '0.8em 0', 
-                  fontWeight: 700, 
-                  fontSize: '1.05rem', 
-                  marginTop: 12, 
-                  cursor: loading ? 'not-allowed' : 'pointer', 
-                  boxShadow: loading ? 'none' : '0 6px 20px rgba(16, 185, 129, 0.25)', 
-                  transition: 'all 0.3s ease'
-                }}>{loading ? (otpSent ? 'Verifying...' : 'Sending OTP...') : (otpSent ? 'Verify OTP' : 'Send OTP')}</button>
+                <button
+                  type="submit"
+                  id={!otpSent ? "send-otp-button" : undefined}
+                  disabled={loading}
+                  style={{
+                    background: loading ? '#9CA3AF' : 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: 10,
+                    padding: '0.8em 0',
+                    fontWeight: 700,
+                    fontSize: '1.05rem',
+                    marginTop: 12,
+                    cursor: loading ? 'not-allowed' : 'pointer',
+                    boxShadow: loading ? 'none' : '0 6px 20px rgba(16, 185, 129, 0.25)',
+                    transition: 'all 0.3s ease'
+                  }}
+                >
+                  {loading ? (otpSent ? 'Verifying...' : 'Sending OTP...') : (otpSent ? 'Verify OTP' : 'Send OTP')}
+                </button>
               </motion.form>
             )}
           </AnimatePresence>
@@ -776,26 +755,26 @@ const LoginV2 = () => {
             transition: 'all 0.3s ease',
             cursor: 'pointer',
           }}
-          onMouseEnter={e => {
-            e.target.style.borderColor = '#10B981';
-            e.target.style.boxShadow = '0 6px 16px rgba(16, 185, 129, 0.1)';
-          }}
-          onMouseLeave={e => {
-            e.target.style.borderColor = '#E5E7EB';
-            e.target.style.boxShadow = '0 4px 12px 0 rgba(0,0,0,0.05)';
-          }}
+            onMouseEnter={e => {
+              e.target.style.borderColor = '#10B981';
+              e.target.style.boxShadow = '0 6px 16px rgba(16, 185, 129, 0.1)';
+            }}
+            onMouseLeave={e => {
+              e.target.style.borderColor = '#E5E7EB';
+              e.target.style.boxShadow = '0 4px 12px 0 rgba(0,0,0,0.05)';
+            }}
           >
             {/* Google logo in original colors */}
             <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
               <g clipPath="url(#clip0_993_771)">
-                <path d="M19.805 10.2305C19.805 9.55047 19.7482 8.90047 19.6482 8.27047H10.2V12.0555H15.605C15.38 13.2555 14.655 14.2655 13.605 14.9455V17.2055H16.685C18.505 15.5455 19.805 13.1455 19.805 10.2305Z" fill="#4285F4"/>
-                <path d="M10.2 20.0005C12.7 20.0005 14.77 19.1805 16.29 17.8055L13.605 14.9455C12.805 15.4855 11.805 15.8055 10.2 15.8055C7.805 15.8055 5.805 14.1455 5.065 11.9955H1.865V14.3255C3.38 17.4655 6.565 20.0005 10.2 20.0005Z" fill="#34A853"/>
-                <path d="M5.065 11.9955C4.865 11.4555 4.75 10.8755 4.75 10.2755C4.75 9.67547 4.865 9.09547 5.065 8.55547V6.22547H1.865C1.165 7.62547 0.75 9.14547 0.75 10.7755C0.75 12.4055 1.165 13.9255 1.865 15.3255L5.065 11.9955Z" fill="#FBBC05"/>
-                <path d="M10.2 4.19547C11.655 4.19547 12.755 4.71547 13.505 5.41547L16.35 2.57047C14.77 1.04547 12.7 0.000473022 10.2 0.000473022C6.565 0.000473022 3.38 2.53547 1.865 5.67547L5.065 8.55547C5.805 6.40547 7.805 4.19547 10.2 4.19547Z" fill="#EA4335"/>
+                <path d="M19.805 10.2305C19.805 9.55047 19.7482 8.90047 19.6482 8.27047H10.2V12.0555H15.605C15.38 13.2555 14.655 14.2655 13.605 14.9455V17.2055H16.685C18.505 15.5455 19.805 13.1455 19.805 10.2305Z" fill="#4285F4" />
+                <path d="M10.2 20.0005C12.7 20.0005 14.77 19.1805 16.29 17.8055L13.605 14.9455C12.805 15.4855 11.805 15.8055 10.2 15.8055C7.805 15.8055 5.805 14.1455 5.065 11.9955H1.865V14.3255C3.38 17.4655 6.565 20.0005 10.2 20.0005Z" fill="#34A853" />
+                <path d="M5.065 11.9955C4.865 11.4555 4.75 10.8755 4.75 10.2755C4.75 9.67547 4.865 9.09547 5.065 8.55547V6.22547H1.865C1.165 7.62547 0.75 9.14547 0.75 10.7755C0.75 12.4055 1.165 13.9255 1.865 15.3255L5.065 11.9955Z" fill="#FBBC05" />
+                <path d="M10.2 4.19547C11.655 4.19547 12.755 4.71547 13.505 5.41547L16.35 2.57047C14.77 1.04547 12.7 0.000473022 10.2 0.000473022C6.565 0.000473022 3.38 2.53547 1.865 5.67547L5.065 8.55547C5.805 6.40547 7.805 4.19547 10.2 4.19547Z" fill="#EA4335" />
               </g>
               <defs>
                 <clipPath id="clip0_993_771">
-                  <rect width="20" height="20" fill="white"/>
+                  <rect width="20" height="20" fill="white" />
                 </clipPath>
               </defs>
             </svg>

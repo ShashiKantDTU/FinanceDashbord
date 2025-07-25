@@ -4,12 +4,13 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "dev:network": "vite --host 0.0.0.0 --port 5173",
-    "build": "vite build",
+    "dev": "vite --mode development",
+    "dev:network": "vite --host 0.0.0.0 --port 5173 --mode development",
+    "build": "vite build --mode production",
+    "build:dev": "vite build --mode development",
     "lint": "eslint .",
-    "preview": "vite preview",
-    "preview:network": "vite preview --host 0.0.0.0 --port 5173"
+    "preview": "vite preview --mode production",
+    "preview:network": "vite preview --host 0.0.0.0 --port 5173 --mode production"
   },
   "dependencies": {
     "@vercel/analytics": "^1.5.0",
