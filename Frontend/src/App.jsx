@@ -14,12 +14,16 @@ import { AuthProvider } from './context/AuthContext';
 import { ToastProvider } from './components/ToastProvider';
 import ProtectedRoute from './components/ProtectedRoute';
 import LoginV2 from "./Pages/LoginV2";
+// Import reCAPTCHA Enterprise test component (development only)
+import RecaptchaEnterpriseTest from './components/RecaptchaEnterpriseTest';
 
 function App() {
 
   return (
     <AuthProvider>
       <ToastProvider>
+        {/* reCAPTCHA Enterprise status indicator (development only) */}
+        <RecaptchaEnterpriseTest />
         <BrowserRouter>
           <Routes>
             <Route path="/login" element={<LoginV2 />} />

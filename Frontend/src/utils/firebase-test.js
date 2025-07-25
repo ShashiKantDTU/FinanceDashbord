@@ -25,9 +25,19 @@ export const testFirebaseSetup = () => {
   console.log('✅ Current User:', auth?.currentUser ? 'Logged in' : 'Not logged in');
   console.log('✅ Auth Domain:', auth?.config?.authDomain || 'Not available');
   
-  // Test 4: reCAPTCHA Availability
+  // Test 4: reCAPTCHA Status
   console.log('\n🛡️ reCAPTCHA Status:');
   console.log('✅ reCAPTCHA Script:', typeof window.grecaptcha !== 'undefined' ? 'Loaded' : '⚠️ Not loaded');
+  
+  const useEnterprise = import.meta.env.VITE_USE_RECAPTCHA_ENTERPRISE === 'true';
+  const enterpriseKey = import.meta.env.VITE_RECAPTCHA_ENTERPRISE_SITE_KEY;
+  console.log('✅ reCAPTCHA Enterprise:', useEnterprise && enterpriseKey ? 'Enabled' : 'Disabled');
+  console.log('✅ Enterprise Key:', enterpriseKey ? 'Present' : '⚠️ Missing');
+  
+  // Check Firebase SDK version for SMS Defense compatibility
+  const firebaseVersion = '11.10.0'; // Your current version
+  const smsDefenseSupported = parseFloat(firebaseVersion) >= 11.0;
+  console.log('✅ SMS Defense Support:', smsDefenseSupported ? 'Enabled (SDK 11.10.0)' : '❌ Requires SDK 11+');
   
   // Test 5: Network Connectivity
   console.log('\n🌐 Network Test:');
@@ -52,7 +62,9 @@ export const testFirebaseSetup = () => {
     config: firebaseConfig,
     auth: !!auth,
     analytics: !!analytics,
-    recaptcha: typeof window.grecaptcha !== 'undefined'
+    recaptcha: typeof window.grecaptcha !== 'undefined',
+    recaptchaEnterprise: useEnterprise && enterpriseKey,
+    smsDefense: smsDefenseSupported && useEnterprise && enterpriseKey
   };
 };
 

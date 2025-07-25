@@ -1,44 +1,50 @@
-// Optional: Advanced reCAPTCHA Enterprise configuration
-// This file shows how to configure reCAPTCHA Enterprise programmatically
-
-import { getAuth } from 'firebase/auth';
+// Firebase reCAPTCHA Enterprise Configuration
 import { initializeAppCheck, ReCaptchaEnterpriseProvider } from 'firebase/app-check';
-import { app } from './firebase-config'; // Your existing Firebase config
+import { app } from './firebase-config';
 
-// Initialize App Check with reCAPTCHA Enterprise
-// This is optional - you can also configure it in Firebase Console
-export const setupAppCheck = () => {
+// reCAPTCHA Enterprise configuration
+let appCheck = null;
+
+export const setupRecaptchaEnterprise = () => {
   try {
-    // Use environment variable for reCAPTCHA Enterprise site key
-    const recaptchaKey = import.meta.env.VITE_RECAPTCHA_ENTERPRISE_SITE_KEY;
+    // Check if reCAPTCHA Enterprise is enabled and key is available
+    const enterpriseKey = import.meta.env.VITE_RECAPTCHA_ENTERPRISE_SITE_KEY;
+    const useEnterprise = import.meta.env.VITE_USE_RECAPTCHA_ENTERPRISE === 'true';
     
-    if (!recaptchaKey) {
-      console.warn('VITE_RECAPTCHA_ENTERPRISE_SITE_KEY not found in environment variables');
+    if (!useEnterprise || !enterpriseKey) {
+      if (import.meta.env.DEV) {
+        console.log('reCAPTCHA Enterprise not configured, using standard reCAPTCHA');
+      }
       return null;
     }
-    
-    const appCheck = initializeAppCheck(app, {
-      provider: new ReCaptchaEnterpriseProvider(recaptchaKey),
-      
-      // Optional: Enable debug mode for development
-      isTokenAutoRefreshEnabled: true,
+
+    // Initialize App Check with reCAPTCHA Enterprise
+    appCheck = initializeAppCheck(app, {
+      provider: new ReCaptchaEnterpriseProvider(enterpriseKey),
+      isTokenAutoRefreshEnabled: true // Automatically refresh tokens
     });
-    
-    console.log('App Check initialized with reCAPTCHA Enterprise');
+
+    if (import.meta.env.DEV) {
+      console.log('reCAPTCHA Enterprise initialized successfully');
+    }
+
     return appCheck;
   } catch (error) {
-    console.error('Failed to initialize App Check:', error);
+    if (import.meta.env.DEV) {
+      console.warn('reCAPTCHA Enterprise initialization failed:', error);
+      console.log('Falling back to standard reCAPTCHA');
+    }
     return null;
   }
 };
 
-// Alternative: Configure reCAPTCHA Enterprise for Firebase Auth specifically
-export const configureRecaptchaEnterprise = () => {
-  const auth = getAuth();
-  
-  // This tells Firebase Auth to use reCAPTCHA Enterprise
-  // The site key should be configured in Firebase Console
-  auth.settings.appVerificationDisabledForTesting = false;
-  
-  return auth;
-};
+// Auto-initialize reCAPTCHA Enterprise
+if (typeof window !== 'undefined') {
+  // Initialize after a short delay to ensure Firebase is ready
+  setTimeout(() => {
+    setupRecaptchaEnterprise();
+  }, 100);
+}
+
+export { appCheck };
+export default setupRecaptchaEnterprise;

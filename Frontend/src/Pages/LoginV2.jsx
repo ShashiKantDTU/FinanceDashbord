@@ -11,7 +11,7 @@ import { authAPI } from '../utils/api';
 import { auth } from '../firebase-config';
 // Import the logo image
 import LoginPageLogo from '../assets/LoginPageLogo.png';
-// Production-ready Firebase phone authentication
+// Production-ready Firebase phone authentication with reCAPTCHA Enterprise
 
 const features = [
   { icon: <FaRocket color="#10B981" size={24} />, title: 'Auto-calculated payments', desc: 'Accurate labour payment, based on daily attendance and all advances given.' },
@@ -182,17 +182,24 @@ const LoginV2 = () => {
         return;
       }
 
-      // Create RecaptchaVerifier with proper Firebase v9+ syntax
+      // Create RecaptchaVerifier with Enterprise support
       try {
         // Initialize RecaptchaVerifier with auth instance as first parameter (Firebase v9+ requirement)
         // Try using the submit button first, fallback to container if needed
         const containerId = !otpSent ? 'send-otp-button' : 'recaptcha-container';
 
-        window.recaptchaVerifier = new RecaptchaVerifier(auth, containerId, {
+        // Check if reCAPTCHA Enterprise is enabled
+        const useEnterprise = import.meta.env.VITE_USE_RECAPTCHA_ENTERPRISE === 'true';
+        const enterpriseKey = import.meta.env.VITE_RECAPTCHA_ENTERPRISE_SITE_KEY;
+
+        // Configure reCAPTCHA based on Enterprise availability
+        const recaptchaConfig = {
           size: 'invisible',
           callback: () => {
             // reCAPTCHA solved, allow signInWithPhoneNumber
-            // Production: Remove console logs for security
+            if (import.meta.env.DEV) {
+              console.log(`reCAPTCHA ${useEnterprise && enterpriseKey ? 'Enterprise' : 'Standard'} solved`);
+            }
           },
           'expired-callback': () => {
             // Response expired. Ask user to solve reCAPTCHA again
@@ -203,7 +210,19 @@ const LoginV2 = () => {
             setError('Verification failed. Please try again.');
             setLoading(false);
           }
-        });
+        };
+
+        // Add Enterprise-specific configuration if available
+        if (useEnterprise && enterpriseKey) {
+          // reCAPTCHA Enterprise is handled by App Check, but we still need the verifier
+          recaptchaConfig.callback = () => {
+            if (import.meta.env.DEV) {
+              console.log('reCAPTCHA Enterprise verification completed');
+            }
+          };
+        }
+
+        window.recaptchaVerifier = new RecaptchaVerifier(auth, containerId, recaptchaConfig);
       } catch (recaptchaError) {
         // Production: Only log detailed errors in development
         if (import.meta.env.DEV) {
