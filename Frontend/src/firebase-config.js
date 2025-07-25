@@ -67,16 +67,20 @@ try {
   // Analytics failure shouldn't break the app
 }
 
-// Initialize reCAPTCHA Enterprise (App Check) after Firebase is ready
+// Initialize App Check with reCAPTCHA Enterprise
+// Following official Firebase documentation: initialize before using Firebase services
 if (typeof window !== 'undefined') {
-  // Import and initialize reCAPTCHA Enterprise
-  import('./firebase-recaptcha-enterprise.js').then(({ setupRecaptchaEnterprise }) => {
-    setupRecaptchaEnterprise();
-  }).catch(error => {
-    if (import.meta.env.DEV) {
-      console.warn('Failed to load reCAPTCHA Enterprise:', error);
-    }
-  });
+  // Import and initialize App Check - this should happen before Firebase service usage
+  import('./firebase-recaptcha-enterprise.js')
+    .then(({ setupRecaptchaEnterprise }) => {
+      setupRecaptchaEnterprise();
+    })
+    .catch(error => {
+      if (import.meta.env.DEV) {
+        console.warn('App Check initialization failed:', error);
+        console.warn('Continuing without App Check - Firebase services will still work');
+      }
+    });
 }
 
 // Export the app, auth, and analytics instances
