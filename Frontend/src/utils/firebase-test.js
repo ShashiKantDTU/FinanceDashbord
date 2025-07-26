@@ -29,10 +29,7 @@ export const testFirebaseSetup = () => {
   console.log('\n🛡️ reCAPTCHA Status:');
   console.log('✅ reCAPTCHA Script:', typeof window.grecaptcha !== 'undefined' ? 'Loaded' : '⚠️ Not loaded');
   
-  const useEnterprise = import.meta.env.VITE_USE_RECAPTCHA_ENTERPRISE === 'true';
-  const enterpriseKey = import.meta.env.VITE_RECAPTCHA_ENTERPRISE_SITE_KEY;
-  console.log('✅ reCAPTCHA Enterprise:', useEnterprise && enterpriseKey ? 'Enabled' : 'Disabled');
-  console.log('✅ Enterprise Key:', enterpriseKey ? 'Present' : '⚠️ Missing');
+  console.log('✅ reCAPTCHA Type:', 'Standard v2 (Firebase managed)');
   
   // Check Firebase SDK version for SMS Defense compatibility
   const firebaseVersion = '11.10.0'; // Your current version
@@ -63,8 +60,7 @@ export const testFirebaseSetup = () => {
     auth: !!auth,
     analytics: !!analytics,
     recaptcha: typeof window.grecaptcha !== 'undefined',
-    recaptchaEnterprise: useEnterprise && enterpriseKey,
-    smsDefense: smsDefenseSupported && useEnterprise && enterpriseKey
+    recaptchaStandard: typeof window.grecaptcha !== 'undefined'
   };
 };
 
