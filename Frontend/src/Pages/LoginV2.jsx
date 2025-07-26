@@ -198,7 +198,7 @@ const LoginV2 = () => {
           callback: () => {
             // reCAPTCHA solved, allow signInWithPhoneNumber
             if (import.meta.env.DEV) {
-              console.log(`reCAPTCHA ${useEnterprise && enterpriseKey ? 'Enterprise' : 'Standard'} solved`);
+              console.log(`reCAPTCHA ${useEnterprise && enterpriseKey && !enterpriseKey.includes('XXXXXXX') ? 'Enterprise' : 'Standard'} solved`);
             }
           },
           'expired-callback': () => {
@@ -212,14 +212,19 @@ const LoginV2 = () => {
           }
         };
 
-        // Add Enterprise-specific configuration if available
-        if (useEnterprise && enterpriseKey) {
+        // Only use Enterprise configuration if properly enabled and configured
+        if (useEnterprise && enterpriseKey && !enterpriseKey.includes('XXXXXXX')) {
           // reCAPTCHA Enterprise is handled by App Check, but we still need the verifier
           recaptchaConfig.callback = () => {
             if (import.meta.env.DEV) {
               console.log('reCAPTCHA Enterprise verification completed');
             }
           };
+        } else {
+          // Use standard reCAPTCHA - no site key needed, Firebase will handle it
+          if (import.meta.env.DEV) {
+            console.log('Using standard reCAPTCHA for phone authentication');
+          }
         }
 
         window.recaptchaVerifier = new RecaptchaVerifier(auth, containerId, recaptchaConfig);

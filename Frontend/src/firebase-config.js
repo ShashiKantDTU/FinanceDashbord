@@ -70,17 +70,27 @@ try {
 // Initialize App Check with reCAPTCHA Enterprise
 // Following official Firebase documentation: initialize before using Firebase services
 if (typeof window !== 'undefined') {
-  // Import and initialize App Check - this should happen before Firebase service usage
-  import('./firebase-recaptcha-enterprise.js')
-    .then(({ setupRecaptchaEnterprise }) => {
-      setupRecaptchaEnterprise();
-    })
-    .catch(error => {
-      if (import.meta.env.DEV) {
-        console.warn('App Check initialization failed:', error);
-        console.warn('Continuing without App Check - Firebase services will still work');
-      }
-    });
+  // Only import and initialize if reCAPTCHA Enterprise is enabled
+  const useEnterprise = import.meta.env.VITE_USE_RECAPTCHA_ENTERPRISE === 'true';
+  const enterpriseKey = import.meta.env.VITE_RECAPTCHA_ENTERPRISE_SITE_KEY;
+  
+  if (useEnterprise && enterpriseKey && !enterpriseKey.includes('XXXXXXX')) {
+    // Import and initialize App Check - this should happen before Firebase service usage
+    import('./firebase-recaptcha-enterprise.js')
+      .then(({ setupRecaptchaEnterprise }) => {
+        setupRecaptchaEnterprise();
+      })
+      .catch(error => {
+        if (import.meta.env.DEV) {
+          console.warn('App Check initialization failed:', error);
+          console.warn('Continuing without App Check - Firebase services will still work');
+        }
+      });
+  } else {
+    if (import.meta.env.DEV) {
+      console.log('App Check disabled - Firebase Auth will work without App Check');
+    }
+  }
 }
 
 // Export the app, auth, and analytics instances
