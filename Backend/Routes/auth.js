@@ -342,6 +342,25 @@ router.get("/verify", authenticateToken, (req, res) => {
   });
 });
 
+router.get("/plan" , authenticateToken ,async (req, res) =>{
+
+  const user = await User.findById(req.user.id)
+
+  if(!user){
+    return res.status(404).json({
+      message: "User not found"
+    })
+  }
+  // prepare a response with plan details
+  
+  return res.status(200).json({
+    plan: user.plan,
+    planExpiry: user.planExpiresAt
+  })
+  
+  
+})
+
 //  supervisor credentials route
 router.post(
   "/supervisor-credentials/create",

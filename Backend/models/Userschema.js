@@ -50,6 +50,39 @@ const userSchema = new mongoose.Schema(
         ref: "Supervisor",
       },
     ],
+
+    // 👇 Plan info
+    plan: {
+      type: String,
+      enum: ['free', 'premium', 'pro'],
+      default: 'free',
+    },
+    planActivatedAt: {
+      type: Date,
+    },
+    planExpiresAt: {
+      type: Date,
+    },
+    isTrial: {
+      type: Boolean,
+      default: false,
+    },
+
+    // For safety
+    isPaymentVerified: {
+      type: Boolean,
+      default: false
+    },
+    planSource: String,
+    purchaseToken: String,
+    planHistory: [{
+      plan: String,
+      purchasedAt: Date,
+      expiresAt: Date,
+      transactionId: String,
+      platform: String,
+      source: String
+    }]
   },
   {
     timestamps: true,
