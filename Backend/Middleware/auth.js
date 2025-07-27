@@ -82,12 +82,14 @@ const generateSupervisorCredentials = async(name) => {
             throw new Error('Name is required and must be a string');
         }
         
-        // Get the next serial number for unique username generation
-        const serial = await fetchLatestSupervisorSerial();
+        // Generate a clean name for username generation
+        const cleanName = name.toLowerCase().replace(/\s+/g, '').replace(/[^a-z0-9]/g, '');
+        
+        // Get the next serial number for unique username generation based on clean name
+        const serial = await fetchLatestSupervisorSerial(cleanName);
         
         // Generate a unique username based on the user's name and serial
-        const cleanName = name.toLowerCase().replace(/\s+/g, '').replace(/[^a-z0-9]/g, '');
-        const username = `${cleanName}${serial}`;
+        const username = `${cleanName}${serial}@sitehaazri.in`;
         
         // Generate a 6-digit numeric password
         const password = generateSixDigitPassword();

@@ -39,12 +39,36 @@ const supervisorSchema = new mongoose.Schema({
     timestamps: true
 });
 
-// Function to get latest serial for unique credentials generation
-const fetchLatestSupervisorSerial = async () => {
+// Function to get latest serial for unique credentials generation based on supervisor name
+const fetchLatestSupervisorSerial = async (supervisorCleanName) => {
     try {
-        // Count total number of supervisors to generate next serial number
-        const supervisorCount = await mongoose.model('Supervisor').countDocuments();
-        return supervisorCount + 1; // Return next serial number
+        // Validate input
+        if (!supervisorCleanName || typeof supervisorCleanName !== 'string') {
+            throw new Error('Supervisor clean name is required and must be a string');
+        }
+
+        // Find all supervisors with userIds that start with the clean name
+        const pattern = new RegExp(`^${supervisorCleanName}\\d*@`, 'i');
+        const existingSupervisors = await mongoose.model('Supervisor').find({
+            userId: { $regex: pattern }
+        }).select('userId');
+
+        if (existingSupervisors.length === 0) {
+            return 1; // First supervisor with this name
+        }
+
+        // Extract serial numbers from existing userIds
+        const serialNumbers = existingSupervisors.map(supervisor => {
+            const match = supervisor.userId.match(new RegExp(`^${supervisorCleanName}(\\d*)@`, 'i'));
+            if (match && match[1]) {
+                return parseInt(match[1], 10);
+            }
+            return 1; // If no number found, it's the first one
+        }).filter(num => !isNaN(num));
+
+        // Find the highest serial number and return next one
+        const maxSerial = Math.max(...serialNumbers);
+        return maxSerial + 1;
     } catch (error) {
         console.error('Error fetching supervisor serial:', error);
         return 1; // Return 1 if error occurs (first supervisor)
