@@ -57,7 +57,7 @@ router.post("/register", async (req, res) => {
 
 router.post ("/otplogin", async (req, res) => {
   // check if ID token is provided in req Body
-  console.log("OTP login route hit");
+  // console.log("OTP login route hit");
   const {token: firebaseIdToken} = req.body;
   if (!firebaseIdToken) {
     return res.status(400).json({ message: "ID token is required" });
@@ -79,7 +79,7 @@ router.post ("/otplogin", async (req, res) => {
         phoneNumber: phoneNumber,
       });
       await user.save();
-      console.log(`New mobile user created: ${firebaseUid}`);
+      // console.log(`New mobile user created: ${firebaseUid}`);
     }
     
     // Generate JWT token for your app
@@ -88,7 +88,7 @@ router.post ("/otplogin", async (req, res) => {
       name: user.name,
       role: "Admin",
     });
-    console.log(`JWT token generated for user in mobile otp route: ${user._id}`);
+    // console.log(`JWT token generated for user in mobile otp route: ${user._id}`);
     return res.status(200).json({
       message: "OTP login successful",
       token: jwtToken,
@@ -157,7 +157,7 @@ router.post("/login", async (req, res) => {
           }
           
 
-          console.log("Supervisor login successful:", existingSupervisor.site[0].toString());
+          // console.log("Supervisor login successful:", existingSupervisor.site[0].toString());
 
           
           res.status(200).json({
@@ -292,7 +292,7 @@ router.post("/reset-password", async (req, res) => {
 
 // Protected route - Get user profile
 router.get("/profile/:siteId?", authenticateToken, async (req, res) => {
-  console.log("params:", req.params);
+  // console.log("params:", req.params);
   try {
     // Check if siteId is provided in the params
     if (!req.params.siteId) {
@@ -312,7 +312,7 @@ router.get("/profile/:siteId?", authenticateToken, async (req, res) => {
     } else {
       // If siteId is provided, populate user with only that site's supervisors
       const siteId = req.params.siteId;
-      console.log("Fetching profile for site:", siteId);
+      // console.log("Fetching profile for site:", siteId);
       const user = await User.findById(req.user.id)
         .select("-password")
         .populate({

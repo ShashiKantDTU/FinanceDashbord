@@ -40,7 +40,7 @@ const handleRecalculationMarking = async (siteID, empid, month, year, deletedBy)
     
     // Check if there are any future months to mark
     if (nextYear > currentYear || (nextYear === currentYear && nextMonth > currentMonth)) {
-      console.log(`📅 No future months to mark for recalculation - deleted month ${month}/${year} is current or future`);
+      // console.log(`📅 No future months to mark for recalculation - deleted month ${month}/${year} is current or future`);
       return {
         success: true,
         recalculationMarked: {
@@ -52,7 +52,7 @@ const handleRecalculationMarking = async (siteID, empid, month, year, deletedBy)
       };
     }
     
-    console.log(`🔄 Marking future months for recalculation for employee ${empid} starting from ${nextMonth}/${nextYear}`);
+    // console.log(`🔄 Marking future months for recalculation for employee ${empid} starting from ${nextMonth}/${nextYear}`);
     
     const recalculationResult = await markEmployeesForRecalculation(
       siteID,
@@ -61,7 +61,7 @@ const handleRecalculationMarking = async (siteID, empid, month, year, deletedBy)
       nextYear
     );
     
-    console.log(`📊 Marked ${recalculationResult.modifiedCount} future records for recalculation`);
+    // console.log(`📊 Marked ${recalculationResult.modifiedCount} future records for recalculation`);
     
     return {
       success: true,
@@ -91,7 +91,7 @@ const handleRecalculationMarking = async (siteID, empid, month, year, deletedBy)
 // Create new employee endpoint (requires name, siteID, and wage)
 router.post("/addemployee", authenticateToken, async (req, res) => {
   try {
-    console.log("📝 Creating new employee:", req.body);
+    // console.log("📝 Creating new employee:", req.body);
 
     const { name, siteID, wage: rate, month, year } = req.body;
     // If month and year are not provided, use current month/year
@@ -118,7 +118,7 @@ router.post("/addemployee", authenticateToken, async (req, res) => {
     }
 
     if (!month || !year) {
-      console.log("No month/year provided, using current month/year");
+      // console.log("No month/year provided, using current month/year");
     }
 
     // // Set default values for other required fields
@@ -133,10 +133,10 @@ router.post("/addemployee", authenticateToken, async (req, res) => {
     const latestSerial = await latestEmpSerialNumber();
     const newSerial = latestSerial + 1;
     const newEmpId = `EMP${newSerial.toString().padStart(3, "0")}`;
-    console.log(
-      `🆔 Assigning new employee ID: ${newEmpId} (latest serial: ${latestSerial})`
-    );
-    console.log(`👤 Created by: ${createdBy}`);
+    // console.log(
+    //   `🆔 Assigning new employee ID: ${newEmpId} (latest serial: ${latestSerial})`
+    // );
+    // console.log(`👤 Created by: ${createdBy}`);
 
     // Check if employee already exists for this month/year
     const existingEmployee = await employeeSchema.findOne({
@@ -179,7 +179,7 @@ router.post("/addemployee", authenticateToken, async (req, res) => {
     const newEmployee = new employeeSchema(newEmployeeData);
     const savedEmployee = await newEmployee.save();
 
-    console.log(`✅ Employee ${newEmpId} created successfully`);
+    // console.log(`✅ Employee ${newEmpId} created successfully`);
     // Track the addition of the new employee using Optimized Change Tracker
     try {
       const changeTrackingResult = await trackOptimizedChanges(
@@ -193,9 +193,9 @@ router.post("/addemployee", authenticateToken, async (req, res) => {
         savedEmployee.toObject() // newEmployeeData
       );
 
-      console.log(
-        `📊 Optimized change tracking recorded: ${changeTrackingResult.length} changes logged`
-      );
+      // console.log(
+      //   `📊 Optimized change tracking recorded: ${changeTrackingResult.length} changes logged`
+      // );
 
       return res.status(201).json({
         success: true,
@@ -267,7 +267,7 @@ router.post("/addemployee", authenticateToken, async (req, res) => {
 // When deleting a specific month, all future months need recalculation due to carry-forward impact
 router.delete("/deleteemployee", authenticateToken, async (req, res) => {
   try {
-    console.log("🗑️ Delete employee request:", req.body);
+    // console.log("🗑️ Delete employee request:", req.body);
 
     const { empid, name, month, year, deletePreviousMonth = false } = req.body;
 
@@ -310,18 +310,18 @@ router.delete("/deleteemployee", authenticateToken, async (req, res) => {
     // Get user info from auth middleware
     const deletedBy = req.user.name || req.user?.email || "unknown-user";
 
-    console.log(
-      `🔍 Looking for employee ${empid} for deletion by ${deletedBy}`
-    );
+    // console.log(
+    //   `🔍 Looking for employee ${empid} for deletion by ${deletedBy}`
+    // );
 
     let deletedEmployees = [];
     let changeTrackingResults = [];
 
     if (deletePreviousMonth) {
       // Delete all records for this employee across all months and years
-      console.log(
-        `🗑️ Deleting ALL records for employee ${empid} (including previous months)`
-      );
+      // console.log(
+      //   `🗑️ Deleting ALL records for employee ${empid} (including previous months)`
+      // );
 
       // Find all employee records
       const allEmployeeRecords = await employeeSchema.find({
@@ -335,9 +335,9 @@ router.delete("/deleteemployee", authenticateToken, async (req, res) => {
         });
       }
 
-      console.log(
-        `📊 Found ${allEmployeeRecords.length} records for employee ${empid}`
-      );
+      // console.log(
+      //   `📊 Found ${allEmployeeRecords.length} records for employee ${empid}`
+      // );
 
       // Process each record for change tracking before deletion
       for (const employeeRecord of allEmployeeRecords) {
@@ -365,9 +365,9 @@ router.delete("/deleteemployee", authenticateToken, async (req, res) => {
             siteID: employeeRecord.siteID,
           });
 
-          console.log(
-            `📊 Optimized change tracking recorded for ${employeeRecord.month}/${employeeRecord.year}: ${changeTrackingResult.length} changes`
-          );
+          // console.log(
+          //   `📊 Optimized change tracking recorded for ${employeeRecord.month}/${employeeRecord.year}: ${changeTrackingResult.length} changes`
+          // );
         } catch (trackingError) {
           console.warn(
             `⚠️ Optimized change tracking failed for ${employeeRecord.month}/${employeeRecord.year}:`,
@@ -395,15 +395,15 @@ router.delete("/deleteemployee", authenticateToken, async (req, res) => {
         siteID: emp.siteID,
       }));
 
-      console.log(
-        `✅ Deleted ${deleteResult.deletedCount} records for employee ${empid}`
-      );
+      // console.log(
+      //   `✅ Deleted ${deleteResult.deletedCount} records for employee ${empid}`
+      // );
 
       // Note: No need to mark future months for recalculation when deleting all records
       // since there are no future records to recalculate
     } else {
       // Delete only the specific month/year record
-      console.log(`🗑️ Deleting specific record: ${empid} for ${month}/${year}`);
+      // console.log(`🗑️ Deleting specific record: ${empid} for ${month}/${year}`);
 
       // Find the specific employee record
       const employeeRecord = await employeeSchema.findOne({
@@ -443,9 +443,9 @@ router.delete("/deleteemployee", authenticateToken, async (req, res) => {
           siteID: employeeRecord.siteID,
         });
 
-        console.log(
-          `📊 Optimized change tracking recorded: ${changeTrackingResult.length} changes`
-        );
+        // console.log(
+        //   `📊 Optimized change tracking recorded: ${changeTrackingResult.length} changes`
+        // );
       } catch (trackingError) {
         console.warn(
           "⚠️ Optimized change tracking failed:",
@@ -472,7 +472,7 @@ router.delete("/deleteemployee", authenticateToken, async (req, res) => {
         },
       ];
 
-      console.log(`✅ Deleted employee ${empid} for ${month}/${year}`);
+      // console.log(`✅ Deleted employee ${empid} for ${month}/${year}`);
 
       // Mark all future months for recalculation since deleting this month affects carry-forward calculations
       const recalculationResult = await handleRecalculationMarking(
@@ -576,7 +576,7 @@ router.delete("/deleteemployee", authenticateToken, async (req, res) => {
 // Import employee from previous month
 router.post("/importemployees", authenticateToken, async (req, res) => {
   try {
-    console.log("📥 Import employees from previous month request:", req.body);
+    // console.log("📥 Import employees from previous month request:", req.body);
 
     const {
       sourceMonth,
@@ -640,9 +640,9 @@ router.post("/importemployees", authenticateToken, async (req, res) => {
     // Get user info from auth middleware
     const importedBy = req.user.name || req.user?.email || "unknown-user";
 
-    console.log(
-      `🔍 Importing employees from ${sourceMonth}/${sourceYear} to ${targetMonth}/${targetYear} for site ${siteID}`
-    );
+    // console.log(
+    //   `🔍 Importing employees from ${sourceMonth}/${sourceYear} to ${targetMonth}/${targetYear} for site ${siteID}`
+    // );
 
     // Build query for source employees
     let sourceQuery = {
@@ -654,7 +654,7 @@ router.post("/importemployees", authenticateToken, async (req, res) => {
     // If specific employee IDs are provided, filter by them
     if (employeeIds.length > 0) {
       sourceQuery.empid = { $in: employeeIds };
-      console.log(`🎯 Importing specific employees: ${employeeIds.join(", ")}`);
+      // console.log(`🎯 Importing specific employees: ${employeeIds.join(", ")}`);
     }
 
     // Find employees from source month/year
@@ -669,7 +669,7 @@ router.post("/importemployees", authenticateToken, async (req, res) => {
       });
     }
 
-    console.log(`📊 Found ${sourceEmployees.length} employees to import`);
+    // console.log(`📊 Found ${sourceEmployees.length} employees to import`);
 
     // Check if any employees already exist in target month/year
     const existingTargetEmployees = await employeeSchema.find({
@@ -681,10 +681,10 @@ router.post("/importemployees", authenticateToken, async (req, res) => {
 
     if (existingTargetEmployees.length > 0) {
       const existingIds = existingTargetEmployees.map((emp) => emp.empid);
-      console.log(
-        `⚠️ Found ${existingTargetEmployees.length} employees already exist in target month:`,
-        existingIds
-      );
+      // console.log(
+      //   `⚠️ Found ${existingTargetEmployees.length} employees already exist in target month:`,
+      //   existingIds
+      // );
 
       return res.status(409).json({
         success: false,
@@ -702,9 +702,9 @@ router.post("/importemployees", authenticateToken, async (req, res) => {
 
     for (const sourceEmployee of sourceEmployees) {
       try {
-        console.log(
-          `🔄 Processing employee ${sourceEmployee.empid} (${sourceEmployee.name})`
-        );
+        // console.log(
+        //   `🔄 Processing employee ${sourceEmployee.empid} (${sourceEmployee.name})`
+        // );
 
         // Calculate carry forward amount from source employee's closing balance
         const carryForwardAmount = preserveCarryForward
@@ -743,9 +743,9 @@ router.post("/importemployees", authenticateToken, async (req, res) => {
         const newEmployee = new employeeSchema(newEmployeeData);
         const savedEmployee = await newEmployee.save();
 
-        console.log(
-          `✅ Employee ${sourceEmployee.empid} imported successfully`
-        );
+        // console.log(
+        //   `✅ Employee ${sourceEmployee.empid} imported successfully`
+        // );
 
         // Track the import using Optimized Change Tracker
         try {
@@ -767,9 +767,9 @@ router.post("/importemployees", authenticateToken, async (req, res) => {
             success: true,
           });
 
-          console.log(
-            `📊 Optimized change tracking recorded for ${sourceEmployee.empid}: ${changeTrackingResult.length} changes`
-          );
+          // console.log(
+          //   `📊 Optimized change tracking recorded for ${sourceEmployee.empid}: ${changeTrackingResult.length} changes`
+          // );
         } catch (trackingError) {
           console.warn(
             `⚠️ Optimized change tracking failed for ${sourceEmployee.empid}:`,
@@ -818,9 +818,9 @@ router.post("/importemployees", authenticateToken, async (req, res) => {
       0
     );
 
-    console.log(
-      `✅ Import completed: ${successfulImports.length} successful, ${failedImports.length} failed`
-    );
+    // console.log(
+    //   `✅ Import completed: ${successfulImports.length} successful, ${failedImports.length} failed`
+    // );
 
     const response = {
       success: true,
@@ -896,7 +896,7 @@ router.get("/employeewithpendingpayouts",
   authenticateToken,
   async (req, res) => {
     // Required query parameters: month, year, and siteID
-    console.log("Query Parameters:", req.query);
+    // console.log("Query Parameters:", req.query);
     const { month, year, siteID } = req.query;
 
     // Validate required parameters
@@ -909,9 +909,9 @@ router.get("/employeewithpendingpayouts",
     }
 
     try {
-      console.log(
-        `🔍 Fetching employees for site ${siteID} - ${month}/${year}`
-      );
+      // console.log(
+      //   `🔍 Fetching employees for site ${siteID} - ${month}/${year}`
+      // );
 
       // First get all employees for the specified month/year/site
       const employees = await employeeSchema
@@ -930,7 +930,7 @@ router.get("/employeewithpendingpayouts",
         });
       }
 
-      console.log(`📊 Processing ${employees.length} employees`);
+      // console.log(`📊 Processing ${employees.length} employees`);
 
       // Process each employee using the Jobs utility
       const employeeDetails = await Promise.all(
@@ -946,10 +946,10 @@ router.get("/employeewithpendingpayouts",
 
             // Calculate additional data using Jobs utility
             const calculationResult = calculateEmployeeData(latestEmployeeData);
-            console.log(
-              `🔢 Calculated data for employee ${employee.empid}:`,
-              calculationResult
-            );
+            // console.log(
+            //   `🔢 Calculated data for employee ${employee.empid}:`,
+            //   calculationResult
+            // );
 
             // Get additional fields for frontend compatibility
             const totalAdditionalReqPays =
@@ -997,9 +997,9 @@ router.get("/employeewithpendingpayouts",
         (emp) => emp !== null
       );
 
-      console.log(
-        `✅ Successfully processed ${validEmployeeDetails.length} employees with pending payouts`
-      );
+      // console.log(
+      //   `✅ Successfully processed ${validEmployeeDetails.length} employees with pending payouts`
+      // );
 
       // Send the response with calculated employee details
       return res.status(200).json({
@@ -1035,9 +1035,9 @@ router.get("/allemployees", authenticateToken, async (req, res) => {
   }
 
   try {
-    console.log(
-      `🔍 Fetching ALL employees for site ${siteID} - ${month}/${year}`
-    );
+    // console.log(
+    //   `🔍 Fetching ALL employees for site ${siteID} - ${month}/${year}`
+    // );
 
     // Get all employees for the specified month/year/site
     const employees = await employeeSchema
@@ -1056,9 +1056,9 @@ router.get("/allemployees", authenticateToken, async (req, res) => {
       });
     }
 
-    console.log(
-      `📊 Processing ${employees.length} employees (including zero balance)`
-    );
+    // console.log(
+    //   `📊 Processing ${employees.length} employees (including zero balance)`
+    // );
 
     // Process each employee using the Jobs utility
     const employeeDetails = await Promise.all(
@@ -1128,9 +1128,9 @@ router.get("/allemployees", authenticateToken, async (req, res) => {
     );
     const withErrors = employeeDetails.filter((emp) => emp.error);
 
-    console.log(
-      `✅ Processed: ${withPendingPayouts.length} with payouts, ${withZeroBalance.length} with zero balance, ${withErrors.length} with errors`
-    );
+    // console.log(
+    //   `✅ Processed: ${withPendingPayouts.length} with payouts, ${withZeroBalance.length} with zero balance, ${withErrors.length} with errors`
+    // );
 
     return res.status(200).json({
       success: true,
@@ -1204,10 +1204,10 @@ router.get("/employeewithpendingattendance",
     const currentMonth = (nowIST.getMonth() + 1).toString().trim();
     const currentYear = nowIST.getFullYear().toString().trim();
 
-    console.log(
-      `🔍 Fetching employees with pending attendance for ${date}/${month}/${year} at site ${siteID}`
-    );
-    console.log(`Current IST date is ${currentDay}/${currentMonth}/${currentYear}`);
+    // console.log(
+    //   `🔍 Fetching employees with pending attendance for ${date}/${month}/${year} at site ${siteID}`
+    // );
+    // console.log(`Current IST date is ${currentDay}/${currentMonth}/${currentYear}`);
 
     // Requested date should be within the last three days (including today) in IST
     // Generate valid dates for today, yesterday, and the day before yesterday (in IST)
@@ -1257,9 +1257,9 @@ router.get("/employeewithpendingattendance",
         });
       }
       // list of all employees with pending attendance for the given date, month, year and siteID
-      console.log(
-        `🔍 Fetching employees with pending attendance for ${date}/${month}/${year} at site ${siteID}`
-      );
+      // console.log(
+      //   `🔍 Fetching employees with pending attendance for ${date}/${month}/${year} at site ${siteID}`
+      // );
       const { pendingEmployees, markedEmployees } = await pendingAttendance(
         date,
         month,
@@ -1297,9 +1297,9 @@ router.get("/employeewithpendingattendance",
         });
       }
       // list of all employees with pending attendance for the given date, month, year and siteID
-      console.log(
-        `🔍 Fetching employees with pending attendance for ${date}/${month}/${year} at site ${siteID}`
-      );
+      // console.log(
+      //   `🔍 Fetching employees with pending attendance for ${date}/${month}/${year} at site ${siteID}`
+      // );
       const { pendingEmployees, markedEmployees } = await pendingAttendance(
         date,
         month,
@@ -1338,9 +1338,9 @@ router.get("/availableforimport", authenticateToken, async (req, res) => {
       });
     }
 
-    console.log(
-      `🔍 Finding available employees for import from ${sourceMonth}/${sourceYear} for site ${siteID}`
-    );
+    // console.log(
+    //   `🔍 Finding available employees for import from ${sourceMonth}/${sourceYear} for site ${siteID}`
+    // );
 
     // Get all employees from source month/year
     const rawSourceEmployees = await employeeSchema
@@ -1405,9 +1405,9 @@ router.get("/availableforimport", authenticateToken, async (req, res) => {
         .select("empid");
 
       unavailableEmployeeIds = existingTargetEmployees.map((emp) => emp.empid);
-      console.log(
-        `⚠️ Found ${unavailableEmployeeIds.length} employees already exist in target month`
-      );
+      // console.log(
+      //   `⚠️ Found ${unavailableEmployeeIds.length} employees already exist in target month`
+      // );
     }
 
     // Prepare employee list with availability status
@@ -1428,9 +1428,9 @@ router.get("/availableforimport", authenticateToken, async (req, res) => {
     ).length;
     const unavailableCount = availableEmployees.length - availableCount;
 
-    console.log(
-      `✅ Found ${availableEmployees.length} employees: ${availableCount} available, ${unavailableCount} already exist in target`
-    );
+    // console.log(
+    //   `✅ Found ${availableEmployees.length} employees: ${availableCount} available, ${unavailableCount} already exist in target`
+    // );
 
     return res.status(200).json({
       success: true,
@@ -1508,9 +1508,9 @@ router.get("/employee/:siteID/:empid/:month/:year",
   authenticateToken,
   async (req, res) => {
     const { empid, month, year, siteID } = req.params;
-    console.log(
-      `🔍 Fetching employee details for ${empid} - ${month}/${year} at site ${siteID}`
-    );
+    // console.log(
+    //   `🔍 Fetching employee details for ${empid} - ${month}/${year} at site ${siteID}`
+    // );
     validateBasicParams(siteID, empid, month, year);
 
     try {

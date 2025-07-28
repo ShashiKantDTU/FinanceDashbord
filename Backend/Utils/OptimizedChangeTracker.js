@@ -590,10 +590,10 @@ const trackOptimizedChanges = async (siteID, employeeID, month, year, changedBy,
         // Pre-analyze what types of changes are happening for optimization
         const changeAnalysis = analyzeChangeTypes(oldData, newData, criticalFields);
         
-        console.log(`🔍 Change Analysis for ${employeeID}:`);
-        console.log(`   Fields being updated: ${changeAnalysis.fieldsBeingUpdated.join(', ')}`);
-        console.log(`   Update type: ${changeAnalysis.updateType}`);
-        console.log(`   Complexity: ${changeAnalysis.complexity}`);
+        // console.log(`🔍 Change Analysis for ${employeeID}:`);
+        // console.log(`   Fields being updated: ${changeAnalysis.fieldsBeingUpdated.join(', ')}`);
+        // console.log(`   Update type: ${changeAnalysis.updateType}`);
+        // console.log(`   Complexity: ${changeAnalysis.complexity}`);
         
         // Track changes for each field that has been modified
         for (const fieldName of changeAnalysis.fieldsBeingUpdated) {
@@ -617,10 +617,10 @@ const trackOptimizedChanges = async (siteID, employeeID, month, year, changedBy,
             
             // If changes detected, create detailed log entries
             if (comparison && comparison.hasChanges) {
-                console.log(`   ✓ Detected ${comparison.changes.summary.totalChanges} changes in ${fieldConfig.displayName}`);
-                console.log(`     - Added: ${comparison.changes.summary.added || 0}`);
-                console.log(`     - Modified: ${comparison.changes.summary.modified || 0}`);
-                console.log(`     - Removed: ${comparison.changes.summary.removed || 0}`);
+                // console.log(`   ✓ Detected ${comparison.changes.summary.totalChanges} changes in ${fieldConfig.displayName}`);
+                // console.log(`     - Added: ${comparison.changes.summary.added || 0}`);
+                // console.log(`     - Modified: ${comparison.changes.summary.modified || 0}`);
+                // console.log(`     - Removed: ${comparison.changes.summary.removed || 0}`);
                 
                 // Create one entry per detailed change for maximum granularity
                 comparison.changes.detailedChanges.forEach(detailedChange => {
@@ -681,7 +681,7 @@ const trackOptimizedChanges = async (siteID, employeeID, month, year, changedBy,
                     changeLogEntries.push(logEntry);
                 });
             } else {
-                console.log(`   - No changes detected in ${fieldConfig.displayName}`);
+                // console.log(`   - No changes detected in ${fieldConfig.displayName}`);
             }
         }
         
@@ -690,15 +690,15 @@ const trackOptimizedChanges = async (siteID, employeeID, month, year, changedBy,
             await ChangeTracking.insertMany(changeLogEntries);
             
             // Enhanced logging with change analysis
-            console.log('\n' + '='.repeat(70));
-            console.log('📊 DETAILED CHANGE TRACKING - GRANULAR AUDIT LOGS');
-            console.log('='.repeat(70));
-            console.log(`👤 Employee: ${employeeID} | 🏢 Site: ${siteID} | 📅 Period: ${month}/${year}`);
-            console.log(`✏️  Changed by: ${changedBy} | 🕒 Time: ${timestamp.toLocaleString()}`);
-            console.log(`💬 Remark: ${remark}`);
-            console.log(`📝 Individual Changes Logged: ${changeLogEntries.length}`);
-            console.log(`🔍 Update Type: ${changeAnalysis.updateType} | Complexity: ${changeAnalysis.complexity}`);
-            console.log('');
+            // console.log('\n' + '='.repeat(70));
+            // console.log('📊 DETAILED CHANGE TRACKING - GRANULAR AUDIT LOGS');
+            // console.log('='.repeat(70));
+            // console.log(`👤 Employee: ${employeeID} | 🏢 Site: ${siteID} | 📅 Period: ${month}/${year}`);
+            // console.log(`✏️  Changed by: ${changedBy} | 🕒 Time: ${timestamp.toLocaleString()}`);
+            // console.log(`💬 Remark: ${remark}`);
+            // console.log(`📝 Individual Changes Logged: ${changeLogEntries.length}`);
+            // console.log(`🔍 Update Type: ${changeAnalysis.updateType} | Complexity: ${changeAnalysis.complexity}`);
+            // console.log('');
             
             // Group by field for summary
             const changesByField = {};
@@ -711,16 +711,16 @@ const trackOptimizedChanges = async (siteID, employeeID, month, year, changedBy,
             
             Object.keys(changesByField).forEach(field => {
                 const fieldChanges = changesByField[field];
-                console.log(`📍 ${fieldChanges[0].fieldDisplayName} Changes (${fieldChanges.length}):`);
-                fieldChanges.forEach((change, index) => {
-                    console.log(`   ${index + 1}. ${change.metadata.displayMessage}`);
-                });
-                console.log('');
+                // console.log(`📍 ${fieldChanges[0].fieldDisplayName} Changes (${fieldChanges.length}):`);
+                // fieldChanges.forEach((change, index) => {
+                //     console.log(`   ${index + 1}. ${change.metadata.displayMessage}`);
+                // });
+                // console.log('');
             });
             
-            console.log('='.repeat(70) + '\n');
+            // console.log('='.repeat(70) + '\n');
         } else {
-            console.log(`ℹ️  No changes detected for ${employeeID} - data appears unchanged`);
+            // console.log(`ℹ️  No changes detected for ${employeeID} - data appears unchanged`);
         }
         
         return changeLogEntries;
@@ -974,7 +974,7 @@ const updateEmployeeDataOptimized = async (siteID, employeeID, month, year, upda
             throw new Error('Missing required parameters');
         }
         
-        console.log(`🔄 Starting optimized employee data update for ${employeeID} - ${month}/${year}`);
+        // console.log(`🔄 Starting optimized employee data update for ${employeeID} - ${month}/${year}`);
         
         // Import Employee model to avoid dependency issues
         const Employee = require('../models/EmployeeSchema');

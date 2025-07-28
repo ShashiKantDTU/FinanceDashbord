@@ -207,7 +207,7 @@ const CorrectCalculations = async (siteID, EmpID, recursionDepth = 0, maxRecursi
         }
 
         const { month, year } = oldestRecord;
-        console.log(`Processing recalculation for employee ${EmpID} - ${month}/${year}`);
+        // console.log(`Processing recalculation for employee ${EmpID} - ${month}/${year}`);
 
         // Get previous month's closing balance for carry forward
         const previousBalance = await getPreviousMonthBalance(siteID, EmpID, month, year);
@@ -243,7 +243,7 @@ const CorrectCalculations = async (siteID, EmpID, recursionDepth = 0, maxRecursi
  */
 const CorrectAllEmployeeData = async (siteID, startYear = null, startMonth = null, endYear = null, endMonth = null) => {
     try {
-        console.log(`Starting batch correction for site ${siteID}`);
+        // console.log(`Starting batch correction for site ${siteID}`);
         
         // Build query for employees needing recalculation
         const query = buildRecalculationQuery(siteID, startYear, startMonth, endYear, endMonth);
@@ -251,7 +251,7 @@ const CorrectAllEmployeeData = async (siteID, startYear = null, startMonth = nul
         // Get unique employee IDs that need correction
         const employeesToCorrect = await mongoose.model('Employee').distinct('empid', query);
         
-        console.log(`Found ${employeesToCorrect.length} employees requiring correction`);
+        // console.log(`Found ${employeesToCorrect.length} employees requiring correction`);
 
         // Process results tracking
         const results = {
@@ -264,7 +264,7 @@ const CorrectAllEmployeeData = async (siteID, startYear = null, startMonth = nul
         // Process each employee sequentially to avoid database conflicts
         for (const empID of employeesToCorrect) {
             try {
-                console.log(`Processing employee: ${empID}`);
+                // console.log(`Processing employee: ${empID}`);
                 await CorrectCalculations(siteID, empID);
                 results.successfulCorrections++;
             } catch (error) {
@@ -380,12 +380,12 @@ const getPreviousMonthBalance = async (siteID, EmpID, currentMonth, currentYear)
         }).sort({ year: -1, month: -1 }); // Sort by most recent first
 
         if (mostRecentData) {
-            console.log(`Found gap in employment for ${EmpID}: Using balance from ${mostRecentData.month}/${mostRecentData.year} (${mostRecentData.closing_balance || 0}) for ${currentMonth}/${currentYear}`);
+            // console.log(`Found gap in employment for ${EmpID}: Using balance from ${mostRecentData.month}/${mostRecentData.year} (${mostRecentData.closing_balance || 0}) for ${currentMonth}/${currentYear}`);
             return mostRecentData.closing_balance || 0;
         }
 
         // If no previous data found at all, return 0
-        console.log(`No previous employment data found for ${EmpID} before ${currentMonth}/${currentYear}`);
+        // console.log(`No previous employment data found for ${EmpID} before ${currentMonth}/${currentYear}`);
         return 0;
 
     } catch (error) {
@@ -418,7 +418,7 @@ const updateEmployeeCalculations = async (employeeRecord, previousBalance, origi
 
     // Save to database
     await employeeRecord.save();
-    console.log(`✅ Successfully updated employee ${EmpID} for ${month}/${year}`);
+    // console.log(`✅ Successfully updated employee ${EmpID} for ${month}/${year}`);
 
     // Track changes using Optimized Change Tracker
     try {
@@ -557,7 +557,7 @@ const markEmployeesForRecalculation = async (siteID, employeeID = null, fromMont
             }
         );
 
-        console.log(`🔄 Marked ${updateResult.modifiedCount} records for recalculation`);
+        // console.log(`🔄 Marked ${updateResult.modifiedCount} records for recalculation`);
         
         return {
             modifiedCount: updateResult.modifiedCount,
@@ -660,7 +660,7 @@ const detectEmploymentGaps = async (siteID, EmpID, startMonth, startYear, endMon
  */
 const testGapHandling = async (siteID, EmpID, testMonth, testYear) => {
     try {
-        console.log(`\n=== Testing Gap Handling for Employee ${EmpID} ===`);
+        // console.log(`\n=== Testing Gap Handling for Employee ${EmpID} ===`);
         
         // Test the enhanced getPreviousMonthBalance function
         const previousBalance = await getPreviousMonthBalance(siteID, EmpID, testMonth, testYear);

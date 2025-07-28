@@ -18,18 +18,18 @@ const EmployeeSchema = require('../models/EmployeeSchema');
 
 // Add logging middleware to track all requests
 router.use((req, res, next) => {
-    console.log(`🌐 CHANGE-TRACKING ROUTE HIT: ${req.method} ${req.originalUrl}`);
-    console.log(`📅 Timestamp: ${new Date().toISOString()}`);
-    console.log(`📋 Request Body Keys: ${Object.keys(req.body || {})}`);
-    if (req.params.employeeID) {
-        console.log(`👤 Employee ID: ${req.params.employeeID}`);
-    }
+    // console.log(`🌐 CHANGE-TRACKING ROUTE HIT: ${req.method} ${req.originalUrl}`);
+    // console.log(`📅 Timestamp: ${new Date().toISOString()}`);
+    // console.log(`📋 Request Body Keys: ${Object.keys(req.body || {})}`);
+    // if (req.params.employeeID) {
+    //     console.log(`👤 Employee ID: ${req.params.employeeID}`);
+    // }
     next();
 });
 
 // Test endpoint to verify route registration and auth
 router.get('/test-connection', (req, res) => {
-    console.log('🔥 TEST CONNECTION ENDPOINT HIT');
+    // console.log('🔥 TEST CONNECTION ENDPOINT HIT');
     res.json({
         success: true,
         message: 'Change tracking routes are registered and working!',
@@ -40,8 +40,8 @@ router.get('/test-connection', (req, res) => {
 
 // Test endpoint with auth to verify auth middleware
 router.get('/test-auth', authenticateToken, (req, res) => {
-    console.log('🔥 TEST AUTH ENDPOINT HIT');
-    console.log('👤 User from token:', req.user);
+    // console.log('🔥 TEST AUTH ENDPOINT HIT');
+    // console.log('👤 User from token:', req.user);
     res.json({
         success: true,
         message: 'Authentication is working!',
@@ -72,8 +72,8 @@ router.get('/employee/:employeeID', authenticateToken, validateRequest(['siteID'
         const { employeeID } = req.params;
         const { siteID, page, limit, sortBy, sortOrder, fromDate, toDate, year, month, changeType, correctedBy } = req.query;
         
-        console.log(`🔥 EMPLOYEE HISTORY ENDPOINT HIT (OPTIMIZED): ${employeeID}`);
-        console.log(`📊 Params: siteID=${siteID}, page=${page}, limit=${limit}`);
+        // console.log(`🔥 EMPLOYEE HISTORY ENDPOINT HIT (OPTIMIZED): ${employeeID}`);
+        // console.log(`📊 Params: siteID=${siteID}, page=${page}, limit=${limit}`);
         
         const pageNum = parseInt(page) || 1;
         const limitNum = parseInt(limit) || 20;
@@ -114,7 +114,7 @@ router.get('/employee/:employeeID', authenticateToken, validateRequest(['siteID'
             OptimizedChangeTracking.countDocuments(query)
         ]);
         
-        console.log(`✅ Found ${records.length} change records for employee ${employeeID} (optimized)`);
+        // console.log(`✅ Found ${records.length} change records for employee ${employeeID} (optimized)`);
         
         res.json({
             success: true,
@@ -150,8 +150,8 @@ router.get('/statistics', authenticateToken, async (req, res) => {
     try {
         const { siteID, fromDate, toDate } = req.query;
         
-        console.log('🔥 STATISTICS ENDPOINT HIT (OPTIMIZED)');
-        console.log(`📊 Params: siteID=${siteID}, fromDate=${fromDate}, toDate=${toDate}`);
+        // console.log('🔥 STATISTICS ENDPOINT HIT (OPTIMIZED)');
+        // console.log(`📊 Params: siteID=${siteID}, fromDate=${fromDate}, toDate=${toDate}`);
         
         // Use the optimized statistics function
         const dateRange = {};
@@ -160,7 +160,7 @@ router.get('/statistics', authenticateToken, async (req, res) => {
         
         const result = await getFieldChangeStatistics(siteID, dateRange);
         
-        console.log(`✅ Statistics generated (optimized): ${result.statistics.length} field types`);
+        // console.log(`✅ Statistics generated (optimized): ${result.statistics.length} field types`);
         
         res.json(result);
     } catch (error) {
@@ -179,8 +179,8 @@ router.get('/recent', authenticateToken, async (req, res) => {
     try {
         const { limit, siteID, field, changeType, changedBy } = req.query;
         
-        console.log('🔥 RECENT CHANGES ENDPOINT HIT (OPTIMIZED)');
-        console.log(`📊 Params: limit=${limit}, siteID=${siteID}, field=${field}, changeType=${changeType}, changedBy=${changedBy}`);
+        // console.log('🔥 RECENT CHANGES ENDPOINT HIT (OPTIMIZED)');
+        // console.log(`📊 Params: limit=${limit}, siteID=${siteID}, field=${field}, changeType=${changeType}, changedBy=${changedBy}`);
         
         // Use the optimized change tracking model directly
         const query = {};
@@ -195,7 +195,7 @@ router.get('/recent', authenticateToken, async (req, res) => {
             .select('employeeID siteID field changeType changeDescription metadata.displayMessage changedBy timestamp remark')
             .lean();
         
-        console.log(`✅ Found ${recentChanges.length} recent changes (optimized)`);
+        // console.log(`✅ Found ${recentChanges.length} recent changes (optimized)`);
         
         res.json({
             success: true,
@@ -239,7 +239,7 @@ router.put('/employee/mobapi/attendance/update', authenticateToken, async (req, 
                 message: 'Missing required fields: employeeId, attendance, date, siteID are required'
             });
         }
-        console.log(`📝 Updating attendance for employee ${employeeId} on ${date}`);
+        // console.log(`📝 Updating attendance for employee ${employeeId} on ${date}`);
         // check if date is Today's date (in IST)
         const now = new Date();
         const nowIST = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
@@ -265,7 +265,7 @@ router.put('/employee/mobapi/attendance/update', authenticateToken, async (req, 
 
         if (!isValidDate) {
             const validDatesStr = validDates.map(vd => `${vd.date}/${vd.month}/${vd.year}`).join(', ');
-            console.log(` Received date is not within the last three days!  received :  ${date.date}/${date.month}/${date.year} valid (IST): ${validDatesStr}` );
+            // console.log(` Received date is not within the last three days!  received :  ${date.date}/${date.month}/${date.year} valid (IST): ${validDatesStr}` );
             return res.status(400).json({
                 success: false,
                 message: `Attendance can only be updated for the last three days (including today) in IST. Valid dates: ${validDatesStr}`
@@ -273,7 +273,7 @@ router.put('/employee/mobapi/attendance/update', authenticateToken, async (req, 
         }
         const employee = await EmployeeSchema.findOne({ empid: employeeId , month: date.month, year: date.year , siteID: siteID });
         if (!employee) {
-            console.log(`❌ Employee with ID ${employeeId} not found for month ${date.month}/${date.year}`);
+            // console.log(`❌ Employee with ID ${employeeId} not found for month ${date.month}/${date.year}`);
             return res.status(404).json({
                 success: false,
                 message: `Employee with ID ${employeeId} not found for month ${date.month}/${date.year}`
@@ -361,7 +361,7 @@ router.put('/employee/mobapi/attendance/update', authenticateToken, async (req, 
             // Don't fail the request if change tracking fails, just log the error
             console.log('⚠️ Attendance update succeeded but change tracking failed');
         }
-        console.log(`✅ Attendance updated successfully for employee ${employeeId} on ${date}`);
+        // console.log(`✅ Attendance updated successfully for employee ${employeeId} on ${date}`);
         return res.status(200).json({
             success: true,
             message: 'Attendance updated successfully'
@@ -427,10 +427,10 @@ router.put('/employee/:employeeID/update', authenticateToken, async (req, res) =
         // Get user info from auth middleware
         const changedBy = req.user.name ||req.user?.email || correctedBy || 'unknown-user';
 
-        console.log(`📝 Employee update request for ${employeeID} - ${monthNum}/${yearNum}`);
-        console.log(`👤 Updated by: ${changedBy}`);
-        console.log(`💬 Reason: ${remark || 'No reason provided'}`);
-        console.log('🔄 Using OPTIMIZED change tracking system');
+        // console.log(`📝 Employee update request for ${employeeID} - ${monthNum}/${yearNum}`);
+        // console.log(`👤 Updated by: ${changedBy}`);
+        // console.log(`💬 Reason: ${remark || 'No reason provided'}`);
+        // console.log('🔄 Using OPTIMIZED change tracking system');
 
         // Preprocess update data to ensure consistency
         const processedUpdateData = { ...updateData };
@@ -441,7 +441,7 @@ router.put('/employee/:employeeID/update', authenticateToken, async (req, res) =
                 ...payment,
                 createdBy: payment.createdBy || changedBy
             }));
-            console.log('✅ Processed additional_req_pays with createdBy');
+            // console.log('✅ Processed additional_req_pays with createdBy');
         }
 
         // Ensure payouts have createdBy field
@@ -450,10 +450,10 @@ router.put('/employee/:employeeID/update', authenticateToken, async (req, res) =
                 ...payout,
                 createdBy: payout.createdBy || changedBy
             }));
-            console.log('✅ Processed payouts with createdBy');
+            // console.log('✅ Processed payouts with createdBy');
         }
 
-        console.log('🔄 About to call updateEmployeeDataOptimized...');
+        // console.log('🔄 About to call updateEmployeeDataOptimized...');
         
         // Use the NEW OPTIMIZED change tracking system
         const result = await updateEmployeeDataOptimized(
@@ -469,7 +469,7 @@ router.put('/employee/:employeeID/update', authenticateToken, async (req, res) =
         // Mark all future months for recalculation
         await markEmployeesForRecalculation(siteID, employeeID, monthNum, yearNum);
 
-        console.log(`✅ Employee ${employeeID} updated successfully with ${result.data.changesTracked} optimized changes tracked`);
+        // console.log(`✅ Employee ${employeeID} updated successfully with ${result.data.changesTracked} optimized changes tracked`);
 
         res.json({
             success: true,
@@ -524,7 +524,7 @@ router.put('/employee/:employeeID/update', authenticateToken, async (req, res) =
 // UPDATE EMPLOYEE DATA ENDPOINT FOR MOBILE APP
 router.put('/employee/mobapi/addpayout', authenticateToken, async (req, res) => {
     try {
-        console.log('Mobile API to update payouts hit successfully')
+        // console.log('Mobile API to update payouts hit successfully')
         const { empid, updateData, month, year, siteID } = req.body;
         const changedBy = req.user.name ||req.user?.email || 'unknown-user';
         
@@ -582,7 +582,7 @@ router.put('/employee/mobapi/addpayout', authenticateToken, async (req, res) => 
         // Add new payout to existing payouts array
         employee.payouts.push(newPayout);
         
-        console.log(`✅ Payment prepared for employee ${empid}: ₹${newPayout.value}`);
+        // console.log(`✅ Payment prepared for employee ${empid}: ₹${newPayout.value}`);
         
         // Use updateEmployeeDataOptimized to handle both save and change tracking
         const result = await updateEmployeeDataOptimized(
@@ -598,7 +598,7 @@ router.put('/employee/mobapi/addpayout', authenticateToken, async (req, res) => 
         // Mark all future months for recalculation
         await markEmployeesForRecalculation(siteID, empid, monthNum, yearNum);
         
-        console.log(`✅ Payment added and change tracking completed: ${result.data.changesTracked} changes tracked`);
+        // console.log(`✅ Payment added and change tracking completed: ${result.data.changesTracked} changes tracked`);
         
         res.json({
             success: true,
@@ -676,7 +676,7 @@ router.put('/attendance/updateattendance', authenticateToken, async (req, res) =
             });
         }
 
-        console.log(`📅 Starting bulk attendance update for ${attendanceData.length} employees - ${monthNum}/${yearNum} at site ${siteID}`);
+        // console.log(`📅 Starting bulk attendance update for ${attendanceData.length} employees - ${monthNum}/${yearNum} at site ${siteID}`);
         
         const results = [];
         const validationErrors = [];
@@ -685,7 +685,7 @@ router.put('/attendance/updateattendance', authenticateToken, async (req, res) =
         const updatedBy = req.user?.name || req.user?.email ||  'unknown-user';
 
         // PHASE 1: Validate all employees exist before making any changes
-        console.log(`🔍 Phase 1: Validating all ${attendanceData.length} employees exist...`);
+        // console.log(`🔍 Phase 1: Validating all ${attendanceData.length} employees exist...`);
         
         for (const empData of attendanceData) {
             try {

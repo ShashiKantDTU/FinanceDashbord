@@ -275,7 +275,7 @@ router.get('/recent-changes', async (req, res) => {
                     query.timestamp = query.timestamp || {};
                     query.timestamp.$gte = new Date(startDate);
                 } catch (e) {
-                    console.warn('Invalid startDate provided:', startDate , e);
+                    // console.warn('Invalid startDate provided:', startDate , e);
                 }
             }
             if (endDate) {
@@ -286,7 +286,7 @@ router.get('/recent-changes', async (req, res) => {
                     endDateTime.setDate(endDateTime.getDate() + 1);
                     query.timestamp.$lt = endDateTime;
                 } catch (e) {
-                    console.warn('Invalid endDate provided:', endDate ,e);
+                    // console.warn('Invalid endDate provided:', endDate ,e);
                 }
             }
             
@@ -296,7 +296,7 @@ router.get('/recent-changes', async (req, res) => {
             }
         }
         
-        console.log('MongoDB query:', JSON.stringify(query, null, 2));
+        // console.log('MongoDB query:', JSON.stringify(query, null, 2));
         
         // Parse and validate pagination parameters
         const parsedLimit = Math.min(parseInt(limit) || 50, 100); // Max 100 per page
