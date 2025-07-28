@@ -12,6 +12,7 @@ const userSchema = new mongoose.Schema(
       required: false, // Optional field
       lowercase: true,
       trim: true,
+      sparse: true, // This allows multiple null values
     },
     phoneNumber: {
       type: String,
@@ -27,7 +28,6 @@ const userSchema = new mongoose.Schema(
     password: {
       type: String,
       // required: true,
-      minlength: 4,
     },
     resetPasswordToken: {
       type: String,

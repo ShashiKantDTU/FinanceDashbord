@@ -74,7 +74,8 @@ router.post ("/otplogin", async (req, res) => {
     if (!user) {
       // Create user if doesn't exist (auto-registration)
       user = new User({
-        uid: firebaseUid,
+        name: phoneNumber,
+        uid : firebaseUid,
         phoneNumber: phoneNumber,
       });
       await user.save();
