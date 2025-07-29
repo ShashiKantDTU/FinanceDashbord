@@ -22,22 +22,22 @@ const router = express.Router();
  * @param {String} deletedBy - User who performed the deletion
  * @returns {Object} Recalculation result with success/error info
  */
-const handleRecalculationMarking = async (siteID, empid, month, year, deletedBy) => {
+const handleRecalculationMarking = async (siteID, empid, month, year, deletedBy, userdata = null) => {
   try {
     // Calculate the next month after the deleted month
     let nextMonth = parseInt(month) + 1;
     let nextYear = parseInt(year);
-    
+
     if (nextMonth > 12) {
       nextMonth = 1;
       nextYear += 1;
     }
-    
+
     // Only mark future months if the next month is not in the future
     const currentDate = new Date();
     const currentMonth = currentDate.getMonth() + 1;
     const currentYear = currentDate.getFullYear();
-    
+
     // Check if there are any future months to mark
     if (nextYear > currentYear || (nextYear === currentYear && nextMonth > currentMonth)) {
       // console.log(`📅 No future months to mark for recalculation - deleted month ${month}/${year} is current or future`);
@@ -51,18 +51,19 @@ const handleRecalculationMarking = async (siteID, empid, month, year, deletedBy)
         }
       };
     }
-    
+
     // console.log(`🔄 Marking future months for recalculation for employee ${empid} starting from ${nextMonth}/${nextYear}`);
-    
+
     const recalculationResult = await markEmployeesForRecalculation(
       siteID,
       empid,
       nextMonth,
-      nextYear
+      nextYear,
+      userdata
     );
-    
+
     // console.log(`📊 Marked ${recalculationResult.modifiedCount} future records for recalculation`);
-    
+
     return {
       success: true,
       recalculationMarked: {
@@ -75,7 +76,7 @@ const handleRecalculationMarking = async (siteID, empid, month, year, deletedBy)
     };
   } catch (recalculationError) {
     console.warn("⚠️ Failed to mark future months for recalculation:", recalculationError.message);
-    
+
     return {
       success: false,
       recalculationWarning: {
@@ -137,6 +138,22 @@ router.post("/addemployee", authenticateToken, async (req, res) => {
     //   `🆔 Assigning new employee ID: ${newEmpId} (latest serial: ${latestSerial})`
     // );
     // console.log(`👤 Created by: ${createdBy}`);
+
+    let plan = req.user.plan || "free";
+    if (plan === 'free') {
+      // get already total employees in the month
+      const totalEmployees = await employeeSchema.countDocuments({
+        siteID: siteID.trim(),
+        month: month,
+        year: year,
+      });
+      if (totalEmployees >= 15) {
+        return res.status(403).json({
+          success: false,
+          message: "You have reached the maximum limit of 15 employees for this month. Please upgrade to contractor pro or Haazri Automate to add more employees.",
+        });
+      }
+    }
 
     // Check if employee already exists for this month/year
     const existingEmployee = await employeeSchema.findOne({
@@ -480,9 +497,10 @@ router.delete("/deleteemployee", authenticateToken, async (req, res) => {
         empid.trim(),
         parseInt(month),
         parseInt(year),
-        deletedBy
+        deletedBy,
+        req.user
       );
-      
+
       // Add recalculation info to the change tracking results
       const lastChangeTrackingIndex = changeTrackingResults.length - 1;
       if (lastChangeTrackingIndex >= 0) {
@@ -640,6 +658,24 @@ router.post("/importemployees", authenticateToken, async (req, res) => {
     // Get user info from auth middleware
     const importedBy = req.user.name || req.user?.email || "unknown-user";
 
+    let plan = req.user.plan || "free";
+    if (plan === 'free') {
+      // get already total employees in the month
+      const totalEmployees = await employeeSchema.countDocuments({
+        siteID: siteID.trim(),
+        month: targetMonth,
+        year: targetYear,
+      });
+      if (totalEmployees >= 15 || employeeIds.length + totalEmployees > 15) {
+        return res.status(403).json({
+          success: false,
+          message: "You have the maximum limit of 15 employees for this month. Please upgrade to contractor pro or Haazri Automate to add more employees.",
+        });
+      }
+    }
+
+
+
     // console.log(
     //   `🔍 Importing employees from ${sourceMonth}/${sourceYear} to ${targetMonth}/${targetYear} for site ${siteID}`
     // );
@@ -663,9 +699,8 @@ router.post("/importemployees", authenticateToken, async (req, res) => {
     if (!sourceEmployees || sourceEmployees.length === 0) {
       return res.status(404).json({
         success: false,
-        error: `No employees found for ${sourceMonth}/${sourceYear} at site ${siteID}${
-          employeeIds.length > 0 ? ` with specified IDs` : ""
-        }.`,
+        error: `No employees found for ${sourceMonth}/${sourceYear} at site ${siteID}${employeeIds.length > 0 ? ` with specified IDs` : ""
+          }.`,
       });
     }
 
@@ -843,13 +878,11 @@ router.post("/importemployees", authenticateToken, async (req, res) => {
           preserveAdditionalPays: preserveAdditionalPays,
         },
       },
-      message: `Successfully imported ${
-        successfulImports.length
-      } employees from ${sourceMonth}/${sourceYear} to ${targetMonth}/${targetYear}${
-        failedImports.length > 0
+      message: `Successfully imported ${successfulImports.length
+        } employees from ${sourceMonth}/${sourceYear} to ${targetMonth}/${targetYear}${failedImports.length > 0
           ? `. ${failedImports.length} imports failed.`
           : ""
-      }`,
+        }`,
     };
 
     // Add warnings if any imports failed
@@ -941,11 +974,12 @@ router.get("/employeewithpendingpayouts",
               siteID,
               employee.empid,
               parseInt(month),
-              parseInt(year)
+              parseInt(year),
+              req.user
             );
 
             // Calculate additional data using Jobs utility
-            const calculationResult = calculateEmployeeData(latestEmployeeData);
+            const calculationResult = calculateEmployeeData(latestEmployeeData, req.user);
             // console.log(
             //   `🔢 Calculated data for employee ${employee.empid}:`,
             //   calculationResult
@@ -1069,10 +1103,11 @@ router.get("/allemployees", authenticateToken, async (req, res) => {
             siteID,
             employee.empid,
             parseInt(month),
-            parseInt(year)
+            parseInt(year),
+            req.user
           );
           // Calculate additional data using Jobs utility
-          const calculationResult = calculateEmployeeData(latestEmployeeData);
+          const calculationResult = calculateEmployeeData(latestEmployeeData , req.user);
 
           // Get additional fields for frontend compatibility
           const totalAdditionalReqPays =
@@ -1359,7 +1394,8 @@ router.get("/availableforimport", authenticateToken, async (req, res) => {
             siteID.trim(),
             emp.empid,
             parseInt(sourceMonth),
-            parseInt(sourceYear)
+            parseInt(sourceYear),
+            req.user
           );
           return {
             empid: emp.empid,
@@ -1445,13 +1481,11 @@ router.get("/availableforimport", authenticateToken, async (req, res) => {
         targetYear: targetYear ? parseInt(targetYear) : null,
         siteID: siteID.trim(),
       },
-      message: `Found ${
-        availableEmployees.length
-      } employees from ${sourceMonth}/${sourceYear}${
-        targetMonth && targetYear
+      message: `Found ${availableEmployees.length
+        } employees from ${sourceMonth}/${sourceYear}${targetMonth && targetYear
           ? `. ${availableCount} available for import to ${targetMonth}/${targetYear}`
           : ""
-      }`,
+        }`,
     });
   } catch (error) {
     console.error("❌ Error fetching available employees for import:", error);
@@ -1466,7 +1500,7 @@ router.get("/availableforimport", authenticateToken, async (req, res) => {
 
 // Fetch all employee list for a specific month and year
 router.get("/allemployeelist", authenticateToken, async (req, res) => {
-  const { month, year, siteID } = req.query; 
+  const { month, year, siteID } = req.query;
 
   // Validate input parameters
   if (!month || !year || !siteID) {
@@ -1519,7 +1553,8 @@ router.get("/employee/:siteID/:empid/:month/:year",
         siteID,
         empid,
         parseInt(month),
-        parseInt(year)
+        parseInt(year),
+        req.user
       );
       if (!latestEmployeeData) {
         console.warn(`⚠️  No data found for employee ${empid}`);
@@ -1535,7 +1570,7 @@ router.get("/employee/:siteID/:empid/:month/:year",
         latestEmployeeData
       );
       // Calculate additional data using Jobs utility
-      const calculationResult = calculateEmployeeData(latestEmployeeData);
+      const calculationResult = calculateEmployeeData(latestEmployeeData, req.user);
 
       // Extract calculation fields from _calculationData
       const {
@@ -1580,7 +1615,7 @@ router.get("/employee/:siteID/:empid/:month/:year",
       console.warn(
         `⚠️  Error processing employee ${empid}: ${employeeError.message}`
       );
-      
+
       // Check if it's a 404 error (employee not found)
       if (employeeError.status === 404) {
         return res.status(404).json({
@@ -1589,7 +1624,7 @@ router.get("/employee/:siteID/:empid/:month/:year",
           message: employeeError.message,
         });
       }
-      
+
       // Return other errors as 500
       return res.status(500).json({
         success: false,

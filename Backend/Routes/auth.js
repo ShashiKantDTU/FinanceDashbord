@@ -57,7 +57,7 @@ router.post("/register", async (req, res) => {
 
 router.post ("/otplogin", async (req, res) => {
   // check if ID token is provided in req Body
-  // console.log("OTP login route hit");
+  console.log("OTP login route hit");
   const {token: firebaseIdToken} = req.body;
   if (!firebaseIdToken) {
     return res.status(400).json({ message: "ID token is required" });
@@ -67,7 +67,8 @@ router.post ("/otplogin", async (req, res) => {
     const decodedToken = await admin.auth().verifyIdToken(firebaseIdToken);
     const firebaseUid = decodedToken.uid;
     const phoneNumber = decodedToken.phone_number;
-    
+    console.log(`Firebase UID: ${firebaseUid}`);
+    console.log(`Phone number: ${phoneNumber}`);
     // Find user in MongoDB by phone number only
     let user = await User.findOne({ phoneNumber: phoneNumber });
     
@@ -345,18 +346,18 @@ router.get("/verify", authenticateToken, (req, res) => {
 
 router.get("/plan" , authenticateToken ,async (req, res) =>{
 
-  const user = await User.findById(req.user.id)
+  // const user = await User.findById(req.user.id)
 
-  if(!user){
-    return res.status(404).json({
-      message: "User not found"
-    })
-  }
+  // if(!user){
+  //   return res.status(404).json({
+  //     message: "User not found"
+  //   })
+  // }
   // prepare a response with plan details
   
   return res.status(200).json({
-    plan: user.plan,
-    planExpiry: user.planExpiresAt
+    plan: req.user.plan,
+    planExpiry: req.user.planExpiresAt
   })
   
   
@@ -409,6 +410,7 @@ router.post(
         profileName: supervisorName,
         createdBy: user.name,
         site: siteId,
+        owner:  user
       });
 
       await newSupervisor.save();

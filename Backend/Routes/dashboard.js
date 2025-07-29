@@ -39,6 +39,8 @@ router.get('/home', authenticateToken, async (req, res) => {
 router.post('/home/addsite', authenticateToken, async (req, res) => {
     try {
         const user = req.user; 
+        console.log('add site route hit')
+
         if (!user) {
             return res.status(401).json({ 
                 error: 'Access denied. Authentication required.' 
@@ -46,6 +48,7 @@ router.post('/home/addsite', authenticateToken, async (req, res) => {
         }
         
         const { sitename } = req.body;
+        console.log(sitename)
         if (!sitename) {
             return res.status(400).json({ 
                 error: 'Site name is required.' 
@@ -57,12 +60,29 @@ router.post('/home/addsite', authenticateToken, async (req, res) => {
             return res.status(404).json({ 
                 error: 'User not found.' 
             });
-        }        // Create new site using the Site model
+        }
+        
+        // check user plan 
+        let plan = userdata.plan;
+        if(plan === null || plan === undefined){
+            plan = 'free';
+        }
+
+        // Check if user has reached the site limit based on their plan
+        if (plan === 'free' && userdata.site.length >= 1) {
+            return res.status(403).json({
+                message: 'Haazri Basic plan has limit of 1 site only, To manage multiple sites Upgrade your plan to Contractor Pro or Haazri Automate.'
+            });
+        }
+
+        // premimum plan has unlimited limits
+
+        // Create new site using the Site model
         const newSite = new Site({
             sitename: sitename,
             CustomProfile: null, // You'll need to handle this properly
             owner: userdata._id,  // Reference to the user
-            createdBy: user.name // name of creator
+            createdBy: userdata.name || userdata.email || userdata.phoneNumber // Use actual user data
         });
 
         // Save the site to the database
@@ -76,7 +96,7 @@ router.post('/home/addsite', authenticateToken, async (req, res) => {
             // If updating user fails, remove the orphaned site
             await Site.findByIdAndDelete(savedSite._id);
             return res.status(500).json({
-                error: 'Error linking site to user',
+                message: 'Error linking site to user',
                 details: userSaveError.message
             });
         }

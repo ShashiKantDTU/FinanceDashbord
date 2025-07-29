@@ -16,7 +16,7 @@
  */
 
 const mongoose = require('mongoose');
-const employeeSchema = require('../models/EmployeeSchema'); 
+const employeeSchema = require('../models/EmployeeSchema');
 const { trackOptimizedChanges } = require('./OptimizedChangeTracker');
 
 /**
@@ -24,7 +24,7 @@ const { trackOptimizedChanges } = require('./OptimizedChangeTracker');
  * @param {Object} employee - Employee data object
  * @returns {Object} Updated employee object with all calculated fields
  */
-const calculateEmployeeData = (employee) => {
+const calculateEmployeeData = (employee, userdata) => {
     // Validate employee data structure
     if (!employee || !employee.additional_req_pays || !employee.payouts || !employee.attendance) {
         throw new Error('Invalid employee data structure - missing required fields');
@@ -40,30 +40,44 @@ const calculateEmployeeData = (employee) => {
         return sum + (payout.value || 0);
     }, 0);    // Process attendance data and calculate working days and overtime
     const { totalDays, totalOvertime } = processAttendanceData(employee.attendance);
-      // Convert overtime hours to days (8 hours = 1 day)
-    const overtimeDays = Math.floor(totalOvertime / 8) + ((totalOvertime % 8) / 10);
-    const totalAttendance = totalDays + overtimeDays;
-    
+    // Calculate overtime days - different methods for different users
+    let totalAttendance;
+
+    if (userdata && userdata.calculationType === 'special') {
+        // Special calculation for specific user
+        // Convert overtime hours to days with floor + remainder/10 method
+        const overtimeDays = Math.floor(totalOvertime / 8) + ((totalOvertime % 8) / 10);
+        totalAttendance = totalDays + overtimeDays;
+    } else {
+        // Default calculation - simple division
+        totalAttendance = totalDays + (totalOvertime / 8);
+    }
+
     // Calculate total wage to be paid to employee
     const totalWage = employee.rate * totalAttendance;
-    
+
     // Get carry forward amount
     const carryForward = employee.carry_forwarded ? employee.carry_forwarded.value : 0;
-    
+
     // Calculate final closing balance
     const closing_balance = totalWage - totalAdvances + totalAdditionalReqPays + carryForward;
-    
+
     // Update all calculated fields in the employee object
     employee.wage = totalWage;
     employee.closing_balance = closing_balance;
-    
+
     // Convert to plain object if it's a Mongoose document, otherwise keep as is
     const updatedEmployee = employee.toObject ? employee.toObject() : { ...employee };
-    
+
     // Ensure all calculated fields are included in the returned object
     updatedEmployee.wage = totalWage;
     updatedEmployee.closing_balance = closing_balance;
-    
+
+    // Calculate overtime days for metadata
+    const overtimeDays = userdata && userdata.calculationType === 'special'
+        ? Math.floor(totalOvertime / 8) + ((totalOvertime % 8) / 10)
+        : totalOvertime / 8;
+
     // Add calculation metadata for reference
     updatedEmployee._calculationData = {
         totalAdvances,
@@ -72,9 +86,10 @@ const calculateEmployeeData = (employee) => {
         totalDays,
         totalOvertime,
         overtimeDays,
+        calculationMethod: userdata && userdata.calculationType === 'special' ? 'special' : 'default',
         calculatedAt: new Date()
     };
-    
+
     return updatedEmployee;
 };
 
@@ -86,27 +101,29 @@ const calculateEmployeeData = (employee) => {
 const processAttendanceData = (attendance) => {
     let totalDays = 0;
     let totalOvertime = 0;
-    
+
     if (!Array.isArray(attendance)) {
         console.warn('Attendance data is not an array, returning zero values');
         return { totalDays: 0, totalOvertime: 0 };
     }
-      attendance.forEach(att => {
+    attendance.forEach(att => {
         if (typeof att !== 'string') {
+            if (att !== null) {
             console.warn(`Invalid attendance entry: ${att}. Skipping.`);
+        }
             return;
         }
-        
+
         // Check if employee was present (contains 'P')
         if (att.includes('P')) {
             totalDays += 1;
         }
-        
+
         // Parse overtime hours if present (e.g., "P8" means present with 8 hours overtime, "A8" means absent but did 8 hours overtime)
         const overtimeMatch = att.match(/[PA](\d+)/);
         if (overtimeMatch) {
             const overtime = parseInt(overtimeMatch[1]);
-            
+
             // Validate overtime hours (0-24 hours per day)
             if (!isNaN(overtime) && overtime >= 0 && overtime <= 24) {
                 totalOvertime += overtime;
@@ -115,7 +132,7 @@ const processAttendanceData = (attendance) => {
             }
         }
     });
-    
+
 
     return { totalDays, totalOvertime };
 };
@@ -129,19 +146,19 @@ const processAttendanceData = (attendance) => {
  * @param {Number} year - Year
  * @returns {Object} Employee data object
  */
-const FetchlatestData = async (siteID, EmpID, month, year) => {
+const FetchlatestData = async (siteID, EmpID, month, year, userdata) => {
     try {
         // Validate input parameters
         validateBasicParams(siteID, EmpID, month, year);
-        
+
         // Find employee record for the specified period
-        const employee = await mongoose.model('Employee').findOne({ 
-            empid: EmpID, 
-            siteID: siteID, 
-            month: month, 
-            year: year 
+        const employee = await mongoose.model('Employee').findOne({
+            empid: EmpID,
+            siteID: siteID,
+            month: month,
+            year: year
         });
-        
+
         if (!employee) {
             const error = new Error(`Employee ${EmpID} not found for ${month}/${year} at site ${siteID}`);
             error.status = 404;
@@ -151,28 +168,28 @@ const FetchlatestData = async (siteID, EmpID, month, year) => {
         // Check if recalculation is needed
         if (employee.recalculationneeded) {
             console.log(`Triggering recalculation for employee ${EmpID}`);
-            await CorrectCalculations(siteID, EmpID);
-            
+            await CorrectCalculations(siteID, EmpID, 0, 60, userdata);
+
             // Fetch the updated employee data
-            const updatedEmployee = await mongoose.model('Employee').findOne({ 
-                empid: EmpID, 
-                siteID: siteID, 
-                month: month, 
-                year: year 
+            const updatedEmployee = await mongoose.model('Employee').findOne({
+                empid: EmpID,
+                siteID: siteID,
+                month: month,
+                year: year
             });
             return updatedEmployee;
         }
 
-        const calculationResult = calculateEmployeeData(employee);
+        const calculationResult = calculateEmployeeData(employee, userdata);
 
         // Update employee record with calculated values
         Object.assign(employee, calculationResult);
-        
+
         // Fix legacy data before saving
         fixLegacyData(employee);
-        
+
         await employee.save();
-        
+
         return employee;
 
     } catch (error) {
@@ -191,7 +208,7 @@ const FetchlatestData = async (siteID, EmpID, month, year) => {
  * @param {Number} recursionDepth - Current recursion depth (for safety)
  * @param {Number} maxRecursionDepth - Maximum allowed recursion depth
  */
-const CorrectCalculations = async (siteID, EmpID, recursionDepth = 0, maxRecursionDepth = 60) => {
+const CorrectCalculations = async (siteID, EmpID, recursionDepth = 0, maxRecursionDepth = 60, userdata = null) => {
     try {
         // Prevent infinite recursion
         if (recursionDepth > maxRecursionDepth) {
@@ -200,7 +217,7 @@ const CorrectCalculations = async (siteID, EmpID, recursionDepth = 0, maxRecursi
 
         // Find the oldest month that needs recalculation
         const oldestRecord = await findOldestRecalculationRecord(siteID, EmpID);
-        
+
         if (!oldestRecord) {
             console.log(`No recalculation needed for employee ${EmpID}`);
             return;
@@ -211,21 +228,21 @@ const CorrectCalculations = async (siteID, EmpID, recursionDepth = 0, maxRecursi
 
         // Get previous month's closing balance for carry forward
         const previousBalance = await getPreviousMonthBalance(siteID, EmpID, month, year);
-        
+
         // Store original data for change tracking
         const originalData = oldestRecord.toObject();
 
         // Update carry forward and recalculate
-        await updateEmployeeCalculations(oldestRecord, previousBalance, originalData, siteID, EmpID, month, year);
+        await updateEmployeeCalculations(oldestRecord, previousBalance, originalData, siteID, EmpID, month, year, userdata);
 
         // Process next month if it's not in the future
         const shouldContinue = shouldProcessNextMonth(month, year);
         if (shouldContinue) {
-            await CorrectCalculations(siteID, EmpID, recursionDepth + 1, maxRecursionDepth);
+            await CorrectCalculations(siteID, EmpID, recursionDepth + 1, maxRecursionDepth, userdata);
         } else {
             console.log(`Recalculation completed for employee ${EmpID}`);
         }
-        
+
     } catch (error) {
         console.error(`Error in CorrectCalculations for employee ${EmpID}:`, error.message);
         throw error;
@@ -241,16 +258,16 @@ const CorrectCalculations = async (siteID, EmpID, recursionDepth = 0, maxRecursi
  * @param {Number} endMonth - Optional end month filter
  * @returns {Object} Processing results summary
  */
-const CorrectAllEmployeeData = async (siteID, startYear = null, startMonth = null, endYear = null, endMonth = null) => {
+const CorrectAllEmployeeData = async (siteID, startYear = null, startMonth = null, endYear = null, endMonth = null, userdata = null) => {
     try {
         // console.log(`Starting batch correction for site ${siteID}`);
-        
+
         // Build query for employees needing recalculation
         const query = buildRecalculationQuery(siteID, startYear, startMonth, endYear, endMonth);
-        
+
         // Get unique employee IDs that need correction
         const employeesToCorrect = await mongoose.model('Employee').distinct('empid', query);
-        
+
         // console.log(`Found ${employeesToCorrect.length} employees requiring correction`);
 
         // Process results tracking
@@ -265,7 +282,7 @@ const CorrectAllEmployeeData = async (siteID, startYear = null, startMonth = nul
         for (const empID of employeesToCorrect) {
             try {
                 // console.log(`Processing employee: ${empID}`);
-                await CorrectCalculations(siteID, empID);
+                await CorrectCalculations(siteID, empID, 0, 60, userdata);
                 results.successfulCorrections++;
             } catch (error) {
                 console.error(`Failed to correct employee ${empID}:`, error.message);
@@ -319,11 +336,11 @@ const validateBasicParams = (siteID, EmpID, month = null, year = null) => {
     if (!siteID || !EmpID) {
         throw new Error('siteID and EmpID are required parameters');
     }
-    
+
     if (month !== null && (month < 1 || month > 12)) {
         throw new Error(`Invalid month: ${month}. Must be between 1-12`);
     }
-    
+
     if (year !== null && (year < 2000 || year > 2100)) {
         throw new Error(`Invalid year: ${year}. Must be between 2000-2100`);
     }
@@ -333,10 +350,10 @@ const validateBasicParams = (siteID, EmpID, month = null, year = null) => {
  * Find the oldest employee record that needs recalculation
  */
 const findOldestRecalculationRecord = async (siteID, EmpID) => {
-    return await mongoose.model('Employee').findOne({ 
-        empid: EmpID, 
-        siteID: siteID, 
-        recalculationneeded: true 
+    return await mongoose.model('Employee').findOne({
+        empid: EmpID,
+        siteID: siteID,
+        recalculationneeded: true
     }).sort({ year: 1, month: 1 });
 };
 
@@ -350,13 +367,13 @@ const getPreviousMonthBalance = async (siteID, EmpID, currentMonth, currentYear)
         const previousMonth = currentMonth === 1 ? 12 : currentMonth - 1;
         const previousYear = currentMonth === 1 ? currentYear - 1 : currentYear;
 
-        const immediatelyPreviousData = await mongoose.model('Employee').findOne({ 
-            empid: EmpID, 
-            siteID: siteID, 
-            month: previousMonth, 
-            year: previousYear 
+        const immediatelyPreviousData = await mongoose.model('Employee').findOne({
+            empid: EmpID,
+            siteID: siteID,
+            month: previousMonth,
+            year: previousYear
         });
-        
+
         // If immediately previous month exists, return its closing balance
         if (immediatelyPreviousData) {
             return immediatelyPreviousData.closing_balance || 0;
@@ -365,16 +382,16 @@ const getPreviousMonthBalance = async (siteID, EmpID, currentMonth, currentYear)
         // If no immediate previous month, search for the most recent month with data
         // Create a date threshold for the current month
         const currentMonthStart = new Date(currentYear, currentMonth - 1, 1);
-        
+
         // Find the most recent employee record before the current month
         const mostRecentData = await mongoose.model('Employee').findOne({
             empid: EmpID,
             siteID: siteID,
             $or: [
                 { year: { $lt: currentYear } },
-                { 
-                    year: currentYear, 
-                    month: { $lt: currentMonth } 
+                {
+                    year: currentYear,
+                    month: { $lt: currentMonth }
                 }
             ]
         }).sort({ year: -1, month: -1 }); // Sort by most recent first
@@ -397,13 +414,13 @@ const getPreviousMonthBalance = async (siteID, EmpID, currentMonth, currentYear)
 /**
  * Update employee calculations and save with change tracking
  */
-const updateEmployeeCalculations = async (employeeRecord, previousBalance, originalData, siteID, EmpID, month, year) => {
+const updateEmployeeCalculations = async (employeeRecord, previousBalance, originalData, siteID, EmpID, month, year, userdata = null) => {
     // Update carry forward value
     employeeRecord.carry_forwarded.value = previousBalance;
 
     // Recalculate employee data
-    const calculationResult = calculateEmployeeData(employeeRecord);
-    
+    const calculationResult = calculateEmployeeData(employeeRecord, userdata);
+
     // Validate calculated values
     if (isNaN(calculationResult.closing_balance)) {
         throw new Error('Calculated closing balance is not a valid number');
@@ -441,7 +458,7 @@ const shouldProcessNextMonth = (currentMonth, currentYear) => {
     const now = new Date();
     const thisMonth = now.getMonth() + 1; // getMonth() returns 0-11
     const thisYear = now.getFullYear();
-    
+
     return currentYear < thisYear || (currentYear === thisYear && currentMonth < thisMonth);
 };
 
@@ -450,7 +467,7 @@ const shouldProcessNextMonth = (currentMonth, currentYear) => {
  */
 const buildRecalculationQuery = (siteID, startYear, startMonth, endYear, endMonth) => {
     const query = { siteID, recalculationneeded: true };
-    
+
     // Add date range filtering if provided
     if (startYear && startMonth) {
         query.$or = [
@@ -458,7 +475,7 @@ const buildRecalculationQuery = (siteID, startYear, startMonth, endYear, endMont
             { year: startYear, month: { $gte: startMonth } }
         ];
     }
-    
+
     if (endYear && endMonth) {
         const endCondition = {
             $or: [
@@ -466,14 +483,14 @@ const buildRecalculationQuery = (siteID, startYear, startMonth, endYear, endMont
                 { year: endYear, month: { $lte: endMonth } }
             ]
         };
-        
+
         if (query.$or) {
             query.$and = [{ $or: query.$or }, endCondition];
             delete query.$or;
         } else {
             Object.assign(query, endCondition);
         }
-    }    return query;
+    } return query;
 };
 
 /**
@@ -484,7 +501,7 @@ const buildRecalculationQuery = (siteID, startYear, startMonth, endYear, endMont
 const getRecalculationStatus = async (siteID) => {
     try {
         const query = { siteID, recalculationneeded: true };
-        
+
         const [totalCount, employeeStats] = await Promise.all([
             mongoose.model('Employee').countDocuments(query),
             mongoose.model('Employee').aggregate([
@@ -531,14 +548,14 @@ const getRecalculationStatus = async (siteID) => {
  * @param {Number} fromYear - Starting year (optional)
  * @returns {Object} Update results
  */
-const markEmployeesForRecalculation = async (siteID, employeeID = null, fromMonth = null, fromYear = null) => {
+const markEmployeesForRecalculation = async (siteID, employeeID = null, fromMonth = null, fromYear = null, userdata = null) => {
     try {
         const query = { siteID };
-        
+
         if (employeeID) {
             query.empid = employeeID;
         }
-        
+
         if (fromMonth && fromYear) {
             query.$or = [
                 { year: { $gt: fromYear } },
@@ -548,8 +565,8 @@ const markEmployeesForRecalculation = async (siteID, employeeID = null, fromMont
 
         const updateResult = await mongoose.model('Employee').updateMany(
             query,
-            { 
-                $set: { 
+            {
+                $set: {
                     recalculationneeded: true,
                     lastModified: new Date(),
                     modificationReason: `Marked for recalculation${employeeID ? ` for employee ${employeeID}` : ''}`
@@ -558,7 +575,7 @@ const markEmployeesForRecalculation = async (siteID, employeeID = null, fromMont
         );
 
         // console.log(`🔄 Marked ${updateResult.modifiedCount} records for recalculation`);
-        
+
         return {
             modifiedCount: updateResult.modifiedCount,
             matchedCount: updateResult.matchedCount,
@@ -609,7 +626,7 @@ const detectEmploymentGaps = async (siteID, EmpID, startMonth, startYear, endMon
 
         while (currentYear < endYear || (currentYear === endYear && currentMonth <= endMonth)) {
             expectedMonths.push({ month: currentMonth, year: currentYear });
-            
+
             currentMonth++;
             if (currentMonth > 12) {
                 currentMonth = 1;
@@ -623,8 +640,8 @@ const detectEmploymentGaps = async (siteID, EmpID, startMonth, startYear, endMon
             year: record.year
         }));
 
-        const gaps = expectedMonths.filter(expected => 
-            !existingMonths.some(existing => 
+        const gaps = expectedMonths.filter(expected =>
+            !existingMonths.some(existing =>
                 existing.month === expected.month && existing.year === expected.year
             )
         );
@@ -661,20 +678,20 @@ const detectEmploymentGaps = async (siteID, EmpID, startMonth, startYear, endMon
 const testGapHandling = async (siteID, EmpID, testMonth, testYear) => {
     try {
         // console.log(`\n=== Testing Gap Handling for Employee ${EmpID} ===`);
-        
+
         // Test the enhanced getPreviousMonthBalance function
         const previousBalance = await getPreviousMonthBalance(siteID, EmpID, testMonth, testYear);
-        
+
         // Detect gaps in the last 12 months
         const startMonth = testMonth === 12 ? 1 : testMonth + 1;
         const startYear = testMonth === 12 ? testYear : testYear - 1;
-        
+
         const gapAnalysis = await detectEmploymentGaps(
-            siteID, EmpID, 
-            startMonth, startYear, 
+            siteID, EmpID,
+            startMonth, startYear,
             testMonth, testYear
         );
-        
+
         return {
             testCase: {
                 employee: EmpID,
@@ -683,8 +700,8 @@ const testGapHandling = async (siteID, EmpID, testMonth, testYear) => {
             },
             previousBalance: {
                 value: previousBalance,
-                message: previousBalance === 0 ? 
-                    'No previous employment data found' : 
+                message: previousBalance === 0 ?
+                    'No previous employment data found' :
                     `Found previous balance: ${previousBalance}`
             },
             gapAnalysis: gapAnalysis,
@@ -697,7 +714,7 @@ const testGapHandling = async (siteID, EmpID, testMonth, testYear) => {
                 'Previous balance calculation is straightforward'
             ]
         };
-        
+
     } catch (error) {
         console.error(`Error in gap handling test:`, error.message);
         throw error;

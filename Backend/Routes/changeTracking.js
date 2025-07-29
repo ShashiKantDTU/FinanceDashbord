@@ -355,7 +355,7 @@ router.put('/employee/mobapi/attendance/update', authenticateToken, async (req, 
             await changeTrackingRecord.save();
 
             // Mark all future months for recalculation
-            await markEmployeesForRecalculation(siteID, employeeId, currentMonth, currentYear);
+            await markEmployeesForRecalculation(siteID, employeeId, currentMonth, currentYear, req.user);
         } catch (changeTrackingError) {
             console.error('❌ Error saving change tracking record:', changeTrackingError);
             // Don't fail the request if change tracking fails, just log the error
@@ -467,7 +467,7 @@ router.put('/employee/:employeeID/update', authenticateToken, async (req, res) =
         );
 
         // Mark all future months for recalculation
-        await markEmployeesForRecalculation(siteID, employeeID, monthNum, yearNum);
+        await markEmployeesForRecalculation(siteID, employeeID, monthNum, yearNum, req.user);
 
         // console.log(`✅ Employee ${employeeID} updated successfully with ${result.data.changesTracked} optimized changes tracked`);
 
@@ -596,7 +596,7 @@ router.put('/employee/mobapi/addpayout', authenticateToken, async (req, res) => 
         );
 
         // Mark all future months for recalculation
-        await markEmployeesForRecalculation(siteID, empid, monthNum, yearNum);
+        await markEmployeesForRecalculation(siteID, empid, monthNum, yearNum, req.user);
         
         // console.log(`✅ Payment added and change tracking completed: ${result.data.changesTracked} changes tracked`);
         
@@ -761,7 +761,7 @@ router.put('/attendance/updateattendance', authenticateToken, async (req, res) =
                 );
 
                 // Mark all future months for recalculation
-                await markEmployeesForRecalculation(siteID, employeeID, monthNum, yearNum);
+                await markEmployeesForRecalculation(siteID, employeeID, monthNum, yearNum, req.user);
 
                 results.push({
                     employeeID: employeeID,
