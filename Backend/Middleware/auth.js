@@ -32,6 +32,7 @@ const authenticateToken = async (req, res, next) => {
             }
         }
 
+        // Attach plan information for all users
         if (decoded.role === 'Supervisor') {
             // check if the supervisor is active
             const supervisor = await Supervisor.findOne({ userId: decoded.email });
@@ -59,6 +60,24 @@ const authenticateToken = async (req, res, next) => {
                 req.user.calculationType = 'special'
             } else {
                 req.user.calculationType = 'normal'
+            }
+        } else {
+            // For regular Admin users, fetch plan information from database
+            try {
+                const user = await User.findById(decoded.id);
+                if (user) {
+                    req.user.plan = user.plan || 'free';
+                    req.user.planExpiresAt = user.planExpiresAt;
+                } else {
+                    // Fallback to free plan if user not found
+                    req.user.plan = 'free';
+                    req.user.planExpiresAt = null;
+                }
+            } catch (dbError) {
+                console.warn('Failed to fetch user plan information:', dbError.message);
+                // Fallback to free plan on database error
+                req.user.plan = 'free';
+                req.user.planExpiresAt = null;
             }
         }
 
