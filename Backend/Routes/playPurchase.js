@@ -57,6 +57,12 @@ router.post('/verify-android-purchase', authenticateToken, async (req, res) => {
         const { purchaseToken } = req.body;
         const user = req.user;
         const packageName = 'com.sitehaazri.app'; // Your app's package name
+        if (!purchaseToken) {
+            return res.status(400).json({ error: 'Purchase token is required.' });
+        }
+        if(!user){
+            return res.status(400).json({ error: 'User is not authenticated.' });
+        }
 
         console.log('Received purchase token:', purchaseToken);
         console.log('packageName:', packageName);
