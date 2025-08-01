@@ -11,6 +11,9 @@ async function verifyAndroidPurchase(packageName, purchaseToken) {
    // Parse the NEW, dedicated key for Play Billing
   const serviceAccountCredentials = JSON.parse(process.env.PLAY_BILLING_SERVICE_KEY);
 
+   // 2. ADD THIS LINE TO DEBUG
+   console.log("VERIFYING WITH SERVICE ACCOUNT EMAIL:", serviceAccountCredentials.client_email);
+
   const auth = new google.auth.GoogleAuth({
     credentials: serviceAccountCredentials, // Use the new key
     scopes: ['https://www.googleapis.com/auth/androidpublisher'],
