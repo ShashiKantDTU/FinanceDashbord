@@ -77,7 +77,7 @@ router.post('/verify-android-purchase', authenticateToken, async (req, res) => {
             const billingCycle = diffInDays > 180 ? 'yearly' : 'monthly';
 
             // Update user's subscription in database - use productId directly
-            await User.findByIdAndUpdate(user._id, {
+            await User.findByIdAndUpdate(user.id, {
                 plan: verificationResult.productId,
                 billing_cycle: billingCycle,
                 planExpiresAt: new Date(verificationResult.expires),
