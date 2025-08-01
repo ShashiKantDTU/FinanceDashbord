@@ -111,7 +111,9 @@ router.get("/plan", authenticateToken, async (req, res) => {
     if (req.user.plan === 'free') {
         req.user.billing_cycle = 'monthly';
     }
-
+    console.log("req.user.plan", req.user.plan);
+    console.log("req.user.billing_cycle", req.user.billing_cycle);
+    
     return res.status(200).json({
         plan: req.user.plan,
         billing_cycle: req.user.billing_cycle,
