@@ -58,6 +58,9 @@ router.post('/verify-android-purchase', authenticateToken, async (req, res) => {
         const user = req.user;
         const packageName = 'com.sitehaazri.app'; // Your app's package name
 
+        console.log('Received purchase token:', purchaseToken);
+        console.log('packageName:', packageName);
+        console.log('user:', user.name);
         // Call the verification function
         const verificationResult = await verifyAndroidPurchase(packageName, purchaseToken);
 
