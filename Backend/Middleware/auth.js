@@ -46,6 +46,7 @@ const authenticateToken = async (req, res, next) => {
             const user = await User.findById(supervisor.owner._id)
             req.user.plan = user.plan
             req.user.planExpiresAt = user.planExpiresAt
+            req.user.billing_cycle = user.billing_cycle
             if (!user.plan || user.plan === null || user.plan === undefined) {
                 // find owner using siteid in supervisor
                 const owner = await User.findOne({ site: supervisor.site })
