@@ -51,7 +51,8 @@ const authenticateToken = async (req, res, next) => {
                 // find owner using siteid in supervisor
                 const owner = await User.findOne({ site: supervisor.site })
                 req.user.plan = owner.plan
-                req.user.planExpiresAt = owner.planExpiresAt
+                req.user.planExpiresAt = owner.planExpiresAt,
+                req.user.billing_cycle = user.billing_cycle
             }
 
             // if special user superviosr request 
@@ -69,6 +70,7 @@ const authenticateToken = async (req, res, next) => {
                 if (user) {
                     req.user.plan = user.plan || 'free';
                     req.user.planExpiresAt = user.planExpiresAt;
+                    req.user.billing_cycle = user.billing_cycle
                 } else {
                     // Fallback to free plan if user not found
                     req.user.plan = 'free';
