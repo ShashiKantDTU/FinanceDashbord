@@ -53,11 +53,15 @@ const userSchema = new mongoose.Schema(
     // 👇 Plan info
     plan: {
       type: String,
-      enum: ['free', 'premium', 'pro'],
+      enum: ['free', 'pro', 'premium'],
       default: 'free',
     },
     planActivatedAt: {
       type: Date,
+    },
+    billing_cycle : {
+      type: String,
+      enum: ['monthly', 'yearly']
     },
     planExpiresAt: {
       type: Date,

@@ -59,6 +59,7 @@ const dashboardRoutes = require('./Routes/dashboard');
 const employeeRoutes = require('./Routes/EmployeeDetails');
 const changeTrackingRoutes = require('./Routes/changeTracking');
 const detailedChangeTrackingRoutes = require('./Routes/detailedChangeTracking');
+const playPurchaseRoutes = require('./Routes/playPurchase');
 // const optimizedEmployeeRoutes = require('./Routes/optimizedEmployeeRoutes');
 
 
@@ -91,6 +92,7 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/employee', employeeRoutes);
 app.use('/api/change-tracking', changeTrackingRoutes);
 app.use('/api/detailed-change-tracking', detailedChangeTrackingRoutes);
+app.use('/api/play-purchase', playPurchaseRoutes);
 // app.use('/api/employee-optimized', optimizedEmployeeRoutes);
 
 // Basic route

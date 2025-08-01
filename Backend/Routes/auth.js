@@ -344,24 +344,7 @@ router.get("/verify", authenticateToken, (req, res) => {
   });
 });
 
-router.get("/plan" , authenticateToken ,async (req, res) =>{
 
-  // const user = await User.findById(req.user.id)
-
-  // if(!user){
-  //   return res.status(404).json({
-  //     message: "User not found"
-  //   })
-  // }
-  // prepare a response with plan details
-  
-  return res.status(200).json({
-    plan: req.user.plan,
-    planExpiry: req.user.planExpiresAt
-  })
-  
-  
-})
 
 //  supervisor credentials route
 router.post(
@@ -686,6 +669,42 @@ router.post("/test-email", async (req, res) => {
         code: error.code,
         response: error.response,
       },
+    });
+  }
+});
+
+// Update user name route
+router.put("/update-name", authenticateToken, async (req, res) => {
+  try {
+    const { name } = req.body;
+    
+    if (!name || name.trim() === "") {
+      return res.status(400).json({ 
+        message: "Name is required and cannot be empty" 
+      });
+    }
+
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ 
+        message: "User not found" 
+      });
+    }
+
+    user.name = name.trim();
+    await user.save();
+
+    res.status(200).json({
+      message: "Name updated successfully",
+      user: {
+        id: user._id,
+        name: user.name
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ 
+      message: "Error updating name", 
+      error: error.message 
     });
   }
 });
