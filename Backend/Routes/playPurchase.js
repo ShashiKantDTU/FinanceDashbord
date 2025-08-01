@@ -8,16 +8,13 @@ const { authenticateToken } = require('../Middleware/auth');
 require("dotenv").config();
 
 async function verifyAndroidPurchase(packageName, purchaseToken) {
-    // --- THIS IS THE UPDATED PART ---
-    // 1. Parse the key from your environment variable, just like in your firebase.js
-    const serviceAccountCredentials = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY);
+   // Parse the NEW, dedicated key for Play Billing
+  const serviceAccountCredentials = JSON.parse(process.env.PLAY_BILLING_SERVICE_KEY);
 
-    // 2. Authenticate with Google by passing the credentials object
-    const auth = new google.auth.GoogleAuth({
-        credentials: serviceAccountCredentials, // Use 'credentials' instead of 'keyFile'
-        scopes: ['https://www.googleapis.com/auth/androidpublisher'],
-    });
-    // --- END OF UPDATED PART ---
+  const auth = new google.auth.GoogleAuth({
+    credentials: serviceAccountCredentials, // Use the new key
+    scopes: ['https://www.googleapis.com/auth/androidpublisher'],
+  });
 
     const androidpublisher = google.androidpublisher({
         version: 'v3',
@@ -66,7 +63,7 @@ router.post('/verify-android-purchase', authenticateToken, async (req, res) => {
 
         console.log('Received purchase token:', purchaseToken);
         console.log('packageName:', packageName);
-        console.log('user:', user.name);
+        console.log('user:', user);
         // Call the verification function
         const verificationResult = await verifyAndroidPurchase(packageName, purchaseToken);
 
