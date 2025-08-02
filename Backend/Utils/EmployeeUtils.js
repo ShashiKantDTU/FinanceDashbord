@@ -3,54 +3,42 @@
  *
  * This module contains utility functions for employee management.
  *
- * Functions:
- * - latestEmpSerialNumber: Used for generating new employee IDs per site (ensures unique IDs within each site)
- * - pendingAttendance: Fetches employees with pending attendance for a specific date
+ * Remaining Legacy Functions:
+ * - latestEmpSerialNumber: Used for generating new employee IDs
  */
 
 const EmployeeSchema = require("../models/EmployeeSchema");
 
 /**
- * Get the latest employee serial number for generating new employee IDs for a specific site
- * Uses efficient sorting method to find the highest serial number within a site
- * @param {String} siteID - The site ID to check for existing employee IDs
- * @returns {Number} Latest serial number from existing employee IDs for the specified site
+ * Get the latest employee serial number for generating new employee IDs
+ * @returns {Number} Latest serial number from existing employee IDs
  */
-const latestEmpSerialNumber = async (siteID) => {
+const latestEmpSerialNumber = async () => {
   try {
-    if (!siteID || typeof siteID !== 'string') {
-      throw new Error('Site ID is required and must be a string');
-    }
+    // Find the latest employee by extracting number from empid (e.g., "EMP01" -> 1)
+    const latestRecords = await EmployeeSchema.find({}, { empid: 1 }).sort({
+      empid: -1,
+    });
 
-    // Find employees for the specific site and get their empids
-    // Using lean() for better performance as we only need the empid field
-    const siteEmployees = await EmployeeSchema.find(
-      { siteID: siteID.trim() },
-      { empid: 1, _id: 0 }
-    ).lean();
-
-    if (!siteEmployees || siteEmployees.length === 0) {
-      console.log(`📊 No existing employees found for site ${siteID}, starting with serial 0`);
+    if (!latestRecords || latestRecords.length === 0) {
       return 0;
     }
 
-    // Extract serial numbers and find the maximum efficiently
+    // Extract the highest numeric value from all empids
     let maxSerial = 0;
-
-    for (const record of siteEmployees) {
-      const match = record.empid.match(/^EMP(\d+)$/);
+    latestRecords.forEach((record) => {
+      const match = record.empid.match(/EMP(\d+)/);
       if (match) {
-        const serialNum = parseInt(match[1], 10);
+        const serialNum = parseInt(match[1]);
         if (serialNum > maxSerial) {
           maxSerial = serialNum;
         }
       }
-    }
+    });
 
-    console.log(`📊 Latest employee serial for site ${siteID}: ${maxSerial} (from ${siteEmployees.length} employees)`);
     return maxSerial;
   } catch (error) {
-    console.error(`❌ Error fetching latest employee serial number for site ${siteID}:`, error);
+    console.error("Error fetching latest employee serial number:", error);
     throw error;
   }
 };
