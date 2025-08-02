@@ -192,10 +192,13 @@ router.post('/verify-android-purchase', authenticateToken, async (req, res) => {
                 }
             };
 
-            // Mark previous plan history entries as inactive
-            await User.findByIdAndUpdate(user.id, {
-                $set: { "planHistory.$[].isActive": false }
-            });
+            // Mark previous plan history entries as inactive ONLY if they exist
+            if (currentUser.planHistory && currentUser.planHistory.length > 0) {
+                await User.updateOne(
+                    { _id: user.id },
+                    { $set: { "planHistory.$[].isActive": false } }
+                );
+            }
 
             // Update user's subscription in database - use productId directly and save purchase token
             await User.findByIdAndUpdate(
@@ -209,7 +212,7 @@ router.post('/verify-android-purchase', authenticateToken, async (req, res) => {
                     lastPurchaseToken: currentUser.purchaseToken, // Store previous token
                     purchaseToken: purchaseToken, // Save the current purchase token
                     planSource: 'google_play',
-                    $push: { planHistory: planHistoryEntry } // Add to plan history
+                    $push: { planHistory: planHistoryEntry } // Add to plan history (creates array if doesn't exist)
                 }
             );
 

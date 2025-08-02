@@ -90,50 +90,53 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: null
     },
-    planHistory: [{
-      plan: {
-        type: String,
-        enum: ['free', 'pro', 'premium'],
-        required: true
-      },
-      purchasedAt: {
-        type: Date,
-        required: true
-      },
-      expiresAt: {
-        type: Date,
-        required: true
-      },
-      transactionId: {
-        type: String,
-        required: true
-      },
-      platform: {
-        type: String,
-        enum: ['android', 'ios', 'web'],
-        required: true
-      },
-      source: {
-        type: String,
-        enum: ['google_play', 'app_store', 'stripe', 'razorpay', 'manual'],
-        required: true
-      },
-      isActive: {
-        type: Boolean,
-        default: true
-      },
-      renewalToken: String, // For subscription renewals
-      originalPurchaseToken: String, // For tracking original purchase
-      // Google Play specific fields
-      originalProductId: String, // Original product ID from Google Play
-      subscriptionId: String, // Google Play subscription ID
-      regionCode: String, // Purchase region
-      // Additional metadata
-      verificationData: {
-        subscriptionState: String,
-        startTime: Date
-      }
-    }]
+    planHistory: {
+      type: [{
+        plan: {
+          type: String,
+          enum: ['free', 'pro', 'premium'],
+          required: true
+        },
+        purchasedAt: {
+          type: Date,
+          required: true
+        },
+        expiresAt: {
+          type: Date,
+          required: true
+        },
+        transactionId: {
+          type: String,
+          required: true
+        },
+        platform: {
+          type: String,
+          enum: ['android', 'ios', 'web'],
+          required: true
+        },
+        source: {
+          type: String,
+          enum: ['google_play', 'app_store', 'stripe', 'razorpay', 'manual'],
+          required: true
+        },
+        isActive: {
+          type: Boolean,
+          default: true
+        },
+        renewalToken: String, // For subscription renewals
+        originalPurchaseToken: String, // For tracking original purchase
+        // Google Play specific fields
+        originalProductId: String, // Original product ID from Google Play
+        subscriptionId: String, // Google Play subscription ID
+        regionCode: String, // Purchase region
+        // Additional metadata
+        verificationData: {
+          subscriptionState: String,
+          startTime: Date
+        }
+      }],
+      default: [] // Ensure every user has an empty array by default
+    }
   },
   {
     timestamps: true,
