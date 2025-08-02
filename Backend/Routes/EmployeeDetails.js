@@ -132,12 +132,27 @@ router.post("/addemployee", authenticateToken, async (req, res) => {
     // Get user info from auth middleware (JWT contains email)
     const createdBy = req.user.name || req.user?.email || "unknown-user";
 
-    // Get the latest employee serial number
-    const latestSerial = await latestEmpSerialNumber();
+    // Get the latest employee serial number for this specific site
+    const latestSerial = await latestEmpSerialNumber(siteID.trim());
     const newSerial = latestSerial + 1;
     const newEmpId = `EMP${newSerial.toString().padStart(3, "0")}`;
+    
+    // Additional validation to ensure no ID collision
+    const existingEmpWithId = await employeeSchema.findOne({
+      empid: newEmpId,
+      siteID: siteID.trim()
+    });
+    
+    if (existingEmpWithId) {
+      console.error(`❌ Employee ID collision detected: ${newEmpId} already exists for site ${siteID}`);
+      return res.status(500).json({
+        success: false,
+        error: "Employee ID generation failed due to collision. Please try again.",
+      });
+    }
+    
     // console.log(
-    //   `🆔 Assigning new employee ID: ${newEmpId} (latest serial: ${latestSerial})`
+    //   `🆔 Assigning new employee ID: ${newEmpId} (latest serial: ${latestSerial}) for site: ${siteID}`
     // );
     // console.log(`👤 Created by: ${createdBy}`);
 
