@@ -96,8 +96,15 @@ router.post("/addemployee", authenticateToken, async (req, res) => {
   try {
     // console.log("📝 Creating new employee:", req.body);
 
-    const { name, siteID, wage: rate, month, year } = req.body;
+    let { name, siteID, wage: rate, month, year } = req.body;
+
     // If month and year are not provided, use current month/year
+    if (!month || !year) {
+      const currentDate = new Date();
+      month = month || (currentDate.getMonth() + 1);
+      year = year || currentDate.getFullYear();
+    }
+
     // Validate required fields
     if (!name || name.trim() === "") {
       return res.status(400).json({
@@ -120,8 +127,22 @@ router.post("/addemployee", authenticateToken, async (req, res) => {
       });
     }
 
-    if (!month || !year) {
-      // console.log("No month/year provided, using current month/year");
+    // Validate month and year ranges
+    if (month < 1 || month > 12) {
+      return res.status(400).json({
+        success: false,
+        error: "Month must be between 1 and 12.",
+      });
+    }
+    // Ensure month and year are integers
+    const monthInt = parseInt(month);
+    const yearInt = parseInt(year);
+
+    if (year < 2000 || year > 2100) {
+      return res.status(400).json({
+        success: false,
+        error: "Year must be between 2000 and 2100.",
+      });
     }
 
     // // Set default values for other required fields
@@ -132,8 +153,8 @@ router.post("/addemployee", authenticateToken, async (req, res) => {
     // Get user info from auth middleware (JWT contains email)
     const createdBy = req.user.name || req.user?.email || "unknown-user";
 
-    // Get the latest employee serial number
-    const latestSerial = await latestEmpSerialNumber();
+    // Get the latest employee serial number for the specific site
+    const latestSerial = await latestEmpSerialNumber(siteID.trim());
     const newSerial = latestSerial + 1;
     const newEmpId = `EMP${newSerial.toString().padStart(3, "0")}`;
     // console.log(
@@ -146,8 +167,8 @@ router.post("/addemployee", authenticateToken, async (req, res) => {
       // get already total employees in the month
       const totalEmployees = await employeeSchema.countDocuments({
         siteID: siteID.trim(),
-        month: month,
-        year: year,
+        month: monthInt,
+        year: yearInt,
       });
       if (totalEmployees >= 20) {
         return res.status(403).json({
@@ -160,24 +181,26 @@ router.post("/addemployee", authenticateToken, async (req, res) => {
     // Check if employee already exists for this month/year
     const existingEmployee = await employeeSchema.findOne({
       empid: newEmpId,
-      month: month,
-      year: year,
+      month: monthInt,
+      year: yearInt,
     });
 
     if (existingEmployee) {
       return res.status(409).json({
         success: false,
-        error: `Employee ${newEmpId} already exists for ${month}/${year}.`,
+        error: `Employee ${newEmpId} already exists for ${monthInt}/${yearInt}.`,
       });
     }
+
+
 
     // Create new employee object with provided and default values
     const newEmployeeData = {
       name: name.trim(),
       empid: newEmpId,
       rate: parseFloat(rate),
-      month: month,
-      year: year,
+      month: monthInt,
+      year: yearInt,
       siteID: siteID.trim(),
       payouts: [],
       wage: 0,
@@ -204,8 +227,8 @@ router.post("/addemployee", authenticateToken, async (req, res) => {
       const changeTrackingResult = await trackOptimizedChanges(
         siteID.trim(),
         newEmpId,
-        month,
-        year,
+        monthInt,
+        yearInt,
         createdBy,
         `New employee "${name}" added to the system by ${createdBy}`,
         {}, // oldEmployeeData (empty for new employee)
@@ -226,14 +249,14 @@ router.post("/addemployee", authenticateToken, async (req, res) => {
             changesRecorded: changeTrackingResult.length,
           },
           metadata: {
-            month: month,
-            year: year,
+            month: monthInt,
+            year: yearInt,
             rate: parseFloat(rate),
             siteID: siteID.trim(),
             createdBy: createdBy,
           },
         },
-        message: `Employee ${name} (${newEmpId}) created successfully for ${month}/${year} by ${createdBy}`,
+        message: `Employee ${name} (${newEmpId}) created successfully for ${monthInt}/${yearInt} by ${createdBy}`,
       });
     } catch (trackingError) {
       console.warn(
@@ -251,14 +274,14 @@ router.post("/addemployee", authenticateToken, async (req, res) => {
             details: trackingError.message,
           },
           metadata: {
-            month: month,
-            year: year,
+            month: monthInt,
+            year: yearInt,
             rate: parseFloat(rate),
             siteID: siteID.trim(),
             createdBy: createdBy,
           },
         },
-        message: `Employee ${name} (${newEmpId}) created successfully for ${month}/${year} by ${createdBy} (change tracking failed)`,
+        message: `Employee ${name} (${newEmpId}) created successfully for ${monthInt}/${yearInt} by ${createdBy} (change tracking failed)`,
       });
     }
   } catch (error) {
