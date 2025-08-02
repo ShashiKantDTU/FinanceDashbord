@@ -7,12 +7,32 @@ const { authenticateToken } = require('../Middleware/auth');
 // Make sure you have this at the top of your server file to load .env variables
 require("dotenv").config();
 
+/**
+ * Helper function to convert Google Play notification type numbers to readable strings
+ * @param {number} notificationType - The numeric notification type from Google Play
+ * @returns {string} - Human readable notification type name
+ */
+function getNotificationTypeName(notificationType) {
+    const notificationTypes = {
+        1: 'SUBSCRIPTION_PURCHASED',
+        2: 'SUBSCRIPTION_RENEWED',
+        3: 'SUBSCRIPTION_CANCELED',
+        4: 'SUBSCRIPTION_ON_HOLD',
+        5: 'SUBSCRIPTION_IN_GRACE_PERIOD',
+        6: 'SUBSCRIPTION_RESTARTED',
+        12: 'SUBSCRIPTION_EXPIRED',
+        13: 'SUBSCRIPTION_RECOVERED'
+    };
+
+    return notificationTypes[notificationType] || `UNKNOWN_TYPE_${notificationType}`;
+}
+
 async function verifyAndroidPurchase(packageName, purchaseToken, requestId = 'unknown') {
     console.log(`[${requestId}] 🔍 verifyAndroidPurchase() started`);
     console.log(`[${requestId}] 📋 Parameters:`);
     console.log(`[${requestId}]   - Package Name: ${packageName}`);
     console.log(`[${requestId}]   - Purchase Token: ${purchaseToken?.substring(0, 20)}...${purchaseToken?.substring(-10)}`);
-    
+
     try {
         // Parse the NEW, dedicated key for Play Billing
         console.log(`[${requestId}] 🔑 Parsing service account credentials...`);
@@ -43,10 +63,10 @@ async function verifyAndroidPurchase(packageName, purchaseToken, requestId = 'un
 
         if (response.data && response.data.subscriptionState === 'SUBSCRIPTION_STATE_ACTIVE') {
             console.log(`[${requestId}] ✅ Subscription is ACTIVE`);
-            
+
             const lineItem = response.data.lineItems[0];
             const originalProductId = lineItem.productId;
-            
+
             console.log(`[${requestId}] 📦 Line item details:`);
             console.log(`[${requestId}]   - Original Product ID: ${originalProductId}`);
             console.log(`[${requestId}]   - Expiry Time: ${lineItem.expiryTime}`);
@@ -74,22 +94,22 @@ async function verifyAndroidPurchase(packageName, purchaseToken, requestId = 'un
                 regionCode: response.data.regionCode || null,
                 subscriptionId: response.data.subscriptionId || null
             };
-            
+
             console.log(`[${requestId}] ✅ Verification successful!`);
             console.log(`[${requestId}] 📤 Returning result:`, JSON.stringify(verificationResult, null, 2));
-            
+
             return verificationResult;
         } else {
             console.log(`[${requestId}] ❌ Subscription is NOT active`);
             console.log(`[${requestId}] 📊 Subscription state: ${response.data?.subscriptionState || 'unknown'}`);
-            
-            const errorResult = { 
-                success: false, 
+
+            const errorResult = {
+                success: false,
                 error: `Subscription is not active. State: ${response.data?.subscriptionState || 'unknown'}`,
                 subscriptionState: response.data?.subscriptionState,
                 rawResponse: response.data
             };
-            
+
             console.log(`[${requestId}] 📤 Returning error result:`, JSON.stringify(errorResult, null, 2));
             return errorResult;
         }
@@ -97,26 +117,26 @@ async function verifyAndroidPurchase(packageName, purchaseToken, requestId = 'un
         console.log(`[${requestId}] ❌ Google API Error occurred:`);
         console.log(`[${requestId}] Error name:`, error.name);
         console.log(`[${requestId}] Error message:`, error.message);
-        
+
         if (error.response) {
             console.log(`[${requestId}] 📊 Error response status:`, error.response.status);
             console.log(`[${requestId}] 📊 Error response data:`, JSON.stringify(error.response.data, null, 2));
         }
-        
+
         if (error.code) {
             console.log(`[${requestId}] 📊 Error code:`, error.code);
         }
-        
+
         console.log(`[${requestId}] 📊 Full error stack:`, error.stack);
-        
-        const errorResult = { 
-            success: false, 
+
+        const errorResult = {
+            success: false,
             error: `Failed to verify purchase with Google: ${error.message}`,
             errorCode: error.code,
             errorStatus: error.response?.status,
             errorData: error.response?.data
         };
-        
+
         console.log(`[${requestId}] 📤 Returning error result:`, JSON.stringify(errorResult, null, 2));
         return errorResult;
     }
@@ -250,9 +270,9 @@ router.get("/debug-user/:userId?", authenticateToken, async (req, res) => {
 
     try {
         const userId = req.params.userId || req.user.id;
-        
+
         console.log(`🔍 Debug request for user: ${userId}`);
-        
+
         const user = await User.findById(userId);
         if (!user) {
             return res.status(404).json({ error: 'User not found' });
@@ -283,7 +303,7 @@ router.get("/debug-user/:userId?", authenticateToken, async (req, res) => {
         };
 
         console.log(`✅ Debug info retrieved for user ${userId}`);
-        
+
         res.status(200).json({
             message: 'Debug info retrieved',
             user: debugInfo
@@ -309,7 +329,7 @@ router.get("/debug-user/:userId?", authenticateToken, async (req, res) => {
 async function findUserByPurchaseToken(purchaseToken, requestId = 'unknown') {
     console.log(`[${requestId}] 🔍 findUserByPurchaseToken() started`);
     console.log(`[${requestId}] 🎯 Searching for purchase token: ${purchaseToken?.substring(0, 20)}...${purchaseToken?.substring(-10)}`);
-    
+
     try {
         // Search query
         const searchQuery = {
@@ -319,15 +339,15 @@ async function findUserByPurchaseToken(purchaseToken, requestId = 'unknown') {
                 { 'planHistory.transactionId': purchaseToken }
             ]
         };
-        
+
         console.log(`[${requestId}] 📋 Search query:`, JSON.stringify(searchQuery, null, 2));
         console.log(`[${requestId}] 🔍 Searching in fields:`);
         console.log(`[${requestId}]   - purchaseToken (current active token)`);
         console.log(`[${requestId}]   - lastPurchaseToken (previous token)`);
         console.log(`[${requestId}]   - planHistory.transactionId (historical transactions)`);
-        
+
         const user = await User.findOne(searchQuery);
-        
+
         if (user) {
             console.log(`[${requestId}] ✅ User found!`);
             console.log(`[${requestId}] 👤 User details:`);
@@ -340,7 +360,7 @@ async function findUserByPurchaseToken(purchaseToken, requestId = 'unknown') {
             console.log(`[${requestId}]   - Plan Expires At: ${user.planExpiresAt}`);
             console.log(`[${requestId}]   - Payment Verified: ${user.isPaymentVerified}`);
             console.log(`[${requestId}]   - Plan History Count: ${user.planHistory?.length || 0}`);
-            
+
             // Check which field matched
             if (user.purchaseToken === purchaseToken) {
                 console.log(`[${requestId}] 🎯 Match found in: purchaseToken (current active)`);
@@ -359,7 +379,7 @@ async function findUserByPurchaseToken(purchaseToken, requestId = 'unknown') {
             console.log(`[${requestId}]   - Current purchase tokens`);
             console.log(`[${requestId}]   - Previous purchase tokens`);
             console.log(`[${requestId}]   - Historical transaction IDs`);
-            
+
             // Additional debugging - let's see if there are any users with similar tokens
             try {
                 const partialToken = purchaseToken?.substring(0, 10);
@@ -369,7 +389,7 @@ async function findUserByPurchaseToken(purchaseToken, requestId = 'unknown') {
                         { lastPurchaseToken: { $regex: partialToken, $options: 'i' } }
                     ]
                 }).limit(5);
-                
+
                 if (similarUsers.length > 0) {
                     console.log(`[${requestId}] 🔍 Found ${similarUsers.length} users with similar token patterns:`);
                     similarUsers.forEach((u, index) => {
@@ -382,10 +402,10 @@ async function findUserByPurchaseToken(purchaseToken, requestId = 'unknown') {
                 console.log(`[${requestId}] ⚠️ Debug search failed:`, debugError.message);
             }
         }
-        
+
         console.log(`[${requestId}] ✅ findUserByPurchaseToken() completed`);
         return user;
-        
+
     } catch (error) {
         console.log(`[${requestId}] ❌ Error in findUserByPurchaseToken():`);
         console.log(`[${requestId}] Error name:`, error.name);
@@ -397,21 +417,37 @@ async function findUserByPurchaseToken(purchaseToken, requestId = 'unknown') {
 
 /**
  * Helper function to update user subscription based on notification
+ * 
+ * Google Play Notification Types (sent as numbers):
+ * 1  = SUBSCRIPTION_PURCHASED - Initial subscription purchase
+ * 2  = SUBSCRIPTION_RENEWED - Subscription renewed (auto-renewal)
+ * 3  = SUBSCRIPTION_CANCELED - User cancelled subscription
+ * 4  = SUBSCRIPTION_ON_HOLD - Subscription on hold (payment issue)
+ * 5  = SUBSCRIPTION_IN_GRACE_PERIOD - Grace period for failed payment
+ * 6  = SUBSCRIPTION_RESTARTED - Subscription restarted after being on hold
+ * 12 = SUBSCRIPTION_EXPIRED - Subscription expired
+ * 13 = SUBSCRIPTION_RECOVERED - Subscription recovered from on hold/grace period
+ * 
+ * @param {Object} user - User document from database
+ * @param {Object} notification - Notification object from Google Play
+ * @param {number} notificationType - Numeric notification type from Google Play
+ * @param {string} requestId - Unique request identifier for logging
+ * @returns {Object} - Result object with success status and details
  */
 async function updateUserSubscription(user, notification, notificationType, requestId = 'unknown') {
     console.log(`[${requestId}] 🔄 updateUserSubscription() started`);
     console.log(`[${requestId}] Input parameters:`);
     console.log(`[${requestId}]   - User ID: ${user._id}`);
     console.log(`[${requestId}]   - User Email: ${user.email}`);
-    console.log(`[${requestId}]   - Notification Type: ${notificationType}`);
+    console.log(`[${requestId}]   - Notification Type: ${notificationType} (${getNotificationTypeName(notificationType)})`);
     console.log(`[${requestId}]   - Notification Object:`, JSON.stringify(notification, null, 2));
-    
+
     try {
         let updateData = {};
         let message = '';
         let additionalInfo = {};
 
-        console.log(`[${requestId}] 🔀 Processing notification type: ${notificationType}`);
+        console.log(`[${requestId}] 🔀 Processing notification type: ${notificationType} (${getNotificationTypeName(notificationType)})`);
 
         // Store user's current state before update
         const userStateBefore = {
@@ -424,24 +460,26 @@ async function updateUserSubscription(user, notification, notificationType, requ
         };
         console.log(`[${requestId}] 📊 User state BEFORE update:`, JSON.stringify(userStateBefore, null, 2));
 
+        // Google Play sends notification types as numbers, not strings
+        // Reference: https://developer.android.com/google/play/billing/rtdn-reference#sub
         switch (notificationType) {
-            case 'SUBSCRIPTION_RENEWED':
-                console.log(`[${requestId}] 🔄 Processing SUBSCRIPTION_RENEWED...`);
+            case 2: // SUBSCRIPTION_RENEWED
+                console.log(`[${requestId}] 🔄 Processing SUBSCRIPTION_RENEWED (type: 2)...`);
                 console.log(`[${requestId}] 🔍 Verifying purchase with Google Play API...`);
-                
+
                 const verification = await verifyAndroidPurchase('com.sitehaazri.app', notification.purchaseToken, requestId);
                 console.log(`[${requestId}] 📋 Google Play verification result:`, JSON.stringify(verification, null, 2));
 
                 if (verification.success) {
                     console.log(`[${requestId}] ✅ Google Play verification successful`);
-                    
+
                     // Calculate billing cycle
                     const expiryDate = new Date(verification.expires);
                     const currentDate = new Date();
                     const diffInMs = expiryDate - currentDate;
                     const diffInDays = diffInMs / (1000 * 60 * 60 * 24);
                     const billingCycle = diffInDays > 180 ? 'yearly' : 'monthly';
-                    
+
                     console.log(`[${requestId}] 📅 Billing cycle calculation:`);
                     console.log(`[${requestId}]   - Expiry Date: ${expiryDate.toISOString()}`);
                     console.log(`[${requestId}]   - Current Date: ${currentDate.toISOString()}`);
@@ -457,7 +495,7 @@ async function updateUserSubscription(user, notification, notificationType, requ
                         purchaseToken: notification.purchaseToken,
                         planActivatedAt: new Date()
                     };
-                    
+
                     message = 'Subscription renewed successfully';
                     additionalInfo = {
                         originalProductId: verification.originalProductId,
@@ -465,14 +503,14 @@ async function updateUserSubscription(user, notification, notificationType, requ
                         regionCode: verification.regionCode,
                         subscriptionState: verification.subscriptionState
                     };
-                    
+
                     console.log(`[${requestId}] ✅ Renewal update data prepared:`, JSON.stringify(updateData, null, 2));
                 } else {
                     console.log(`[${requestId}] ❌ Google Play verification failed:`, verification.error);
                     message = `Renewal verification failed: ${verification.error}`;
-                    return { 
-                        success: false, 
-                        error: verification.error, 
+                    return {
+                        success: false,
+                        error: verification.error,
                         userId: user._id,
                         message: message,
                         requestId: requestId
@@ -480,8 +518,8 @@ async function updateUserSubscription(user, notification, notificationType, requ
                 }
                 break;
 
-            case 'SUBSCRIPTION_CANCELED':
-                console.log(`[${requestId}] 🚫 Processing SUBSCRIPTION_CANCELED...`);
+            case 3: // SUBSCRIPTION_CANCELED
+                console.log(`[${requestId}] 🚫 Processing SUBSCRIPTION_CANCELED (type: 3)...`);
                 updateData = {
                     plan: 'free',
                     billing_cycle: 'monthly',
@@ -494,8 +532,8 @@ async function updateUserSubscription(user, notification, notificationType, requ
                 console.log(`[${requestId}] ✅ Cancellation update data prepared:`, JSON.stringify(updateData, null, 2));
                 break;
 
-            case 'SUBSCRIPTION_EXPIRED':
-                console.log(`[${requestId}] ⏰ Processing SUBSCRIPTION_EXPIRED...`);
+            case 12: // SUBSCRIPTION_EXPIRED
+                console.log(`[${requestId}] ⏰ Processing SUBSCRIPTION_EXPIRED (type: 12)...`);
                 updateData = {
                     plan: 'free',
                     billing_cycle: 'monthly',
@@ -508,10 +546,10 @@ async function updateUserSubscription(user, notification, notificationType, requ
                 console.log(`[${requestId}] ✅ Expiration update data prepared:`, JSON.stringify(updateData, null, 2));
                 break;
 
-            case 'SUBSCRIPTION_RECOVERED':
-                console.log(`[${requestId}] 🔄 Processing SUBSCRIPTION_RECOVERED...`);
+            case 13: // SUBSCRIPTION_RECOVERED
+                console.log(`[${requestId}] 🔄 Processing SUBSCRIPTION_RECOVERED (type: 13)...`);
                 console.log(`[${requestId}] 🔍 Verifying recovered subscription with Google Play API...`);
-                
+
                 const recoveryVerification = await verifyAndroidPurchase('com.sitehaazri.app', notification.purchaseToken, requestId);
                 console.log(`[${requestId}] 📋 Recovery verification result:`, JSON.stringify(recoveryVerification, null, 2));
 
@@ -536,9 +574,105 @@ async function updateUserSubscription(user, notification, notificationType, requ
                 } else {
                     console.log(`[${requestId}] ❌ Recovery verification failed:`, recoveryVerification.error);
                     message = `Recovery verification failed: ${recoveryVerification.error}`;
-                    return { 
-                        success: false, 
-                        error: recoveryVerification.error, 
+                    return {
+                        success: false,
+                        error: recoveryVerification.error,
+                        userId: user._id,
+                        message: message,
+                        requestId: requestId
+                    };
+                }
+                break;
+
+            case 1: // SUBSCRIPTION_PURCHASED (initial purchase)
+                console.log(`[${requestId}] 🛒 Processing SUBSCRIPTION_PURCHASED (type: 1)...`);
+                console.log(`[${requestId}] 🔍 Verifying new purchase with Google Play API...`);
+
+                const purchaseVerification = await verifyAndroidPurchase('com.sitehaazri.app', notification.purchaseToken, requestId);
+                console.log(`[${requestId}] 📋 Purchase verification result:`, JSON.stringify(purchaseVerification, null, 2));
+
+                if (purchaseVerification.success) {
+                    const expiryDate = new Date(purchaseVerification.expires);
+                    const currentDate = new Date();
+                    const diffInMs = expiryDate - currentDate;
+                    const diffInDays = diffInMs / (1000 * 60 * 60 * 24);
+                    const billingCycle = diffInDays > 180 ? 'yearly' : 'monthly';
+
+                    updateData = {
+                        plan: purchaseVerification.productId,
+                        billing_cycle: billingCycle,
+                        planExpiresAt: expiryDate,
+                        isPaymentVerified: true,
+                        lastPurchaseToken: user.purchaseToken,
+                        purchaseToken: notification.purchaseToken,
+                        planActivatedAt: new Date()
+                    };
+                    message = 'New subscription purchased successfully';
+                    additionalInfo = {
+                        originalProductId: purchaseVerification.originalProductId,
+                        subscriptionId: purchaseVerification.subscriptionId,
+                        regionCode: purchaseVerification.regionCode,
+                        subscriptionState: purchaseVerification.subscriptionState
+                    };
+                    console.log(`[${requestId}] ✅ Purchase update data prepared:`, JSON.stringify(updateData, null, 2));
+                } else {
+                    console.log(`[${requestId}] ❌ Purchase verification failed:`, purchaseVerification.error);
+                    message = `Purchase verification failed: ${purchaseVerification.error}`;
+                    return {
+                        success: false,
+                        error: purchaseVerification.error,
+                        userId: user._id,
+                        message: message,
+                        requestId: requestId
+                    };
+                }
+                break;
+
+            case 4: // SUBSCRIPTION_ON_HOLD
+                console.log(`[${requestId}] ⏸️ Processing SUBSCRIPTION_ON_HOLD (type: 4)...`);
+                // For on-hold, we might want to keep the subscription active but flag it
+                message = 'Subscription placed on hold - keeping current plan active';
+                console.log(`[${requestId}] ℹ️ Subscription on hold - no database changes made`);
+                break;
+
+            case 5: // SUBSCRIPTION_IN_GRACE_PERIOD
+                console.log(`[${requestId}] ⏳ Processing SUBSCRIPTION_IN_GRACE_PERIOD (type: 5)...`);
+                // For grace period, keep subscription active
+                message = 'Subscription in grace period - keeping current plan active';
+                console.log(`[${requestId}] ℹ️ Subscription in grace period - no database changes made`);
+                break;
+
+            case 6: // SUBSCRIPTION_RESTARTED
+                console.log(`[${requestId}] 🔄 Processing SUBSCRIPTION_RESTARTED (type: 6)...`);
+                console.log(`[${requestId}] 🔍 Verifying restarted subscription with Google Play API...`);
+
+                const restartVerification = await verifyAndroidPurchase('com.sitehaazri.app', notification.purchaseToken, requestId);
+                console.log(`[${requestId}] 📋 Restart verification result:`, JSON.stringify(restartVerification, null, 2));
+
+                if (restartVerification.success) {
+                    const expiryDate = new Date(restartVerification.expires);
+                    const currentDate = new Date();
+                    const diffInMs = expiryDate - currentDate;
+                    const diffInDays = diffInMs / (1000 * 60 * 60 * 24);
+                    const billingCycle = diffInDays > 180 ? 'yearly' : 'monthly';
+
+                    updateData = {
+                        plan: restartVerification.productId,
+                        billing_cycle: billingCycle,
+                        planExpiresAt: expiryDate,
+                        isPaymentVerified: true,
+                        lastPurchaseToken: user.purchaseToken,
+                        purchaseToken: notification.purchaseToken,
+                        planActivatedAt: new Date()
+                    };
+                    message = 'Subscription restarted successfully';
+                    console.log(`[${requestId}] ✅ Restart update data prepared:`, JSON.stringify(updateData, null, 2));
+                } else {
+                    console.log(`[${requestId}] ❌ Restart verification failed:`, restartVerification.error);
+                    message = `Restart verification failed: ${restartVerification.error}`;
+                    return {
+                        success: false,
+                        error: restartVerification.error,
                         userId: user._id,
                         message: message,
                         requestId: requestId
@@ -548,6 +682,15 @@ async function updateUserSubscription(user, notification, notificationType, requ
 
             default:
                 console.log(`[${requestId}] ⚠️ Unknown notification type: ${notificationType}`);
+                console.log(`[${requestId}] 📋 Known notification types:`);
+                console.log(`[${requestId}]   - 1: SUBSCRIPTION_PURCHASED`);
+                console.log(`[${requestId}]   - 2: SUBSCRIPTION_RENEWED`);
+                console.log(`[${requestId}]   - 3: SUBSCRIPTION_CANCELED`);
+                console.log(`[${requestId}]   - 4: SUBSCRIPTION_ON_HOLD`);
+                console.log(`[${requestId}]   - 5: SUBSCRIPTION_IN_GRACE_PERIOD`);
+                console.log(`[${requestId}]   - 6: SUBSCRIPTION_RESTARTED`);
+                console.log(`[${requestId}]   - 12: SUBSCRIPTION_EXPIRED`);
+                console.log(`[${requestId}]   - 13: SUBSCRIPTION_RECOVERED`);
                 message = `Unknown notification type processed: ${notificationType}`;
                 console.log(`[${requestId}] ℹ️ No database update will be performed for unknown notification type`);
         }
@@ -557,28 +700,28 @@ async function updateUserSubscription(user, notification, notificationType, requ
             console.log(`[${requestId}] 💾 Performing database update...`);
             console.log(`[${requestId}] 🎯 Target User ID: ${user._id}`);
             console.log(`[${requestId}] 📝 Update data:`, JSON.stringify(updateData, null, 2));
-            
+
             try {
                 const updateResult = await User.findByIdAndUpdate(
-                    user._id, 
-                    updateData, 
-                    { 
+                    user._id,
+                    updateData,
+                    {
                         new: true, // Return updated document
                         runValidators: true // Run schema validators
                     }
                 );
-                
+
                 if (!updateResult) {
                     console.log(`[${requestId}] ❌ Database update failed - user not found or update failed`);
-                    return { 
-                        success: false, 
-                        error: 'User not found or update failed', 
+                    return {
+                        success: false,
+                        error: 'User not found or update failed',
                         userId: user._id,
                         message: 'Database update failed',
                         requestId: requestId
                     };
                 }
-                
+
                 console.log(`[${requestId}] ✅ Database update successful!`);
                 console.log(`[${requestId}] 📊 Updated user data:`, {
                     id: updateResult._id,
@@ -600,7 +743,7 @@ async function updateUserSubscription(user, notification, notificationType, requ
                     purchaseToken: updateResult.purchaseToken,
                     lastPurchaseToken: updateResult.lastPurchaseToken
                 };
-                
+
                 console.log(`[${requestId}] 📊 User state AFTER update:`, JSON.stringify(userStateAfter, null, 2));
                 console.log(`[${requestId}] 🔄 Changes made:`);
                 Object.keys(updateData).forEach(key => {
@@ -610,13 +753,13 @@ async function updateUserSubscription(user, notification, notificationType, requ
                         console.log(`[${requestId}]   - ${key}: ${oldValue} → ${newValue}`);
                     }
                 });
-                
+
             } catch (dbError) {
                 console.log(`[${requestId}] ❌ Database update error:`, dbError.message);
                 console.log(`[${requestId}] 📋 Database error details:`, dbError);
-                return { 
-                    success: false, 
-                    error: `Database update failed: ${dbError.message}`, 
+                return {
+                    success: false,
+                    error: `Database update failed: ${dbError.message}`,
                     userId: user._id,
                     message: 'Database update error',
                     requestId: requestId
@@ -626,18 +769,18 @@ async function updateUserSubscription(user, notification, notificationType, requ
             console.log(`[${requestId}] ℹ️ No database update needed - updateData is empty`);
         }
 
-        const successResult = { 
-            success: true, 
-            message, 
+        const successResult = {
+            success: true,
+            message,
             userId: user._id,
             updateData: updateData,
             additionalInfo: additionalInfo,
             requestId: requestId
         };
-        
+
         console.log(`[${requestId}] ✅ updateUserSubscription() completed successfully`);
         console.log(`[${requestId}] 📤 Returning result:`, JSON.stringify(successResult, null, 2));
-        
+
         return successResult;
 
     } catch (error) {
@@ -645,15 +788,15 @@ async function updateUserSubscription(user, notification, notificationType, requ
         console.log(`[${requestId}] Error name:`, error.name);
         console.log(`[${requestId}] Error message:`, error.message);
         console.log(`[${requestId}] Error stack:`, error.stack);
-        
-        const errorResult = { 
-            success: false, 
-            error: error.message, 
+
+        const errorResult = {
+            success: false,
+            error: error.message,
             userId: user._id,
             message: `Update failed: ${error.message}`,
             requestId: requestId
         };
-        
+
         console.log(`[${requestId}] 📤 Returning error result:`, JSON.stringify(errorResult, null, 2));
         return errorResult;
     }
@@ -665,13 +808,13 @@ async function updateUserSubscription(user, notification, notificationType, requ
  */
 router.post('/notifications', async (req, res) => {
     const requestId = `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    
+
     console.log(`\n🔔 [${requestId}] ===== NOTIFICATION WEBHOOK STARTED =====`);
     console.log(`[${requestId}] Timestamp: ${new Date().toISOString()}`);
     console.log(`[${requestId}] Request Headers:`, JSON.stringify(req.headers, null, 2));
     console.log(`[${requestId}] Request Body Type:`, typeof req.body);
     console.log(`[${requestId}] Request Body Length:`, req.body ? req.body.length : 'null');
-    
+
     try {
         // Step 1: Parse raw request body
         console.log(`[${requestId}] 📥 Step 1: Parsing raw request body...`);
@@ -705,7 +848,7 @@ router.post('/notifications', async (req, res) => {
         if (!pubsubMessage.message?.data) {
             throw new Error('No data field in Pub/Sub message');
         }
-        
+
         const decodedData = Buffer.from(pubsubMessage.message.data, 'base64').toString('utf-8');
         console.log(`[${requestId}] ✅ Base64 data decoded successfully`);
         console.log(`[${requestId}] Decoded data:`, decodedData);
@@ -726,9 +869,9 @@ router.post('/notifications', async (req, res) => {
         const notificationType = subscription.notificationType;
         const purchaseToken = subscription.purchaseToken;
         const subscriptionId = subscription.subscriptionId;
-        
+
         console.log(`[${requestId}] ✅ Subscription details extracted:`);
-        console.log(`[${requestId}]   - Notification Type: ${notificationType}`);
+        console.log(`[${requestId}]   - Notification Type: ${notificationType} (${getNotificationTypeName(notificationType)})`);
         console.log(`[${requestId}]   - Purchase Token: ${purchaseToken?.substring(0, 20)}...${purchaseToken?.substring(-10)}`);
         console.log(`[${requestId}]   - Subscription ID: ${subscriptionId}`);
         console.log(`[${requestId}]   - Full subscription object:`, JSON.stringify(subscription, null, 2));
@@ -736,17 +879,18 @@ router.post('/notifications', async (req, res) => {
         // Step 6: Find user by purchase token
         console.log(`[${requestId}] 👤 Step 6: Finding user by purchase token...`);
         const user = await findUserByPurchaseToken(purchaseToken, requestId);
-        
+
         if (!user) {
             console.log(`[${requestId}] ❌ No user found for purchase token: ${purchaseToken?.substring(0, 20)}...`);
             console.log(`[${requestId}] 🔍 Searched in fields: purchaseToken, lastPurchaseToken, planHistory.transactionId`);
-            
+
             return res.status(200).json({
                 message: 'No user found for purchase token',
                 acknowledged: true,
                 requestId: requestId,
                 purchaseToken: purchaseToken?.substring(0, 20) + '...',
-                notificationType: notificationType
+                notificationType: notificationType,
+                notificationTypeName: getNotificationTypeName(notificationType)
             });
         }
 
@@ -779,6 +923,7 @@ router.post('/notifications', async (req, res) => {
             acknowledged: true,
             requestId: requestId,
             notificationType: notificationType,
+            notificationTypeName: getNotificationTypeName(notificationType),
             userId: user._id.toString(),
             updateResult: updateResult.message
         };
@@ -793,7 +938,7 @@ router.post('/notifications', async (req, res) => {
         console.log(`[${requestId}] Error name:`, error.name);
         console.log(`[${requestId}] Error message:`, error.message);
         console.log(`[${requestId}] Error stack:`, error.stack);
-        
+
         const errorResponse = {
             message: 'Error processing notification',
             error: error.message,
@@ -817,7 +962,7 @@ router.post('/test-notification', async (req, res) => {
     }
 
     const testId = `test_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    
+
     console.log(`\n🧪 [${testId}] ===== TEST NOTIFICATION STARTED =====`);
     console.log(`[${testId}] Timestamp: ${new Date().toISOString()}`);
     console.log(`[${testId}] Request body:`, JSON.stringify(req.body, null, 2));
@@ -827,7 +972,7 @@ router.post('/test-notification', async (req, res) => {
 
         if (!notificationType || !purchaseToken) {
             console.log(`[${testId}] ❌ Missing required parameters`);
-            return res.status(400).json({ 
+            return res.status(400).json({
                 error: 'notificationType and purchaseToken required',
                 testId: testId
             });
@@ -835,10 +980,10 @@ router.post('/test-notification', async (req, res) => {
 
         console.log(`[${testId}] 🔍 Finding user for test...`);
         const user = await findUserByPurchaseToken(purchaseToken, testId);
-        
+
         if (!user) {
             console.log(`[${testId}] ❌ User not found for test`);
-            return res.status(404).json({ 
+            return res.status(404).json({
                 error: 'User not found',
                 testId: testId,
                 purchaseToken: purchaseToken.substring(0, 20) + '...'
@@ -847,9 +992,9 @@ router.post('/test-notification', async (req, res) => {
 
         console.log(`[${testId}] 🔄 Running test update...`);
         const updateResult = await updateUserSubscription(
-            user, 
-            { notificationType, purchaseToken }, 
-            notificationType, 
+            user,
+            { notificationType, purchaseToken },
+            notificationType,
             testId
         );
 
@@ -865,8 +1010,8 @@ router.post('/test-notification', async (req, res) => {
     } catch (error) {
         console.log(`[${testId}] ❌ Test error:`, error.message);
         console.log(`[${testId}] ===== TEST NOTIFICATION FAILED =====\n`);
-        
-        res.status(500).json({ 
+
+        res.status(500).json({
             error: error.message,
             testId: testId
         });
