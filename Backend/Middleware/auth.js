@@ -52,7 +52,7 @@ const authenticateToken = async (req, res, next) => {
                 const owner = await User.findOne({ site: supervisor.site })
                 req.user.plan = owner.plan
                 req.user.planExpiresAt = owner.planExpiresAt,
-                req.user.billing_cycle = user.billing_cycle
+                    req.user.billing_cycle = user.billing_cycle
             }
 
             // if special user superviosr request 

@@ -13,6 +13,8 @@ const { pendingAttendance } = require("../Utils/EmployeeUtils");
 const { markEmployeesForRecalculation } = require("../Utils/Jobs");
 const router = express.Router();
 
+
+
 /**
  * Helper function to mark future months for recalculation after employee deletion
  * @param {String} siteID - Site identifier
@@ -147,10 +149,10 @@ router.post("/addemployee", authenticateToken, async (req, res) => {
         month: month,
         year: year,
       });
-      if (totalEmployees >= 15) {
+      if (totalEmployees >= 20) {
         return res.status(403).json({
           success: false,
-          message: "You have reached the maximum limit of 15 employees for this month. Please upgrade to contractor pro or Haazri Automate to add more employees.",
+          message: "You have reached the maximum limit of 20 employees for this month. Please upgrade to contractor pro or Haazri Automate to add more employees.",
         });
       }
     }
@@ -666,10 +668,10 @@ router.post("/importemployees", authenticateToken, async (req, res) => {
         month: targetMonth,
         year: targetYear,
       });
-      if (totalEmployees >= 15 || employeeIds.length + totalEmployees > 15) {
+      if (totalEmployees >= 20 || employeeIds.length + totalEmployees > 20) {
         return res.status(403).json({
           success: false,
-          message: "You have the maximum limit of 15 employees for this month. Please upgrade to contractor pro or Haazri Automate to add more employees.",
+          message: "You have the maximum limit of 20 employees for this month. Please upgrade to contractor pro or Haazri Automate to add more employees.",
         });
       }
     }
@@ -1107,7 +1109,7 @@ router.get("/allemployees", authenticateToken, async (req, res) => {
             req.user
           );
           // Calculate additional data using Jobs utility
-          const calculationResult = calculateEmployeeData(latestEmployeeData , req.user);
+          const calculationResult = calculateEmployeeData(latestEmployeeData, req.user);
 
           // Get additional fields for frontend compatibility
           const totalAdditionalReqPays =
@@ -1546,6 +1548,42 @@ router.get("/employee/:siteID/:empid/:month/:year",
     //   `🔍 Fetching employee details for ${empid} - ${month}/${year} at site ${siteID}`
     // );
     validateBasicParams(siteID, empid, month, year);
+
+    // Check subscription-based time restrictions for free plan users
+    const userPlan = req.user.plan || 'free';
+    if (userPlan === 'free') {
+      const currentDate = new Date();
+      const currentMonth = currentDate.getMonth() + 1; // Convert to 1-12
+      const currentYear = currentDate.getFullYear();
+
+      const requestedMonth = parseInt(month);
+      const requestedYear = parseInt(year);
+
+      // Calculate previous month
+      let previousMonth = currentMonth - 1;
+      let previousYear = currentYear;
+      if (previousMonth === 0) {
+        previousMonth = 12;
+        previousYear = currentYear - 1;
+      }
+
+      // Allow only current month and previous month
+      const isCurrentMonth = (requestedMonth === currentMonth && requestedYear === currentYear);
+      const isPreviousMonth = (requestedMonth === previousMonth && requestedYear === previousYear);
+
+      if (!isCurrentMonth && !isPreviousMonth) {
+        return res.status(403).json({
+          success: false,
+          message: "Free plan users can only access data from the current and previous month. Please upgrade to Contractor Pro or Haazri Automate to view unlimited historical data.",
+          error: "Historical data access restricted",
+          details: {
+            requestedMonth: `${month}/${year}`,
+            allowedRange: "Current and previous month only",
+            upgradeRequired: true
+          }
+        });
+      }
+    }
 
     try {
       // Use FetchlatestData to get updated employee data
