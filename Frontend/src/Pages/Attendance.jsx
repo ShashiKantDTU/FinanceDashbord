@@ -11,7 +11,7 @@ import VirtualizedAttendanceTable from '../components/VirtualizedAttendanceTable
 import SubscriptionModal from '../components/SubscriptionModal';
 import { useOptimizedAttendance } from '../hooks/useOptimizedAttendance';
 import { useProgressiveEditMode } from '../hooks/useProgressiveEditMode';
-import { shouldShowSubscriptionModal, checkEmployeeLimit, getSubscriptionWarning } from '../utils/subscriptionUtils';
+
 
 const Attendance = () => {
     // Initialize toast notifications
@@ -459,16 +459,6 @@ const Attendance = () => {
 
     // --- ADD EMPLOYEE ACTIONS ---    // Opens the modal for adding a new employee.
     const handleOpenAddEmployeeModal = () => {
-        // Check subscription limits for free plan users
-        const userPlan = user?.plan || 'free';
-        const currentEmployeeCount = attendanceData.length;
-        
-        if (shouldShowSubscriptionModal(userPlan, currentEmployeeCount, 1)) {
-            // Show subscription modal instead of add employee modal
-            setShowSubscriptionModal(true);
-            return;
-        }
-        
         setNewEmployee({ name: '', rate: '' }); // Reset form fields.
         setIsImportMode(false); // Default to manual mode.
         setSourceMonth(getCurrentMonth()); // Reset source month to current month.
@@ -594,17 +584,9 @@ const Attendance = () => {
                 setAvailableEmployees(response.data || []);
                 setShowEmployeeList(true);
                 
-                const userPlan = user?.plan || 'free';
-                const currentEmployeeCount = attendanceData.length;
                 const availableCount = response.data?.length || 0;
                 
                 let successMessage = `Found ${availableCount} employees available for import from ${formatMonthLabel(sourceMonth)}`;
-                
-                // Add warning for free plan users approaching limit
-                const warningMessage = getSubscriptionWarning(userPlan, currentEmployeeCount);
-                if (warningMessage) {
-                    successMessage += `. ${warningMessage}`;
-                }
                 
                 showSuccess(successMessage);
             } else {
@@ -665,17 +647,6 @@ const Attendance = () => {
     const handleImportEmployees = async () => {
         if (selectedEmployees.size === 0) {
             showError('Please select at least one employee to import');
-            return;
-        }
-
-        // Check subscription limits for free plan users
-        const userPlan = user?.plan || 'free';
-        const currentEmployeeCount = attendanceData.length;
-        const selectedEmployeeCount = selectedEmployees.size;
-        
-        if (shouldShowSubscriptionModal(userPlan, currentEmployeeCount, selectedEmployeeCount)) {
-            // Show subscription modal instead of proceeding with import
-            setShowSubscriptionModal(true);
             return;
         }
 
@@ -958,35 +929,12 @@ const Attendance = () => {
                                 className={`${styles.editButton} ${styles.addEmployeeButton}`} // Use general button style + specific
                                 onClick={handleOpenAddEmployeeModal}
                                 disabled={isLoading || isEditMode} // Disable if loading or already in edit mode
-                                title={(() => {
-                                    const userPlan = user?.plan || 'free';
-                                    const currentCount = attendanceData.length;
-                                    const limitCheck = checkEmployeeLimit(userPlan, currentCount);
-                                    
-                                    if (limitCheck.isApproachingLimit && limitCheck.remainingSlots !== Infinity) {
-                                        return `${limitCheck.planName}: ${currentCount}/${limitCheck.maxEmployees} employees used`;
-                                    }
-                                    return 'Add a new employee';
-                                })()}
+                                title="Add a new employee"
                             >
                                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
                                     <path d="M8 3.5V12.5M3.5 8H12.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                                 </svg>
                                 Add Employee
-                                {(() => {
-                                    const userPlan = user?.plan || 'free';
-                                    const currentCount = attendanceData.length;
-                                    const limitCheck = checkEmployeeLimit(userPlan, currentCount);
-                                    
-                                    if (limitCheck.isApproachingLimit && limitCheck.remainingSlots !== Infinity) {
-                                        return (
-                                            <span style={{ fontSize: '0.8em', opacity: 0.8, marginLeft: '4px' }}>
-                                                ({currentCount}/{limitCheck.maxEmployees})
-                                            </span>
-                                        );
-                                    }
-                                    return null;
-                                })()}
                             </button>
                         )}
                         {!isEditMode ? (
