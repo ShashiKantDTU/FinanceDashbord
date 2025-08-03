@@ -1,4 +1,5 @@
 const express = require("express");
+const mongoose = require("mongoose");
 const employeeSchema = require("../models/EmployeeSchema");
 const User = require("../models/Userschema");
 const {
@@ -1189,6 +1190,182 @@ router.get("/allemployees", authenticateToken, async (req, res) => {
     });
   }
 });
+
+// This new route replaces the old "/allemployees" logic.
+// It uses a single aggregation pipeline for maximum efficiency.
+router.get("/allemployees-optimized", authenticateToken, async (req, res) => {
+  const { month, year, siteID } = req.query;
+
+  // 1. Validate Input Parameters
+  if (!month || !year || !siteID) {
+    return res.status(400).json({ success: false, error: "Month, year, and siteID are required." });
+  }
+
+  try {
+    // Get the user's specific calculation type from the authenticated token
+    const calculationType = req.user?.calculationType || 'default';
+
+    // 2. Define the Aggregation Pipeline
+    // This pipeline will perform all calculations in the database.
+    const pipeline = [
+      // ====== Stage 1: Filter Documents ======
+      // Find only the employees for the requested site, month, and year.
+      // This is the most important step for performance. Use an index here.
+      {
+        $match: {
+          siteID: new mongoose.Types.ObjectId(siteID), // Assuming siteID is stored as a String. If it's an ObjectId, use: mongoose.Types.ObjectId(siteID),
+          month: parseInt(month),
+          year: parseInt(year)
+        }
+      },
+
+      // ====== Stage 2: Perform Initial Calculations ======
+      // Calculate sums and totals from arrays, similar to your .reduce() calls.
+      {
+        $addFields: {
+          totalPayouts: { $sum: "$payouts.value" },
+          totalAdditionalReqPays: { $sum: "$additional_req_pays.value" },
+          carryForward: { $ifNull: ["$carry_forwarded.value", 0] },
+
+          // Process attendance data to find total present days and overtime hours
+          totalDays: {
+            $size: {
+              $filter: {
+                input: "$attendance",
+                as: "att",
+                cond: { $regexMatch: { input: "$$att", regex: /^P/ } } // Count if string starts with 'P'
+              }
+            }
+          },
+          totalovertime: {
+            $sum: {
+              $map: {
+                input: "$attendance",
+                as: "att",
+                in: { // For each attendance string...
+                  $let: {
+                    vars: {
+                      // Find the numeric part of the string (e.g., '8' from 'P8')
+                      overtimeStr: { $arrayElemAt: [{ $regexFindAll: { input: "$$att", regex: /\d+/ } }, 0] }
+                    },
+                    // Convert to integer, or default to 0 if no number found
+                    in: { $ifNull: [{ $toInt: "$$overtimeStr.match" }, 0] }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+
+      // ====== Stage 3: Perform Final Calculations ======
+      // Use the results from Stage 2 to calculate wages and balances.
+      {
+        $addFields: {
+          // This part handles the conditional overtime logic from your original code
+          overtimeDays: {
+            $cond: {
+              if: { $eq: [calculationType, 'special'] },
+              then: { // special calculation: Math.floor(totalOvertime / 8) + ((totalOvertime % 8) / 10)
+                $add: [
+                  { $floor: { $divide: ["$totalovertime", 8] } },
+                  { $divide: [{ $mod: ["$totalovertime", 8] }, 10] }
+                ]
+              },
+              else: { // default calculation: totalOvertime / 8
+                $divide: ["$totalovertime", 8]
+              }
+            }
+          }
+        }
+      },
+
+      // ====== Stage 4: Calculate Final Values ======
+      // Now calculate totalAttendance, totalWage, and closing_balance
+      {
+        $addFields: {
+          totalAttendance: { $add: ["$totalDays", "$overtimeDays"] },
+          totalWage: { $multiply: ["$rate", { $add: ["$totalDays", "$overtimeDays"] }] },
+          closing_balance: {
+            $subtract: [
+              {
+                $add: [
+                  { $multiply: ["$rate", { $add: ["$totalDays", "$overtimeDays"] }] }, // totalWage
+                  "$totalAdditionalReqPays",
+                  "$carryForward"
+                ]
+              },
+              "$totalPayouts"
+            ]
+          }
+        }
+      },
+
+      // ====== Stage 5: Final Projection ======
+      // Shape the output to match your original API response.
+      {
+        $project: {
+          // Include original fields
+          _id: 1,
+          name: 1,
+          empid: 1,
+          rate: 1,
+          month: 1,
+          year: 1,
+          siteID: 1,
+          payouts: 1,
+          additional_req_pays: 1,
+          attendance: 1,
+          carry_forwarded: 1,
+          recalculationneeded: 1,
+          // Include all our newly calculated fields
+          totalWage: 1,
+          totalPayouts: 1,
+          carryForward: 1,
+          closing_balance: 1,
+          totalAttendance: 1,
+          totalDays: 1,
+          totalovertime: 1,
+          overtimeDays: 1,
+          totalAdditionalReqPays: 1,
+          // Add extra status fields for convenience
+          hasPendingPayouts: { $ne: ["$closing_balance", 0] },
+        }
+      }
+    ];
+
+    // 3. Execute the Aggregation
+    const employeeDetails = await employeeSchema.aggregate(pipeline);
+
+    if (!employeeDetails) {
+      return res.status(404).json({ success: false, message: "Could not retrieve employee data." });
+    }
+
+    // 4. Send the Response
+    const withPendingPayouts = employeeDetails.filter(emp => emp.hasPendingPayouts);
+    const withZeroBalance = employeeDetails.filter(emp => !emp.hasPendingPayouts);
+
+    return res.status(200).json({
+      success: true,
+      data: employeeDetails,
+      summary: {
+        total: employeeDetails.length,
+        withPendingPayouts: withPendingPayouts.length,
+        withZeroBalance: withZeroBalance.length,
+      },
+      message: `Found ${employeeDetails.length} employees for ${month}/${year}`,
+    });
+
+  } catch (error) {
+    console.error("❌ Error in optimized /allemployees route:", error);
+    return res.status(500).json({
+      success: false,
+      error: "Error fetching employee details.",
+      message: error.message,
+    });
+  }
+});
+
 
 // Route to get employee with pending attendance on a specific date
 router.get("/employeewithpendingattendance",
