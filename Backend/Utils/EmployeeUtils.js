@@ -10,52 +10,38 @@
 const EmployeeSchema = require("../models/EmployeeSchema");
 
 /**
- * Get the latest employee serial number for a specific site.
- * @param {String} siteID - The identifier of the site to scope the search.
- * @returns {Number} Latest serial number from existing employee IDs for the given site.
+ * Get the latest employee serial number for generating new employee IDs
+ * @returns {Number} Latest serial number from existing employee IDs
  */
-const latestEmpSerialNumber = async (siteID) => {
+const latestEmpSerialNumber = async () => {
   try {
-    // Find the latest employee for the specific site by sorting empid.
-    // This is more efficient than fetching all records.
-    const latestEmployee = await EmployeeSchema.findOne(
-      { siteID: siteID },
-      { empid: 1 }
-    ).sort({ createdAt: -1 }); // Sort by creation date to likely get the latest ID
+    // Find the latest employee by extracting number from empid (e.g., "EMP01" -> 1)
+    const latestRecords = await EmployeeSchema.find({}, { empid: 1 }).sort({
+      empid: -1,
+    });
 
-    if (!latestEmployee) {
-      // No employees exist for this site yet.
+    if (!latestRecords || latestRecords.length === 0) {
       return 0;
     }
 
-    // To be absolutely sure, we'll scan all employees of that site to find the max serial.
-    // This handles cases where an older employee might have a higher number due to manual entries or deletions.
-    const allEmployeesForSite = await EmployeeSchema.find(
-        { siteID: siteID },
-        { empid: 1 }
-    );
-    
+    // Extract the highest numeric value from all empids
     let maxSerial = 0;
-    allEmployeesForSite.forEach((record) => {
-      // Regex to extract the numeric part of the empid, e.g., "EMP123" -> 123
-      const match = record.empid.match(/\d+$/);
+    latestRecords.forEach((record) => {
+      const match = record.empid.match(/EMP(\d+)/);
       if (match) {
-        const serialNum = parseInt(match[0], 10);
+        const serialNum = parseInt(match[1]);
         if (serialNum > maxSerial) {
           maxSerial = serialNum;
         }
       }
     });
 
-
     return maxSerial;
   } catch (error) {
-    console.error("Error fetching latest employee serial number for site:", error);
-    throw error; // Re-throw the error to be handled by the calling route.
+    console.error("Error fetching latest employee serial number:", error);
+    throw error;
   }
 };
-
-
 
 // get employees with pending attendance
 
