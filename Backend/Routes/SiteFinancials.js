@@ -189,71 +189,92 @@ router.get("/sites/:siteID/financial-summary", authenticateToken, async (req, re
         const startDate = new Date(parsedYear, parsedMonth - 1, 1);
         const endDate = new Date(parsedYear, parsedMonth, 1);
 
-        // --- FIX STARTS HERE ---
         // Execute all queries in parallel for maximum efficiency
+        // Note: All collections use ObjectId for siteID, so we use siteObjectId consistently
         const [
             advancesResult,
             expensesResult,
             paymentsResult,
             expenseBreakdown,
-            siteExpenseDetails,
+            expenseDetails,
             paymentDetails,
             employeeCount,
-            employeeBreakdown,
+            employeeBreakdown
         ] = await Promise.all([
-            // 1. Get Total Advances from Employees
+            // 1. Get Total Advances from Employees (using ObjectId)
             Employee.aggregate([
                 { $match: { siteID: siteObjectId, month: parsedMonth, year: parsedYear } },
                 { $unwind: { path: "$payouts", preserveNullAndEmptyArrays: true } },
                 { $group: { _id: null, total: { $sum: { $ifNull: ["$payouts.value", 0] } } } }
             ]),
 
-            // 2. Get Total Expenses from SiteExpenses
+            // 2. Get Total Expenses from SiteExpenses (using ObjectId)
             SiteExpense.aggregate([
                 { $match: { siteID: siteObjectId, date: { $gte: startDate, $lt: endDate } } },
                 { $group: { _id: null, total: { $sum: "$value" } } }
             ]),
 
-            // 3. Get Total Payments from SitePayments
+            // 3. Get Total Payments from SitePayments (using ObjectId)
             SitePayment.aggregate([
                 { $match: { siteID: siteObjectId, date: { $gte: startDate, $lt: endDate } } },
                 { $group: { _id: null, total: { $sum: "$value" } } }
             ]),
 
-            // 4. Get expense breakdown by category (summary)
+            // 4. Get expense breakdown by category (using ObjectId)
             SiteExpense.aggregate([
                 { $match: { siteID: siteObjectId, date: { $gte: startDate, $lt: endDate } } },
                 { $group: { _id: "$category", total: { $sum: "$value" }, count: { $sum: 1 } } },
                 { $sort: { total: -1 } }
             ]),
 
-            // 5. Get complete site expense details
+            // 5. Get expense details (using ObjectId)
             SiteExpense.find({
                 siteID: siteObjectId,
                 date: { $gte: startDate, $lt: endDate }
             }).sort({ date: -1 }),
 
-            // 6. Get recent payments
+            // 6. Get recent payments (using ObjectId)
             SitePayment.find({
                 siteID: siteObjectId,
                 date: { $gte: startDate, $lt: endDate }
             }).sort({ date: -1 }).limit(10),
 
-            // 7. Get employee count for the month
+            // 7. Get employee count for the month (using ObjectId)
             Employee.countDocuments({
                 siteID: siteObjectId,
                 month: parsedMonth,
                 year: parsedYear
             }),
 
-            // 8. Get per-employee breakdown with only essential data
+            // 8. Get detailed employee breakdown with individual advances (using ObjectId)
             Employee.aggregate([
                 { $match: { siteID: siteObjectId, month: parsedMonth, year: parsedYear } },
                 {
                     $project: {
-                        empid: 1, name: 1, rate: 1, wage: 1,
+                        empid: 1,
+                        name: 1,
+                        rate: 1,
+                        wage: 1,
+                        closing_balance: 1,
+                        carry_forwarded: 1,
                         totalAdvances: {
-                            $reduce: { input: "$payouts", initialValue: 0, in: { $add: ["$$value", "$$this.value"] } }
+                            $reduce: {
+                                input: "$payouts",
+                                initialValue: 0,
+                                in: { $add: ["$$value", "$$this.value"] }
+                            }
+                        },
+                        payoutCount: { $size: { $ifNull: ["$payouts", []] } },
+                        payouts: {
+                            $map: {
+                                input: "$payouts",
+                                as: "payout",
+                                in: {
+                                    value: "$$payout.value",
+                                    remark: "$$payout.remark",
+                                    date: "$$payout.date"
+                                }
+                            }
                         }
                     }
                 },
@@ -268,7 +289,7 @@ router.get("/sites/:siteID/financial-summary", authenticateToken, async (req, re
         const totalCosts = advances + expenses;
         const finalProfit = payments - totalCosts;
 
-        // Manually construct the summary object
+        // Construct the summary object
         const summary = {
             advances,
             expenses,
@@ -276,17 +297,15 @@ router.get("/sites/:siteID/financial-summary", authenticateToken, async (req, re
             totalCosts,
             finalProfit
         };
-        
-        // --- FIX ENDS HERE ---
 
         return res.status(200).json({
             success: true,
             data: {
-                summary: summary, // Use the manually constructed summary object
+                summary: summary,
                 breakdown: {
                     siteExpenses: {
                         categoryBreakdown: expenseBreakdown,
-                        expenseDetails: siteExpenseDetails
+                        expenseDetails: expenseDetails
                     },
                     recentPayments: paymentDetails,
                     employeeCount: employeeCount,
