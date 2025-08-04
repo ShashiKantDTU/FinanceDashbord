@@ -189,149 +189,71 @@ router.get("/sites/:siteID/financial-summary", authenticateToken, async (req, re
         const startDate = new Date(parsedYear, parsedMonth - 1, 1);
         const endDate = new Date(parsedYear, parsedMonth, 1);
 
-        // Use $facet to run multiple aggregation pipelines in parallel
-        const summaryPipeline = [
-            {
-                $facet: {
-                    // Pipeline 1: Calculate Total Advances from the 'employees' collection
-                    "totalAdvances": [
-                        {
-                            $match: {
-                                siteID: siteObjectId,
-                                month: parsedMonth,
-                                year: parsedYear
-                            }
-                        },
-                        { $unwind: { path: "$payouts", preserveNullAndEmptyArrays: true } },
-                        {
-                            $group: {
-                                _id: null,
-                                total: { $sum: { $ifNull: ["$payouts.value", 0] } }
-                            }
-                        }
-                    ],
+        // --- FIX STARTS HERE ---
+        // Execute all queries in parallel for maximum efficiency
+        const [
+            advancesResult,
+            expensesResult,
+            paymentsResult,
+            expenseBreakdown,
+            siteExpenseDetails,
+            paymentDetails,
+            employeeCount,
+            employeeBreakdown,
+        ] = await Promise.all([
+            // 1. Get Total Advances from Employees
+            Employee.aggregate([
+                { $match: { siteID: siteObjectId, month: parsedMonth, year: parsedYear } },
+                { $unwind: { path: "$payouts", preserveNullAndEmptyArrays: true } },
+                { $group: { _id: null, total: { $sum: { $ifNull: ["$payouts.value", 0] } } } }
+            ]),
 
-                    // Pipeline 2: Calculate Total Expenses from the 'siteexpenses' collection
-                    "totalSiteExpenses": [
-                        {
-                            $match: {
-                                siteID: siteObjectId,
-                                date: {
-                                    $gte: startDate,
-                                    $lt: endDate
-                                }
-                            }
-                        },
-                        {
-                            $group: {
-                                _id: null,
-                                total: { $sum: "$value" }
-                            }
-                        }
-                    ],
-
-                    // Pipeline 3: Calculate Total Payments Received from the 'sitepayments' collection
-                    "totalPaymentsReceived": [
-                        {
-                            $match: {
-                                siteID: siteObjectId,
-                                date: {
-                                    $gte: startDate,
-                                    $lt: endDate
-                                }
-                            }
-                        },
-                        {
-                            $group: {
-                                _id: null,
-                                total: { $sum: "$value" }
-                            }
-                        }
-                    ]
-                }
-            },
-            // Stage 2: Clean up the output and calculate the final profit
-            {
-                $project: {
-                    advances: { $ifNull: [{ $arrayElemAt: ["$totalAdvances.total", 0] }, 0] },
-                    expenses: { $ifNull: [{ $arrayElemAt: ["$totalSiteExpenses.total", 0] }, 0] },
-                    payments: { $ifNull: [{ $arrayElemAt: ["$totalPaymentsReceived.total", 0] }, 0] }
-                }
-            },
-            {
-                $project: {
-                    advances: 1,
-                    expenses: 1,
-                    payments: 1,
-                    totalCosts: { $add: ["$advances", "$expenses"] },
-                    finalProfit: { $subtract: ["$payments", { $add: ["$advances", "$expenses"] }] }
-                }
-            }
-        ];
-
-        // Run the aggregation on the Site collection
-        const result = await Site.aggregate(summaryPipeline);
-
-        // Get additional breakdown data for detailed view
-        const [expenseBreakdown, siteExpenseDetails, paymentDetails, employeeCount, employeeBreakdown] = await Promise.all([
-            // Get expense breakdown by category (summary)
+            // 2. Get Total Expenses from SiteExpenses
             SiteExpense.aggregate([
-                {
-                    $match: {
-                        siteID: siteObjectId,
-                        date: { $gte: startDate, $lt: endDate }
-                    }
-                },
-                {
-                    $group: {
-                        _id: "$category",
-                        total: { $sum: "$value" },
-                        count: { $sum: 1 }
-                    }
-                },
+                { $match: { siteID: siteObjectId, date: { $gte: startDate, $lt: endDate } } },
+                { $group: { _id: null, total: { $sum: "$value" } } }
+            ]),
+
+            // 3. Get Total Payments from SitePayments
+            SitePayment.aggregate([
+                { $match: { siteID: siteObjectId, date: { $gte: startDate, $lt: endDate } } },
+                { $group: { _id: null, total: { $sum: "$value" } } }
+            ]),
+
+            // 4. Get expense breakdown by category (summary)
+            SiteExpense.aggregate([
+                { $match: { siteID: siteObjectId, date: { $gte: startDate, $lt: endDate } } },
+                { $group: { _id: "$category", total: { $sum: "$value" }, count: { $sum: 1 } } },
                 { $sort: { total: -1 } }
             ]),
 
-            // Get complete site expense details
+            // 5. Get complete site expense details
             SiteExpense.find({
                 siteID: siteObjectId,
                 date: { $gte: startDate, $lt: endDate }
             }).sort({ date: -1 }),
 
-            // Get recent payments
+            // 6. Get recent payments
             SitePayment.find({
                 siteID: siteObjectId,
                 date: { $gte: startDate, $lt: endDate }
             }).sort({ date: -1 }).limit(10),
 
-            // Get employee count for the month
+            // 7. Get employee count for the month
             Employee.countDocuments({
                 siteID: siteObjectId,
                 month: parsedMonth,
                 year: parsedYear
             }),
 
-            // Get per-employee breakdown with only essential data
+            // 8. Get per-employee breakdown with only essential data
             Employee.aggregate([
-                {
-                    $match: {
-                        siteID: siteObjectId,
-                        month: parsedMonth,
-                        year: parsedYear
-                    }
-                },
+                { $match: { siteID: siteObjectId, month: parsedMonth, year: parsedYear } },
                 {
                     $project: {
-                        empid: 1,
-                        name: 1,
-                        rate: 1,
-                        wage: 1,
+                        empid: 1, name: 1, rate: 1, wage: 1,
                         totalAdvances: {
-                            $reduce: {
-                                input: "$payouts",
-                                initialValue: 0,
-                                in: { $add: ["$$value", "$$this.value"] }
-                            }
+                            $reduce: { input: "$payouts", initialValue: 0, in: { $add: ["$$value", "$$this.value"] } }
                         }
                     }
                 },
@@ -339,18 +261,28 @@ router.get("/sites/:siteID/financial-summary", authenticateToken, async (req, re
             ])
         ]);
 
-        const summary = result[0] || {
-            advances: 0,
-            expenses: 0,
-            payments: 0,
-            totalCosts: 0,
-            finalProfit: 0
+        // Extract totals from aggregation results, defaulting to 0 if no data exists
+        const advances = advancesResult[0]?.total || 0;
+        const expenses = expensesResult[0]?.total || 0;
+        const payments = paymentsResult[0]?.total || 0;
+        const totalCosts = advances + expenses;
+        const finalProfit = payments - totalCosts;
+
+        // Manually construct the summary object
+        const summary = {
+            advances,
+            expenses,
+            payments,
+            totalCosts,
+            finalProfit
         };
+        
+        // --- FIX ENDS HERE ---
 
         return res.status(200).json({
             success: true,
             data: {
-                summary: summary,
+                summary: summary, // Use the manually constructed summary object
                 breakdown: {
                     siteExpenses: {
                         categoryBreakdown: expenseBreakdown,
