@@ -4,8 +4,8 @@ const { authenticateToken } = require('../Middleware/auth');
 // switched email to name for Info message 
 
 // Import the new optimized change tracking functions
-const { 
-    updateEmployeeDataOptimized, 
+const {
+    updateEmployeeDataOptimized,
     getFieldChangeStatistics,
 } = require('../Utils/OptimizedChangeTracker');
 
@@ -15,6 +15,99 @@ const { markEmployeesForRecalculation } = require('../Utils/Jobs');
 // Import the optimized change tracking model
 const OptimizedChangeTracking = require('../models/OptimizedChangeTrackingSchema');
 const EmployeeSchema = require('../models/EmployeeSchema');
+
+// New optimized patch attendance function
+async function patchEmployeeAttendance(siteID, month, updates, user) {
+    const [year, monthNum] = month.split('-').map(Number);
+    const updatedBy = user?.name || user?.email || 'unknown-user';
+
+    // This part remains the same: we still need to prepare the actual updates for the employee documents.
+    const employeeIds = [...new Set(updates.map(u => u.employeeID))];
+    const bulkWriteOps = [];
+    let dayUpdated = null; // Assuming all updates in a patch are for the same day
+
+    for (const update of updates) {
+        const { employeeID, day, newValue } = update;
+        if (!dayUpdated) dayUpdated = day; // Capture the day being updated
+        const arrayIndex = day - 1;
+
+        bulkWriteOps.push({
+            updateOne: {
+                filter: { siteID, empid: employeeID, year, month: monthNum },
+                update: { $set: { [`attendance.${arrayIndex}`]: newValue } }
+            }
+        });
+    }
+
+    // --- NEW AGGREGATED LOGGING LOGIC ---
+    // We create only ONE log entry for the entire operation.
+    let aggregatedLogEntry = null;
+    if (updates.length > 0) {
+        // Create a formatted timestamp string ONCE.
+        const now = new Date();
+        const formattedTimestamp = now.toLocaleString('en-IN', {
+            timeZone: 'Asia/Kolkata',
+            dateStyle: 'medium',
+            timeStyle: 'short'
+        }); // Example output: "4 Aug 2025, 5:45 pm"
+
+        const displayDate = dayUpdated ? `${dayUpdated}/${monthNum}/${year}` : `${monthNum}/${year}`;
+        const displayMessage = `${updatedBy} marked attendance for ${updates.length} employees on ${displayDate}.`;
+
+        aggregatedLogEntry = {
+            siteID: siteID,
+            month: monthNum,
+            year: year,
+            field: 'attendance',
+            fieldDisplayName: 'Attendance',
+            fieldType: 'array_string',
+            changeType: 'modified', // Using 'modified' as it fits the schema
+            changeDescription: `Bulk attendance update for ${updates.length} employees.`,
+            changeData: {
+                employeeCount: updates.length,
+                employeeIds: employeeIds, // Log all affected employee IDs for reference
+                dayUpdated: dayUpdated
+            },
+            changedBy: updatedBy,
+            // UPDATED REMARK
+            remark: `Bulk attendance marked via patch API at ${formattedTimestamp}`, // Use the friendly timestamp
+            timestamp: now, // The main timestamp field should still be a proper Date object
+            metadata: {
+                displayMessage: displayMessage, // The display message is already clean.
+                isAttendanceChange: true,
+                isPaymentChange: false,
+                isRateChange: false,
+                updateType: 'attendance-only', // This update type is in the schema
+                complexity: 'high', // All bulk updates can be considered high complexity
+                totalFieldsUpdated: 1,
+                fieldsUpdated: 'attendance'
+            }
+        };
+    }
+
+    // --- DATABASE OPERATIONS ---
+    // Execute the database updates and save the single log entry.
+    let writeResult = {};
+    if (bulkWriteOps.length > 0) {
+        writeResult = await EmployeeSchema.bulkWrite(bulkWriteOps);
+    }
+
+    if (aggregatedLogEntry) {
+        // Save the single aggregated log entry instead of using insertMany
+        await new OptimizedChangeTracking(aggregatedLogEntry).save();
+    }
+
+    // Mark employees for recalculation (this part remains the same)
+    await markEmployeesForRecalculation(siteID, employeeIds, monthNum, year, user);
+
+    return {
+        message: `Successfully processed attendance for ${updates.length} employees.`,
+        summary: {
+            employeesUpdated: writeResult.modifiedCount,
+            changesLogged: aggregatedLogEntry ? 1 : 0 // We now only log 1 change
+        }
+    };
+}
 
 // Add logging middleware to track all requests
 router.use((req, res, next) => {
@@ -71,31 +164,31 @@ router.get('/employee/:employeeID', authenticateToken, validateRequest(['siteID'
     try {
         const { employeeID } = req.params;
         const { siteID, page, limit, sortBy, sortOrder, fromDate, toDate, year, month, changeType, correctedBy } = req.query;
-        
+
         // console.log(`🔥 EMPLOYEE HISTORY ENDPOINT HIT (OPTIMIZED): ${employeeID}`);
         // console.log(`📊 Params: siteID=${siteID}, page=${page}, limit=${limit}`);
-        
+
         const pageNum = parseInt(page) || 1;
         const limitNum = parseInt(limit) || 20;
         const skip = (pageNum - 1) * limitNum;
-        
+
         // Build query for optimized change tracking
         const query = {
             siteID: siteID,
             employeeID: employeeID
         };
-        
+
         if (fromDate || toDate) {
             query.timestamp = {};
             if (fromDate) query.timestamp.$gte = new Date(fromDate);
             if (toDate) query.timestamp.$lte = new Date(toDate);
         }
-        
+
         if (year) query.year = parseInt(year);
         if (month) query.month = parseInt(month);
         if (changeType) query.changeType = changeType;
         if (correctedBy) query.changedBy = correctedBy;
-        
+
         // Build sort object
         const sort = {};
         if (sortBy === 'serialNumber') {
@@ -103,7 +196,7 @@ router.get('/employee/:employeeID', authenticateToken, validateRequest(['siteID'
         } else {
             sort[sortBy || 'timestamp'] = sortOrder === 'desc' ? -1 : 1;
         }
-        
+
         // Execute query with pagination
         const [records, totalCount] = await Promise.all([
             OptimizedChangeTracking.find(query)
@@ -113,9 +206,9 @@ router.get('/employee/:employeeID', authenticateToken, validateRequest(['siteID'
                 .lean(),
             OptimizedChangeTracking.countDocuments(query)
         ]);
-        
+
         // console.log(`✅ Found ${records.length} change records for employee ${employeeID} (optimized)`);
-        
+
         res.json({
             success: true,
             records: records.map(record => ({
@@ -149,19 +242,19 @@ router.get('/employee/:employeeID', authenticateToken, validateRequest(['siteID'
 router.get('/statistics', authenticateToken, async (req, res) => {
     try {
         const { siteID, fromDate, toDate } = req.query;
-        
+
         // console.log('🔥 STATISTICS ENDPOINT HIT (OPTIMIZED)');
         // console.log(`📊 Params: siteID=${siteID}, fromDate=${fromDate}, toDate=${toDate}`);
-        
+
         // Use the optimized statistics function
         const dateRange = {};
         if (fromDate) dateRange.fromDate = fromDate;
         if (toDate) dateRange.toDate = toDate;
-        
+
         const result = await getFieldChangeStatistics(siteID, dateRange);
-        
+
         // console.log(`✅ Statistics generated (optimized): ${result.statistics.length} field types`);
-        
+
         res.json(result);
     } catch (error) {
         console.error('Error in statistics API (optimized):', error);
@@ -178,42 +271,53 @@ router.get('/statistics', authenticateToken, async (req, res) => {
 router.get('/recent', authenticateToken, async (req, res) => {
     try {
         const { limit, siteID, field, changeType, changedBy } = req.query;
-        
+
         // console.log('🔥 RECENT CHANGES ENDPOINT HIT (OPTIMIZED)');
         // console.log(`📊 Params: limit=${limit}, siteID=${siteID}, field=${field}, changeType=${changeType}, changedBy=${changedBy}`);
-        
+
         // Use the optimized change tracking model directly
         const query = {};
         if (siteID) query.siteID = siteID;
         if (field && field !== 'all') query.field = field;
         if (changeType && changeType !== 'all') query.changeType = changeType;
         if (changedBy && changedBy !== 'all') query.changedBy = changedBy;
-        
+
         const recentChanges = await OptimizedChangeTracking.find(query)
             .sort({ timestamp: -1 })
             .limit(limit ? parseInt(limit) : 50)
             .select('employeeID siteID field changeType changeDescription metadata.displayMessage changedBy timestamp remark')
             .lean();
-        
+
         // console.log(`✅ Found ${recentChanges.length} recent changes (optimized)`);
-        
+
         res.json({
             success: true,
-            data: recentChanges.map(change => ({
-                employeeID: change.employeeID,
-                siteID: change.siteID,
-                field: change.field,
-                changeType: change.changeType,
-                description: change.changeDescription,
-                displayMessage: change.metadata?.displayMessage || change.changeDescription,
-                changedBy: change.changedBy,
-                timestamp: change.timestamp,
-                remark: change.remark,
-                // Add compatibility fields for frontend
-                correctedBy: change.changedBy,
-                correctionDate: change.timestamp,
-                isOptimized: true
-            }))
+            data: recentChanges.map(change => {
+                // NEW LOGIC: Check if it's an aggregated log (no employeeID)
+                const isAggregatedLog = !change.employeeID;
+                
+                return {
+                    // If it's aggregated, the title IS the display message.
+                    // Otherwise, build a title like before.
+                    title: isAggregatedLog ? change.metadata?.displayMessage : `${change.field} modified for ${change.employeeID}`,
+                    // The main description is always the display message.
+                    displayMessage: change.metadata?.displayMessage || change.changeDescription,
+                    // Pass the rest of the data
+                    employeeID: change.employeeID,
+                    siteID: change.siteID,
+                    field: change.field,
+                    changeType: change.changeType,
+                    description: change.changeDescription,
+                    changedBy: change.changedBy,
+                    timestamp: change.timestamp,
+                    remark: change.remark,
+                    isAggregated: isAggregatedLog, // Add a flag for the frontend
+                    // Add compatibility fields for frontend
+                    correctedBy: change.changedBy,
+                    correctionDate: change.timestamp,
+                    isOptimized: true
+                };
+            })
         });
     } catch (error) {
         console.error('Error in recent changes API (optimized):', error);
@@ -230,7 +334,7 @@ router.get('/recent', authenticateToken, async (req, res) => {
 router.put('/employee/mobapi/attendance/update', authenticateToken, async (req, res) => {
     try {
 
-        const { employeeId, attendance, date , siteID } = req.body;
+        const { employeeId, attendance, date, siteID } = req.body;
         // Validate required fields
         if (!employeeId || !attendance || !date || !siteID) {
             console.log('Missing required fields: employeeId, attendance, date, siteID are required');
@@ -243,7 +347,7 @@ router.put('/employee/mobapi/attendance/update', authenticateToken, async (req, 
         // check if date is Today's date (in IST)
         const now = new Date();
         const nowIST = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
-        
+
         // Generate valid dates for today, yesterday, and the day before yesterday (in IST)
         const validDates = [];
         for (let i = 0; i < 3; i++) {
@@ -271,7 +375,7 @@ router.put('/employee/mobapi/attendance/update', authenticateToken, async (req, 
                 message: `Attendance can only be updated for the last three days (including today) in IST. Valid dates: ${validDatesStr}`
             });
         }
-        const employee = await EmployeeSchema.findOne({ empid: employeeId , month: date.month, year: date.year , siteID: siteID });
+        const employee = await EmployeeSchema.findOne({ empid: employeeId, month: date.month, year: date.year, siteID: siteID });
         if (!employee) {
             // console.log(`❌ Employee with ID ${employeeId} not found for month ${date.month}/${date.year}`);
             return res.status(404).json({
@@ -283,7 +387,7 @@ router.put('/employee/mobapi/attendance/update', authenticateToken, async (req, 
         employee.attendance[date.date - 1] = attendance; // currentDate is 1-based, array is 0-based
         await employee.save();
 
-        const istTime = new Date().toLocaleString('en-IN', { 
+        const istTime = new Date().toLocaleString('en-IN', {
             timeZone: 'Asia/Kolkata',
             year: 'numeric',
             month: '2-digit',
@@ -293,61 +397,61 @@ router.put('/employee/mobapi/attendance/update', authenticateToken, async (req, 
             second: '2-digit',
             hour12: false
         });
-        
-        const displayMessage = `Attendance Added by ${ req.user.name || req.user.email || 'unknown-user'} for employee Name ${employee.name} & employeeId ${employeeId}  on ${date.date}/${date.month}/${date.year} marked as ${attendance} at ${istTime}`;
+
+        const displayMessage = `Attendance Added by ${req.user.name || req.user.email || 'unknown-user'} for employee Name ${employee.name} & employeeId ${employeeId}  on ${date.date}/${date.month}/${date.year} marked as ${attendance} at ${istTime}`;
 
         // Record and save the change in the Detailed change tracking system
         try {
             const changeRecord = {
-            siteID: siteID,
-            employeeID: employeeId,
-            month: currentMonth,
-            year: currentYear,
-            field: 'attendance',
-            fieldDisplayName: 'Attendance',
-            fieldType: 'array_string',
-            changeType: 'added',
-            changeDescription: `Daily attendance for employee ${employeeId} on ${date.date}/${date.month}/${date.year} marked as ${attendance}`,
-            changeData: {
-                from: null, // No previous data for today's attendance
-                to: attendance,
-                item: attendance, // The attendance value being set
-                changedFields: [{
+                siteID: siteID,
+                employeeID: employeeId,
+                month: currentMonth,
+                year: currentYear,
                 field: 'attendance',
-                from: null,
-                to: attendance
-                }],
-                position: currentDate - 1, // 0-based index for today's date
-                attendanceValue: attendance, // The actual attendance value (P, A, etc.)
-                difference: null, // No rate change for attendance
-                percentageChange: null, // No percentage change for attendance
-                dateInfo: {
-                day: date.date,
-                month: date.month,
-                year: date.year,
-                date: new Date(date.year, date.month - 1, date.date), // Create a Date object for the given date
-                dateString: `${date.year}-${date.month.toString().padStart(2, '0')}-${date.date.toString().padStart(2, '0')}`, // Format date as YYYY-MM-DD
-                dayName: new Date(date.year, date.month - 1, date.date).toLocaleString('default', { weekday: 'long' }), // Get day name from date
-                isValid: true // Mark as valid date
-                },
-                attendanceDate: `${date.date}/${date.month}/${date.year}`, // Quick access field for frontend
-                dayName: new Date(date.year, date.month - 1, date.date).toLocaleString('default', { weekday: 'long' }), // Get day name from date
-                date: `${date.date}/${date.month}/${date.year}` // Store as string for attendance dates
+                fieldDisplayName: 'Attendance',
+                fieldType: 'array_string',
+                changeType: 'added',
+                changeDescription: `Daily attendance for employee ${employeeId} on ${date.date}/${date.month}/${date.year} marked as ${attendance}`,
+                changeData: {
+                    from: null, // No previous data for today's attendance
+                    to: attendance,
+                    item: attendance, // The attendance value being set
+                    changedFields: [{
+                        field: 'attendance',
+                        from: null,
+                        to: attendance
+                    }],
+                    position: currentDate - 1, // 0-based index for today's date
+                    attendanceValue: attendance, // The actual attendance value (P, A, etc.)
+                    difference: null, // No rate change for attendance
+                    percentageChange: null, // No percentage change for attendance
+                    dateInfo: {
+                        day: date.date,
+                        month: date.month,
+                        year: date.year,
+                        date: new Date(date.year, date.month - 1, date.date), // Create a Date object for the given date
+                        dateString: `${date.year}-${date.month.toString().padStart(2, '0')}-${date.date.toString().padStart(2, '0')}`, // Format date as YYYY-MM-DD
+                        dayName: new Date(date.year, date.month - 1, date.date).toLocaleString('default', { weekday: 'long' }), // Get day name from date
+                        isValid: true // Mark as valid date
+                    },
+                    attendanceDate: `${date.date}/${date.month}/${date.year}`, // Quick access field for frontend
+                    dayName: new Date(date.year, date.month - 1, date.date).toLocaleString('default', { weekday: 'long' }), // Get day name from date
+                    date: `${date.date}/${date.month}/${date.year}` // Store as string for attendance dates
 
-            },
-            changedBy: req.user.name || req.user.email || 'unknown-user', // Use email from auth middleware (should be string, not object)
-            remark: `Attendance updated via mobile app on ${new Date().toISOString()}`,
-            timestamp: new Date(),
-            metadata: {
-                displayMessage: displayMessage,
-                isAttendanceChange: true, // Mark this as an attendance change
-                isPaymentChange: false, // Mark this as not a payment change
-                isRateChange: false, // Mark this as not a rate change
-                updateType: 'attendance-only', // Specify this is an attendance-only update
-                complexity: 'simple', // Add required complexity field
-                totalFieldsUpdated: 1, // Add required totalFieldsUpdated field
-                fieldsUpdated: 'attendance' // Specify the field that was updated
-            }
+                },
+                changedBy: req.user.name || req.user.email || 'unknown-user', // Use email from auth middleware (should be string, not object)
+                remark: `Attendance updated via mobile app on ${new Date().toISOString()}`,
+                timestamp: new Date(),
+                metadata: {
+                    displayMessage: displayMessage,
+                    isAttendanceChange: true, // Mark this as an attendance change
+                    isPaymentChange: false, // Mark this as not a payment change
+                    isRateChange: false, // Mark this as not a rate change
+                    updateType: 'attendance-only', // Specify this is an attendance-only update
+                    complexity: 'simple', // Add required complexity field
+                    totalFieldsUpdated: 1, // Add required totalFieldsUpdated field
+                    fieldsUpdated: 'attendance' // Specify the field that was updated
+                }
             }
 
             // Save the change record to the optimized change tracking system
@@ -366,7 +470,7 @@ router.put('/employee/mobapi/attendance/update', authenticateToken, async (req, 
             success: true,
             message: 'Attendance updated successfully'
         });
-        
+
 
     } catch (error) {
         console.error('Error updating employee attendance:', error);
@@ -401,14 +505,14 @@ router.put('/employee/:employeeID/update', authenticateToken, async (req, res) =
         // Parse and validate month/year
         const monthNum = parseInt(month);
         const yearNum = parseInt(year);
-        
+
         if (monthNum < 1 || monthNum > 12) {
             return res.status(400).json({
                 success: false,
                 message: 'Month must be between 1 and 12'
             });
         }
-        
+
         if (yearNum < 2000 || yearNum > 2100) {
             return res.status(400).json({
                 success: false,
@@ -425,7 +529,7 @@ router.put('/employee/:employeeID/update', authenticateToken, async (req, res) =
         }
 
         // Get user info from auth middleware
-        const changedBy = req.user.name ||req.user?.email || correctedBy || 'unknown-user';
+        const changedBy = req.user.name || req.user?.email || correctedBy || 'unknown-user';
 
         // console.log(`📝 Employee update request for ${employeeID} - ${monthNum}/${yearNum}`);
         // console.log(`👤 Updated by: ${changedBy}`);
@@ -434,7 +538,7 @@ router.put('/employee/:employeeID/update', authenticateToken, async (req, res) =
 
         // Preprocess update data to ensure consistency
         const processedUpdateData = { ...updateData };
-        
+
         // Add createdBy to additional_req_pays if missing (for schema consistency)
         if (processedUpdateData.additional_req_pays && Array.isArray(processedUpdateData.additional_req_pays)) {
             processedUpdateData.additional_req_pays = processedUpdateData.additional_req_pays.map(payment => ({
@@ -454,7 +558,7 @@ router.put('/employee/:employeeID/update', authenticateToken, async (req, res) =
         }
 
         // console.log('🔄 About to call updateEmployeeDataOptimized...');
-        
+
         // Use the NEW OPTIMIZED change tracking system
         const result = await updateEmployeeDataOptimized(
             siteID,
@@ -496,7 +600,7 @@ router.put('/employee/:employeeID/update', authenticateToken, async (req, res) =
     } catch (error) {
         console.error('❌ Error in employee update API (optimized):', error);
         console.error('❌ Full error stack:', error.stack);
-        
+
         // Handle specific error types
         if (error.message.includes('not found')) {
             return res.status(404).json({
@@ -526,8 +630,8 @@ router.put('/employee/mobapi/addpayout', authenticateToken, async (req, res) => 
     try {
         // console.log('Mobile API to update payouts hit successfully')
         const { empid, updateData, month, year, siteID } = req.body;
-        const changedBy = req.user.name ||req.user?.email || 'unknown-user';
-        
+        const changedBy = req.user.name || req.user?.email || 'unknown-user';
+
         // Validate required parameters
         if (!empid || !updateData || !month || !year || !siteID) {
             return res.status(400).json({
@@ -536,7 +640,7 @@ router.put('/employee/mobapi/addpayout', authenticateToken, async (req, res) => 
                 requiredFields: ['employeeID', 'updateData', 'month', 'year', 'siteID']
             });
         }
-        
+
         // Validate updateData structure
         if (!updateData.value) {
             return res.status(400).json({
@@ -545,32 +649,32 @@ router.put('/employee/mobapi/addpayout', authenticateToken, async (req, res) => 
                 requiredFields: ['value', 'date', 'remark']
             });
         }
-        
+
         const monthNum = parseInt(month);
         const yearNum = parseInt(year);
-        
+
         if (monthNum < 1 || monthNum > 12 || yearNum < 2000 || yearNum > 2100) {
             return res.status(400).json({
                 success: false,
                 message: 'Month must be between 1 and 12 and year must be between 2000 and 2100'
             });
         }
-        
+
         // Find employee record
-        const employee = await EmployeeSchema.findOne({ 
-            empid: empid, 
-            month: monthNum, 
-            year: yearNum, 
-            siteID: siteID 
+        const employee = await EmployeeSchema.findOne({
+            empid: empid,
+            month: monthNum,
+            year: yearNum,
+            siteID: siteID
         });
-        
+
         if (!employee) {
             return res.status(404).json({
                 success: false,
                 message: `Employee with ID ${empid} not found for month ${monthNum}/${yearNum}`
             });
         }
-        
+
         // Create new payout with correct schema structure
         const newPayout = {
             value: updateData.value,
@@ -578,12 +682,12 @@ router.put('/employee/mobapi/addpayout', authenticateToken, async (req, res) => 
             remark: updateData.remark || 'Payment added via mobile app',
             createdBy: changedBy // Add required createdBy field
         };
-        
+
         // Add new payout to existing payouts array
         employee.payouts.push(newPayout);
-        
+
         // console.log(`✅ Payment prepared for employee ${empid}: ₹${newPayout.value}`);
-        
+
         // Use updateEmployeeDataOptimized to handle both save and change tracking
         const result = await updateEmployeeDataOptimized(
             siteID,
@@ -597,9 +701,9 @@ router.put('/employee/mobapi/addpayout', authenticateToken, async (req, res) => 
 
         // Mark all future months for recalculation
         await markEmployeesForRecalculation(siteID, empid, monthNum, yearNum, req.user);
-        
+
         // console.log(`✅ Payment added and change tracking completed: ${result.data.changesTracked} changes tracked`);
-        
+
         res.json({
             success: true,
             message: `Payment of ₹${newPayout.value} added successfully for ${employee.name}`,
@@ -619,7 +723,7 @@ router.put('/employee/mobapi/addpayout', authenticateToken, async (req, res) => 
                 timestamp: new Date().toISOString()
             }
         });
-        
+
     } catch (error) {
         console.error('❌ Error in mobile payout API:', error);
         return res.status(500).json({
@@ -635,12 +739,85 @@ router.put('/employee/mobapi/addpayout', authenticateToken, async (req, res) => 
 
 
 
+// NEW PATCH UPDATE ENDPOINT - SIMPLER AND MORE PERFORMANT
+// PUT /api/change-tracking/attendance/patch-update
+router.put('/attendance/patch-update', authenticateToken, async (req, res) => {
+    try {
+        const { month, siteID, updates } = req.body;
+
+        // Validate required fields
+        if (!month || !siteID || !updates || !Array.isArray(updates)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Missing required fields: month, siteID, and updates (array) are required',
+                example: {
+                    month: "2025-05",
+                    siteID: "6833ff004bd307e45abbfb41",
+                    updates: [
+                        {
+                            employeeID: "EMP001",
+                            day: 15,
+                            newValue: "P"
+                        }
+                    ]
+                }
+            });
+        }
+
+        // Parse month and year from the month string (format: "2025-05")
+        const [yearStr, monthStr] = month.split('-');
+        const yearNum = parseInt(yearStr);
+        const monthNum = parseInt(monthStr);
+
+        // Validate month and year
+        if (!yearStr || !monthStr || monthNum < 1 || monthNum > 12 || yearNum < 2000 || yearNum > 2100) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid month format. Expected format: "YYYY-MM" (e.g., "2025-05")'
+            });
+        }
+
+        // Validate updates array
+        for (const update of updates) {
+            if (!update.employeeID || !update.day || update.newValue === undefined) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Each update must have employeeID, day, and newValue fields'
+                });
+            }
+
+            if (update.day < 1 || update.day > 31) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Day must be between 1 and 31'
+                });
+            }
+        }
+
+        // Call the new, optimized service function
+        const result = await patchEmployeeAttendance(siteID, month, updates, req.user);
+
+        res.status(200).json({
+            success: true,
+            ...result
+        });
+
+    } catch (error) {
+        console.error('Error in patch attendance update:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to update attendance',
+            error: error.message
+        });
+    }
+});
+
 // CURRENTLY BEING USED AT UPDATE EMPLOYEE ATTENDANCE WEB FRONTEND
 // Bulk attendance update endpoint (OPTIMIZED VERSION)
 // PUT /api/change-tracking/attendance/updateattendance
 router.put('/attendance/updateattendance', authenticateToken, async (req, res) => {
     const startTime = Date.now();
-    
+
     try {
         const { month, siteID, attendanceData } = req.body;
 
@@ -677,16 +854,16 @@ router.put('/attendance/updateattendance', authenticateToken, async (req, res) =
         }
 
         // console.log(`📅 Starting bulk attendance update for ${attendanceData.length} employees - ${monthNum}/${yearNum} at site ${siteID}`);
-        
+
         const results = [];
         const validationErrors = [];
-        
+
         // Get user information from JWT token attached by middleware
-        const updatedBy = req.user?.name || req.user?.email ||  'unknown-user';
+        const updatedBy = req.user?.name || req.user?.email || 'unknown-user';
 
         // PHASE 1: Validate all employees exist before making any changes
         // console.log(`🔍 Phase 1: Validating all ${attendanceData.length} employees exist...`);
-        
+
         for (const empData of attendanceData) {
             try {
                 const { id: employeeID, name: employeeName, attendance } = empData;
@@ -702,11 +879,11 @@ router.put('/attendance/updateattendance', authenticateToken, async (req, res) =
 
                 // Check if employee exists for the given month/year/site
                 const Employee = require('../models/EmployeeSchema');
-                const employeeExists = await Employee.findOne({ 
-                    empid: employeeID, 
-                    siteID: siteID, 
-                    month: monthNum, 
-                    year: yearNum 
+                const employeeExists = await Employee.findOne({
+                    empid: employeeID,
+                    siteID: siteID,
+                    month: monthNum,
+                    year: yearNum
                 });
 
                 if (!employeeExists) {
@@ -728,7 +905,7 @@ router.put('/attendance/updateattendance', authenticateToken, async (req, res) =
         // If any validation errors, stop processing
         if (validationErrors.length > 0) {
             console.log(`❌ Validation failed for ${validationErrors.length} employees. Operation stopped.`);
-            
+
             return res.status(400).json({
                 success: false,
                 message: `Validation failed for ${validationErrors.length} employees. No data was updated.`,
@@ -742,7 +919,7 @@ router.put('/attendance/updateattendance', authenticateToken, async (req, res) =
 
         // PHASE 2: Update all employees
         console.log(`🔄 Phase 2: Updating all employee attendance data...`);
-        
+
         for (const empData of attendanceData) {
             const { id: employeeID, name: employeeName, attendance } = empData;
 
@@ -777,7 +954,7 @@ router.put('/attendance/updateattendance', authenticateToken, async (req, res) =
 
             } catch (updateError) {
                 console.error(`❌ Error updating employee ${employeeID}:`, updateError);
-                
+
                 results.push({
                     employeeID: employeeID,
                     employeeName: employeeName,
@@ -792,7 +969,7 @@ router.put('/attendance/updateattendance', authenticateToken, async (req, res) =
         const successful = results.filter(r => r.success);
         const failed = results.filter(r => !r.success);
         const totalOptimizedChanges = successful.reduce((sum, r) => sum + (r.optimizedChanges || 0), 0);
-        
+
         const endTime = Date.now();
         const processingTime = endTime - startTime;
 

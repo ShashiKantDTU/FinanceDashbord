@@ -1,6 +1,7 @@
 const express = require('express');
 const User = require('../models/Userschema');
 const Site = require('../models/Siteschema');
+const Employee = require('../models/EmployeeSchema');
 const { authenticateToken } = require('../Middleware/auth');
 
 const router = express.Router();
@@ -34,6 +35,69 @@ router.get('/home', authenticateToken, async (req, res) => {
 
 })
 
+
+// NEW, SEPARATE ENDPOINT FOR THE MODERN DASHBOARD
+router.get('/v2/home', authenticateToken, async (req, res) => {
+    try {
+        const user = req.user;
+        if (!user) {
+            return res.status(401).json({ success: false, message: 'Authentication required.' });
+        }
+
+        // 1. Fetch the user and their site details in one go.
+        const userdata = await User.findById(user.id).populate({
+            path: 'site',
+            select: 'sitename createdAt' // Only select fields the new UI needs.
+        });
+
+        if (!userdata) {
+            return res.status(404).json({ success: false, message: 'User not found.' });
+        }
+
+        // 2. Efficiently get employee counts for all sites.
+        const now = new Date();
+        const currentMonth = now.getMonth() + 1;
+        const currentYear = now.getFullYear();
+        const siteIds = userdata.site.map(s => s._id);
+
+        let countMap = new Map();
+        if (siteIds.length > 0) {
+            const employeeCounts = await Employee.aggregate([
+                { $match: { siteID: { $in: siteIds }, month: currentMonth, year: currentYear } },
+                { $group: { _id: '$siteID', count: { $sum: 1 } } }
+            ]);
+            countMap = new Map(employeeCounts.map(item => [item._id.toString(), item.count]));
+        }
+
+        // 3. Prepare the clean 'sites' array with counts included.
+        const sitesWithCounts = userdata.site.map(site => ({
+            _id: site._id,
+            sitename: site.sitename,
+            createdAt: site.createdAt,
+            employeeCount: countMap.get(site._id.toString()) || 0
+        }));
+
+        // 4. Calculate summary totals.
+        const totalEmployees = Array.from(countMap.values()).reduce((sum, count) => sum + count, 0);
+
+        // 5. Construct the final, clean payload.
+        const responsePayload = {
+            userName: userdata.name,
+            userRole: userdata.role,
+            sites: sitesWithCounts,
+            summary: {
+                totalSites: siteIds.length,
+                totalEmployees: totalEmployees
+            }
+        };
+
+        res.status(200).json({ success: true, data: responsePayload });
+
+    } catch (error) {
+        console.error("Error in /v2/home route:", error);
+        res.status(500).json({ success: false, message: "An internal server error occurred." });
+    }
+});
 
 // Add site route
 router.post('/home/addsite', authenticateToken, async (req, res) => {

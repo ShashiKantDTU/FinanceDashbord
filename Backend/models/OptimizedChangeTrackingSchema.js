@@ -25,7 +25,7 @@ const OptimizedChangeTrackingSchema = new mongoose.Schema({
     },
     employeeID: {
         type: String,
-        required: true,
+        // required: true,
         index: true
     },
     month: {
@@ -40,7 +40,7 @@ const OptimizedChangeTrackingSchema = new mongoose.Schema({
         min: 2000,
         max: 2100
     },
-    
+
     // Field details
     field: {
         type: String,
@@ -57,7 +57,7 @@ const OptimizedChangeTrackingSchema = new mongoose.Schema({
         required: true,
         enum: ['array_string', 'array_object', 'number']
     },
-    
+
     // Change details (granular tracking)
     changeType: {
         type: String,
@@ -69,7 +69,7 @@ const OptimizedChangeTrackingSchema = new mongoose.Schema({
         type: String,
         required: true
     },
-    
+
     // Specific change data
     changeData: {
         // What changed from/to
@@ -126,7 +126,7 @@ const OptimizedChangeTrackingSchema = new mongoose.Schema({
             type: String // Store as string for attendance dates
         }
     },
-    
+
     // Audit information
     changedBy: {
         type: String,
@@ -142,7 +142,7 @@ const OptimizedChangeTrackingSchema = new mongoose.Schema({
         default: Date.now,
         index: true
     },
-    
+
     // Frontend display metadata
     metadata: {
         displayMessage: {
@@ -193,12 +193,12 @@ OptimizedChangeTrackingSchema.index({ field: 1, changeType: 1, timestamp: -1 });
 OptimizedChangeTrackingSchema.index({ changedBy: 1, timestamp: -1 });
 
 // Virtual for period identification
-OptimizedChangeTrackingSchema.virtual('period').get(function() {
+OptimizedChangeTrackingSchema.virtual('period').get(function () {
     return `${this.month}/${this.year}`;
 });
 
 // Virtual for user-friendly change summary
-OptimizedChangeTrackingSchema.virtual('changeSummary').get(function() {
+OptimizedChangeTrackingSchema.virtual('changeSummary').get(function () {
     if (this.metadata.isAttendanceChange) {
         return `${this.changeType} attendance for ${this.changeData.date || 'unknown date'}`;
     } else if (this.metadata.isPaymentChange) {
@@ -212,9 +212,9 @@ OptimizedChangeTrackingSchema.virtual('changeSummary').get(function() {
 });
 
 // Static method to get field statistics with detailed breakdown
-OptimizedChangeTrackingSchema.statics.getFieldStatistics = function(filters = {}) {
+OptimizedChangeTrackingSchema.statics.getFieldStatistics = function (filters = {}) {
     const matchStage = { ...filters };
-    
+
     return this.aggregate([
         { $match: matchStage },
         {
@@ -259,10 +259,10 @@ OptimizedChangeTrackingSchema.statics.getFieldStatistics = function(filters = {}
 };
 
 // Static method to get recent changes with display messages
-OptimizedChangeTrackingSchema.statics.getRecentChanges = function(limit = 50, siteID = null) {
+OptimizedChangeTrackingSchema.statics.getRecentChanges = function (limit = 50, siteID = null) {
     const matchStage = {};
     if (siteID) matchStage.siteID = siteID;
-    
+
     return this.find(matchStage)
         .sort({ timestamp: -1 })
         .limit(limit)
@@ -271,7 +271,7 @@ OptimizedChangeTrackingSchema.statics.getRecentChanges = function(limit = 50, si
 };
 
 // Instance method to get detailed change summary
-OptimizedChangeTrackingSchema.methods.getDetailedChangeSummary = function() {
+OptimizedChangeTrackingSchema.methods.getDetailedChangeSummary = function () {
     return {
         field: this.field,
         changeType: this.changeType,
@@ -296,7 +296,7 @@ OptimizedChangeTrackingSchema.methods.getDetailedChangeSummary = function() {
 };
 
 // Pre-save middleware (removed automatic calculation since we're doing granular tracking)
-OptimizedChangeTrackingSchema.pre('save', function(next) {
+OptimizedChangeTrackingSchema.pre('save', function (next) {
     // Ensure display message is set
     if (!this.metadata.displayMessage) {
         this.metadata.displayMessage = this.changeDescription || `${this.changeType} ${this.field}`;
