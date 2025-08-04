@@ -166,7 +166,7 @@ router.get("/sites/:siteID/financial-summary", authenticateToken, async (req, re
     }
 
     try {
-        const siteObjectId = siteID;
+        const siteObjectId = new mongoose.Types.ObjectId(siteID);
         const parsedMonth = parseInt(month);
         const parsedYear = parseInt(year);
 
