@@ -188,10 +188,10 @@ router.delete('/delete-site', authenticateToken, async (req, res) => {
             });
         }
         
-        const { siteName, siteId, createdBy } = req.body;
-        if (!siteName || !siteId || !createdBy) {
+        const { siteName, siteId } = req.body;
+        if (!siteName || !siteId) {
             return res.status(400).json({ 
-                error: 'Site name, site ID, and created by are required.' 
+                error: 'Site name and site ID are required.' 
             });
         }
         
