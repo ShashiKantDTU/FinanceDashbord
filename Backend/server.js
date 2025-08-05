@@ -77,6 +77,7 @@ const changeTrackingRoutes = require('./Routes/changeTracking');
 const detailedChangeTrackingRoutes = require('./Routes/detailedChangeTracking');
 const playPurchaseRoutes = require('./Routes/playPurchase');
 const siteFinancialRoutes = require('./Routes/SiteFinancials');
+const pdfRoutes = require('./Routes/pdfRoutes');
 // const optimizedEmployeeRoutes = require('./Routes/optimizedEmployeeRoutes');
 
 
@@ -111,6 +112,7 @@ app.use('/api/change-tracking', changeTrackingRoutes);
 app.use('/api/detailed-change-tracking', detailedChangeTrackingRoutes);
 app.use('/api/play-purchase', playPurchaseRoutes);
 app.use('/api/financials', siteFinancialRoutes);
+app.use('/api/pdf', pdfRoutes);
 // app.use('/api/employee-optimized', optimizedEmployeeRoutes);
 
 // Basic route
