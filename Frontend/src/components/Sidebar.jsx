@@ -68,7 +68,7 @@ const Sidebar = ({ activeSection, onSectionChange }) => {
       icon: <FaHistory />, 
       path: `/change-tracking/${siteID}` 
     },
-    { title: "Settings", icon: <FaCog />, path: `/settings/${siteID}` },
+    { title: "Manage Supervisors", icon: <FaCog />, path: `/settings/${siteID}` },
   ];
 
   // Store event handler references so they can be properly removed

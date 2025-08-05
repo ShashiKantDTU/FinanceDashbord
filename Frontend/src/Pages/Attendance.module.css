@@ -1033,8 +1033,8 @@
 }
 
 .addEmployeeButton:hover:not(:disabled) {
-    background-color: darken(var(--color-info), 10%);
-    border-color: darken(var(--color-info), 10%);
+    background-color: var(--color-info-hover);
+    border-color: var(--color-info-hover);
     /* Removed transform and box-shadow for better performance */
 }
 

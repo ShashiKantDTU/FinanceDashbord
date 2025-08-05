@@ -229,8 +229,11 @@ const Attendance = () => {
                     }));
 
                     setAttendanceData(transformedData); // Update the main attendance data.
-                    // Create a deep copy for `originalAttendanceData` to allow resetting edits.
-                    setOriginalAttendanceData(JSON.parse(JSON.stringify(transformedData)));
+                    // ✅ OPTIMIZED: Create a more efficient deep copy for `originalAttendanceData`
+                    setOriginalAttendanceData(transformedData.map(employee => ({
+                        ...employee,
+                        attendance: [...(employee.attendance || [])]
+                    })));
                     console.log(`Loaded ${transformedData.length} employees.`);
                 } else {
                     // If API response indicates failure or is malformed.
@@ -371,7 +374,11 @@ const Attendance = () => {
         // `originalAttendanceData` should already be set from `fetchAttendanceData`.
         // If not, ensure it's a copy of the current `attendanceData`.
         if (originalAttendanceData.length === 0 && attendanceData.length > 0) {
-            setOriginalAttendanceData(JSON.parse(JSON.stringify(attendanceData)));
+            // ✅ OPTIMIZED: Create efficient copy instead of expensive JSON deep clone
+            setOriginalAttendanceData(attendanceData.map(employee => ({
+                ...employee,
+                attendance: [...(employee.attendance || [])]
+            })));
         }
         
         // Enable progressive edit mode
@@ -383,8 +390,11 @@ const Attendance = () => {
         disableEditMode();
         setShowConfirmDialog(false); // Hide confirmation dialog if open.
         setChanges([]);              // Clear any tracked changes.
-        // Restore attendance data from the backup.
-        setAttendanceData(JSON.parse(JSON.stringify(originalAttendanceData)));
+        // ✅ OPTIMIZED: Restore attendance data from the backup efficiently
+        setAttendanceData(originalAttendanceData.map(employee => ({
+            ...employee,
+            attendance: [...(employee.attendance || [])]
+        })));
         console.log('Edit cancelled, data restored to original state.');
     };
 
@@ -408,25 +418,45 @@ const Attendance = () => {
         setShowConfirmDialog(false);
         setIsSaving(true);
         try {
-            // Prepare the request body according to API specification
+            // ✅ NEW OPTIMIZED APPROACH: Send only the changes, not the entire dataset
+            const updates = changes.map(change => ({
+                employeeID: attendanceData[change.employeeIndex].id,
+                day: change.day,
+                newValue: change.newValue
+                // ✅ Removed: employeeName and oldValue (not needed by backend)
+            }));
+
             const requestBody = {
                 month: selectedMonth,
                 siteID: siteID,
-                attendanceData: attendanceData.map(employee => ({
-                    id: employee.id,
-                    name: employee.name,
-                    attendance: employee.attendance
-                }))
+                updates: updates // ✅ Only sending the changes, not entire data
             };
 
-            console.log('Saving attendance data:', requestBody);
+            // 🔍 DETAILED API PAYLOAD LOGGING
+            console.log('=== ATTENDANCE API CALL DETAILS ===');
+            console.log('📤 API Endpoint:', '/api/change-tracking/attendance/patch-update');
+            console.log('📤 HTTP Method:', 'PUT');
+            console.log('📤 Full Request Payload:', JSON.stringify(requestBody, null, 2));
+            console.log('📊 Performance Stats:');
+            console.log(`   • Changes being sent: ${updates.length}`);
+            console.log(`   • Total employees in memory: ${attendanceData.length}`);
+            console.log(`   • Data reduction: ${((1 - updates.length / (attendanceData.length * 31)) * 100).toFixed(1)}%`);
+            console.log('📋 Individual Changes:');
+            changes.forEach((change, index) => {
+                console.log(`   ${index + 1}. Employee: ${change.employeeName} (ID: ${attendanceData[change.employeeIndex].id})`);
+                console.log(`      Day ${change.day}: "${change.oldValue}" → "${change.newValue}"`);
+            });
+            console.log('=====================================');
 
-            // Make API call to update attendance
-            const response = await api.put('/api/change-tracking/attendance/updateattendance', requestBody);
+            // ✅ Use the new patch endpoint for efficient updates
+            const response = await api.put('/api/change-tracking/attendance/patch-update', requestBody);
 
             if (response.success) {
-                // Update original data to reflect saved changes
-                setOriginalAttendanceData(JSON.parse(JSON.stringify(attendanceData)));
+                // ✅ OPTIMIZED: Update original data to reflect saved changes efficiently
+                setOriginalAttendanceData(attendanceData.map(employee => ({
+                    ...employee,
+                    attendance: [...(employee.attendance || [])]
+                })));
                 disableEditMode();
                 setChanges([]); // Clear changes after successful save
                 

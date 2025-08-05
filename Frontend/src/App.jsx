@@ -1,3 +1,4 @@
+import React, { useEffect } from 'react';
 import { Analytics } from "@vercel/analytics/react"
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import Home from './Pages/Home';
@@ -14,8 +15,17 @@ import { AuthProvider } from './context/AuthContext';
 import { ToastProvider } from './components/ToastProvider';
 import ProtectedRoute from './components/ProtectedRoute';
 import LoginV2 from "./Pages/LoginV2";
+import { initGA, trackWebVitals } from './utils/analytics';
+import './styles/seo.css';
 
 function App() {
+
+
+  useEffect(() => {
+    initGA();
+    trackWebVitals();
+  }, []);
+
 
   return (
     <AuthProvider>
@@ -60,6 +70,7 @@ function App() {
             {/* Add more routes as needed */}
           </Routes>
         </BrowserRouter>
+        <Analytics />
       </ToastProvider>
     </AuthProvider>
   )

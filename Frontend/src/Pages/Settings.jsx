@@ -369,7 +369,7 @@ const Settings = () => {
             <main className={styles.settingsContent}>
                 <header className={styles.pageHeader}>
                     <div className={styles.titleSection}>
-                        <h1>Settings</h1>
+                        <h1>Manage Supervisor Accounts</h1>
                         <p>Manage supervisor profiles and permissions for Site ID: {siteID}</p>
                     </div>
                     <button className={styles.createButton} onClick={() => setShowCreateModal(true)} disabled={loading}>

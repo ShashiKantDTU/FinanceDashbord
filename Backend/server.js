@@ -25,20 +25,32 @@ const PORT = process.env.PORT || 5000;
 
 // CORS configuration for production and development
 const allowedOrigins = [];
+
+// Production URLs
+allowedOrigins.push('https://app.sitehaazri.in');
+allowedOrigins.push('https://sitehaazri.in'); // In case you need the marketing site to make API calls
+
+// Add environment-specific URL if provided
 if (process.env.FRONTEND_URL) {
   allowedOrigins.push(process.env.FRONTEND_URL);
 }
+
+// Development URLs
 if (process.env.NODE_ENV === 'development') {
-  allowedOrigins.push('http://localhost:5173' , 'http://localhost:8081'); // Add your development frontend URL
+  allowedOrigins.push('http://localhost:5173', 'http://localhost:8081', 'http://localhost:3000');
 }
 const corsOptions = {
   origin: function (origin, callback) {
     // Allow requests with no origin (like mobile apps, curl, etc.)
     if (!origin) return callback(null, true);
+    
     if (allowedOrigins.includes(origin)) {
+      console.log(`✅ CORS: Allowed origin: ${origin}`);
       return callback(null, true);
     } else {
-      return callback(new Error('Not allowed by CORS'));
+      console.log(`❌ CORS: Blocked origin: ${origin}`);
+      console.log(`📋 CORS: Allowed origins: ${allowedOrigins.join(', ')}`);
+      return callback(new Error(`Not allowed by CORS. Origin: ${origin}`));
     }
   },
   credentials: true,
@@ -160,6 +172,8 @@ mongoose.connect(mongoURI).then(async () => {
   app.listen(PORT,'0.0.0.0', () => {
     console.log(`🚀 Server is running on port ${PORT}`);
     console.log(`🔗 Frontend URL: ${process.env.FRONTEND_URL}`);
+    console.log(`🌐 CORS: Allowed origins: ${allowedOrigins.join(', ')}`);
+    console.log(`🔒 Environment: ${process.env.NODE_ENV}`);
   });
 }).catch(err => {
   console.error('Error connecting to MongoDB:', err);

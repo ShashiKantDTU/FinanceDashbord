@@ -55,10 +55,10 @@ router.post("/register", async (req, res) => {
 
 // OTP login route
 
-router.post ("/otplogin", async (req, res) => {
+router.post("/otplogin", async (req, res) => {
   // check if ID token is provided in req Body
   console.log("OTP login route hit");
-  const {token: firebaseIdToken} = req.body;
+  const { token: firebaseIdToken } = req.body;
   if (!firebaseIdToken) {
     return res.status(400).json({ message: "ID token is required" });
   }
@@ -71,18 +71,18 @@ router.post ("/otplogin", async (req, res) => {
     console.log(`Phone number: ${phoneNumber}`);
     // Find user in MongoDB by phone number only
     let user = await User.findOne({ phoneNumber: phoneNumber });
-    
+
     if (!user) {
       // Create user if doesn't exist (auto-registration)
       user = new User({
         name: phoneNumber,
-        uid : firebaseUid,
+        uid: firebaseUid,
         phoneNumber: phoneNumber,
       });
       await user.save();
       // console.log(`New mobile user created: ${firebaseUid}`);
     }
-    
+
     // Generate JWT token for your app
     const jwtToken = generateToken({
       id: user._id,
@@ -156,11 +156,11 @@ router.post("/login", async (req, res) => {
           if (!site) {
             return res.status(404).json({ message: "Contact your contractor" });
           }
-          
+
 
           // console.log("Supervisor login successful:", existingSupervisor.site[0].toString());
 
-          
+
           res.status(200).json({
             message: "Login successful",
             token,
@@ -300,15 +300,29 @@ router.get("/profile/:siteId?", authenticateToken, async (req, res) => {
       // The user information is already attached to req.user by the middleware
       const user = await User.findById(req.user.id)
         .select("-password")
-        .populate("supervisors"); // Populate supervisor details
+        .lean(); // Use lean() to get plain JavaScript objects
 
       if (!user) {
         return res.status(404).json({ message: "User not found" });
       }
 
+      // Manually populate supervisors to avoid circular references
+      const supervisors = await Supervisor.find({ owner: user._id })
+        .select("-__v") // Exclude version key
+        .lean();
+
+      // Add supervisors to user object without circular references
+      const userWithSupervisors = {
+        ...user,
+        supervisors: supervisors.map(supervisor => ({
+          ...supervisor,
+          owner: user._id // Keep owner reference as ID only, not full object
+        }))
+      };
+
       res.status(200).json({
         message: "Profile retrieved successfully",
-        user,
+        user: userWithSupervisors,
       });
     } else {
       // If siteId is provided, populate user with only that site's supervisors
@@ -316,18 +330,32 @@ router.get("/profile/:siteId?", authenticateToken, async (req, res) => {
       // console.log("Fetching profile for site:", siteId);
       const user = await User.findById(req.user.id)
         .select("-password")
-        .populate({
-          path: "supervisors",
-          match: { site: siteId },
-        });
+        .lean(); // Use lean() to get plain JavaScript objects
 
       if (!user) {
         return res.status(404).json({ message: "User not found" });
       }
 
+      // Manually populate supervisors for specific site to avoid circular references
+      const supervisors = await Supervisor.find({
+        owner: user._id,
+        site: siteId
+      })
+        .select("-__v") // Exclude version key
+        .lean();
+
+      // Add supervisors to user object without circular references
+      const userWithSupervisors = {
+        ...user,
+        supervisors: supervisors.map(supervisor => ({
+          ...supervisor,
+          owner: user._id // Keep owner reference as ID only, not full object
+        }))
+      };
+
       res.status(200).json({
         message: "Profile retrieved successfully",
-        user,
+        user: userWithSupervisors,
       });
     }
   } catch (error) {
@@ -393,7 +421,7 @@ router.post(
         profileName: supervisorName,
         createdBy: user.name,
         site: siteId,
-        owner:  user
+        owner: user
       });
 
       await newSupervisor.save();
@@ -402,9 +430,22 @@ router.post(
       user.supervisors.push(newSupervisor);
       await user.save();
 
+      // Create a clean supervisor object without circular references for response
+      const supervisorResponse = {
+        _id: newSupervisor._id,
+        userId: newSupervisor.userId,
+        password: newSupervisor.password,
+        profileName: newSupervisor.profileName,
+        createdBy: newSupervisor.createdBy,
+        site: newSupervisor.site,
+        status: newSupervisor.status,
+        createdAt: newSupervisor.createdAt,
+        updatedAt: newSupervisor.updatedAt
+      };
+
       res.status(201).json({
         message: "Supervisor credentials created successfully",
-        supervisor: newSupervisor,
+        supervisor: supervisorResponse,
       });
     } catch (error) {
       console.error("Error fetching supervisor credentials:", error);
@@ -677,17 +718,17 @@ router.post("/test-email", async (req, res) => {
 router.put("/update-name", authenticateToken, async (req, res) => {
   try {
     const { name } = req.body;
-    
+
     if (!name || name.trim() === "") {
-      return res.status(400).json({ 
-        message: "Name is required and cannot be empty" 
+      return res.status(400).json({
+        message: "Name is required and cannot be empty"
       });
     }
 
     const user = await User.findById(req.user.id);
     if (!user) {
-      return res.status(404).json({ 
-        message: "User not found" 
+      return res.status(404).json({
+        message: "User not found"
       });
     }
 
@@ -702,9 +743,9 @@ router.put("/update-name", authenticateToken, async (req, res) => {
       }
     });
   } catch (error) {
-    res.status(500).json({ 
-      message: "Error updating name", 
-      error: error.message 
+    res.status(500).json({
+      message: "Error updating name",
+      error: error.message
     });
   }
 });
