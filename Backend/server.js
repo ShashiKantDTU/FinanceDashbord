@@ -68,6 +68,12 @@ app.use('/api/play-purchase/notifications', express.raw({ type: 'application/jso
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+// Import usage tracking middleware
+const { usageTracker } = require('./Middleware/usageTracker');
+
+// Add usage tracking middleware (must be after express.json and before routes)
+app.use(usageTracker);
+
 
 // Import routes
 const authRoutes = require('./Routes/auth');
@@ -78,6 +84,7 @@ const detailedChangeTrackingRoutes = require('./Routes/detailedChangeTracking');
 const playPurchaseRoutes = require('./Routes/playPurchase');
 const siteFinancialRoutes = require('./Routes/SiteFinancials');
 const pdfRoutes = require('./Routes/pdfRoutes');
+const usageRoutes = require('./Routes/usage');
 // const optimizedEmployeeRoutes = require('./Routes/optimizedEmployeeRoutes');
 
 
@@ -113,6 +120,7 @@ app.use('/api/detailed-change-tracking', detailedChangeTrackingRoutes);
 app.use('/api/play-purchase', playPurchaseRoutes);
 app.use('/api/financials', siteFinancialRoutes);
 app.use('/api/pdf', pdfRoutes);
+app.use('/api/usage', usageRoutes);
 // app.use('/api/employee-optimized', optimizedEmployeeRoutes);
 
 // Basic route

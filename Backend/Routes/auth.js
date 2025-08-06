@@ -74,10 +74,19 @@ router.post("/otplogin", async (req, res) => {
 
     if (!user) {
       // Create user if doesn't exist (auto-registration)
+      // Grant 2-month pro trial to new users
+      const trialExpiryDate = new Date();
+      trialExpiryDate.setMonth(trialExpiryDate.getMonth() + 2);
+
       user = new User({
         name: phoneNumber,
         uid: firebaseUid,
         phoneNumber: phoneNumber,
+        plan: 'pro',
+        isTrial: true,
+        planExpiresAt: trialExpiryDate,
+        planSource: 'manual',
+        planActivatedAt: new Date()
       });
       await user.save();
       // console.log(`New mobile user created: ${firebaseUid}`);

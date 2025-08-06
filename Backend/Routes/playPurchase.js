@@ -1,10 +1,49 @@
 const express = require('express');
 const { google } = require('googleapis');
+const { OAuth2Client } = require('google-auth-library');
 const router = express.Router();
 const User = require('../models/Userschema');
 const { authenticateToken } = require('../Middleware/auth');
 
 require("dotenv").config();
+
+const client = new OAuth2Client();
+
+// JWT Authentication Middleware for Webhook
+async function authenticateWebhook(req, res, next) {
+    try {
+        const authHeader = req.header('Authorization');
+        if (!authHeader) {
+            console.log('❌ Webhook authentication failed: Missing Authorization header');
+            return res.status(401).send('Unauthorized: Missing Authorization header');
+        }
+
+        const token = authHeader.split(' ')[1];
+        if (!token) {
+            console.log('❌ Webhook authentication failed: Invalid Authorization header format');
+            return res.status(401).send('Unauthorized: Invalid Authorization header format');
+        }
+
+        // Use the correct audience from environment variable
+        const expectedAudience = process.env.GOOGLE_WEBHOOK_AUDIENCE;
+        if (!expectedAudience) {
+            console.error('CRITICAL: GOOGLE_WEBHOOK_AUDIENCE environment variable is not set.');
+            return res.status(500).send('Server configuration error.');
+        }
+
+        // Verify the JWT token against Google's public keys
+        await client.verifyIdToken({
+            idToken: token,
+            audience: expectedAudience
+        });
+
+        console.log('✅ Webhook authentication successful');
+        next();
+    } catch (error) {
+        console.error('❌ Webhook authentication failed:', error.message);
+        return res.status(401).send('Unauthorized: Invalid token');
+    }
+}
 
 function getNotificationTypeName(notificationType) {
     const notificationTypes = {
@@ -40,7 +79,8 @@ async function verifyAndroidPurchase(packageName, purchaseToken, requestId = 'un
             token: purchaseToken,
         });
 
-        if (response.data && response.data.subscriptionState === 'SUBSCRIPTION_STATE_ACTIVE') {
+        // Check for valid subscription states (active or in grace period)
+        if (response.data && (response.data.subscriptionState === 'SUBSCRIPTION_STATE_ACTIVE' || response.data.subscriptionState === 'SUBSCRIPTION_STATE_IN_GRACE_PERIOD')) {
             const lineItem = response.data.lineItems[0];
             const originalProductId = lineItem.productId;
 
@@ -59,6 +99,7 @@ async function verifyAndroidPurchase(packageName, purchaseToken, requestId = 'un
                 productId: mappedProductId,
                 originalProductId: originalProductId,
                 expires: new Date(lineItem.expiryTime),
+                gracePeriodEndTime: lineItem.gracePeriodEndTime ? new Date(lineItem.gracePeriodEndTime) : null,
                 subscriptionState: response.data.subscriptionState,
                 startTime: response.data.startTime ? new Date(response.data.startTime) : null,
                 regionCode: response.data.regionCode || null,
@@ -188,13 +229,23 @@ router.get("/plan", authenticateToken, async (req, res) => {
         req.user.billing_cycle = 'monthly';
     }
 
-    return res.status(200).json({
+    const response = {
         plan: req.user.plan,
         billing_cycle: req.user.billing_cycle,
         planExpiry: req.user.planExpiresAt,
         planSource: req.user.planSource,
         isPaymentVerified: req.user.isPaymentVerified
-    })
+    };
+
+    // Only include isTrial, isCancelled, isGrace, and purchaseToken for normal users, not supervisors
+    if (req.user.role !== 'Supervisor') {
+        response.isTrial = req.user.isTrial || false;
+        response.isCancelled = req.user.isCancelled || false;
+        response.isGrace = req.user.isGrace || false;
+        response.purchaseToken = req.user.purchaseToken || null;
+    }
+
+    return res.status(200).json(response)
 });
 
 // Debug endpoint to check user subscription details
@@ -219,6 +270,10 @@ router.get("/debug-user/:userId?", authenticateToken, async (req, res) => {
             planExpiresAt: user.planExpiresAt,
             planActivatedAt: user.planActivatedAt,
             isPaymentVerified: user.isPaymentVerified,
+            isTrial: user.isTrial,
+            isCancelled: user.isCancelled,
+            isGrace: user.isGrace,
+            graceExpiresAt: user.graceExpiresAt,
             purchaseToken: user.purchaseToken ? `${user.purchaseToken.substring(0, 20)}...` : null,
             lastPurchaseToken: user.lastPurchaseToken ? `${user.lastPurchaseToken.substring(0, 20)}...` : null,
             planSource: user.planSource,
@@ -277,136 +332,101 @@ async function updateUserSubscription(user, notification, notificationType, requ
         let message = '';
 
         switch (notificationType) {
-            case 2: // SUBSCRIPTION_RENEWED
+            // Cases where a NEW expiry date is generated. We MUST verify to get the official date.
+            case 1:  // SUBSCRIPTION_PURCHASED
+            case 2:  // SUBSCRIPTION_RENEWED
+            case 6:  // SUBSCRIPTION_RESTARTED
+            case 13: // SUBSCRIPTION_RECOVERED
                 const verification = await verifyAndroidPurchase('com.sitehaazri.app', notification.purchaseToken, requestId);
                 if (verification.success) {
-                    const expiryDate = new Date(verification.expires);
-                    const diffInMs = expiryDate - new Date();
-                    const billingCycle = diffInMs > (180 * 24 * 60 * 60 * 1000) ? 'yearly' : 'monthly';
+                    // Determine billing cycle from the Product ID (more reliable than date calculation)
+                    const billingCycle = verification.originalProductId.includes('yearly') ? 'yearly' : 'monthly';
 
                     updateData = {
                         plan: verification.productId,
                         billing_cycle: billingCycle,
-                        planExpiresAt: expiryDate,
+                        planExpiresAt: verification.expires,
                         isPaymentVerified: true,
+                        isCancelled: false,
+                        isGrace: false,
+                        graceExpiresAt: null,
                         lastPurchaseToken: user.purchaseToken,
                         purchaseToken: notification.purchaseToken,
                         planActivatedAt: new Date()
                     };
-                    message = 'Subscription renewed successfully';
+                    message = `Subscription active. Type: ${getNotificationTypeName(notificationType)}.`;
                 } else {
-                    return { success: false, error: verification.error, userId: user._id, message: 'Renewal verification failed' };
+                    return {
+                        success: false,
+                        error: verification.error,
+                        userId: user._id,
+                        message: `Webhook received for ${getNotificationTypeName(notificationType)}, but verification failed.`
+                    };
                 }
                 break;
 
+            // Simple status change cases - trust the authenticated webhook
             case 3: // SUBSCRIPTION_CANCELED
                 updateData = {
-                    plan: 'free',
-                    billing_cycle: 'monthly',
-                    isPaymentVerified: false,
-                    lastPurchaseToken: user.purchaseToken,
-                    purchaseToken: null,
-                    planExpiresAt: null
+                    isCancelled: true,
+                    lastPurchaseToken: user.purchaseToken
                 };
-                message = 'Subscription cancelled - reverted to free plan';
+                message = 'Subscription cancellation recorded.';
                 break;
 
+            case 4: // SUBSCRIPTION_ON_HOLD
+                updateData = {
+                    isPaymentVerified: false
+                };
+                message = 'Subscription is On Hold.';
+                break;
+
+            case 5: // SUBSCRIPTION_IN_GRACE_PERIOD
+                // Verify to get the gracePeriodEndTime for accurate tracking
+                const graceVerification = await verifyAndroidPurchase('com.sitehaazri.app', notification.purchaseToken, requestId);
+                if (graceVerification.success && graceVerification.gracePeriodEndTime) {
+                    updateData = {
+                        isGrace: true,
+                        isPaymentVerified: false,
+                        graceExpiresAt: graceVerification.gracePeriodEndTime,
+                        lastPurchaseToken: user.purchaseToken
+                    };
+                    message = `Subscription in grace period until ${graceVerification.gracePeriodEndTime.toDateString()}`;
+                } else {
+                    // Fallback if API call fails
+                    updateData = {
+                        isGrace: true,
+                        isPaymentVerified: false,
+                        lastPurchaseToken: user.purchaseToken
+                    };
+                    message = 'Subscription in grace period.';
+                }
+                break;
+
+            // The final downgrade state
             case 12: // SUBSCRIPTION_EXPIRED
                 updateData = {
                     plan: 'free',
                     billing_cycle: 'monthly',
                     isPaymentVerified: false,
+                    isCancelled: false,
+                    isGrace: false,
                     lastPurchaseToken: user.purchaseToken,
                     purchaseToken: null,
-                    planExpiresAt: null
+                    planExpiresAt: null,
+                    graceExpiresAt: null
                 };
-                message = 'Subscription expired - reverted to free plan';
-                break;
-
-            case 13: // SUBSCRIPTION_RECOVERED
-                const recoveryVerification = await verifyAndroidPurchase('com.sitehaazri.app', notification.purchaseToken, requestId);
-                if (recoveryVerification.success) {
-                    const expiryDate = new Date(recoveryVerification.expires);
-                    const diffInMs = expiryDate - new Date();
-                    const billingCycle = diffInMs > (180 * 24 * 60 * 60 * 1000) ? 'yearly' : 'monthly';
-
-                    updateData = {
-                        plan: recoveryVerification.productId,
-                        billing_cycle: billingCycle,
-                        planExpiresAt: expiryDate,
-                        isPaymentVerified: true,
-                        lastPurchaseToken: user.purchaseToken,
-                        purchaseToken: notification.purchaseToken,
-                        planActivatedAt: new Date()
-                    };
-                    message = 'Subscription recovered successfully';
-                } else {
-                    return { success: false, error: recoveryVerification.error, userId: user._id, message: 'Recovery verification failed' };
-                }
-                break;
-
-            case 1: // SUBSCRIPTION_PURCHASED
-                const purchaseVerification = await verifyAndroidPurchase('com.sitehaazri.app', notification.purchaseToken, requestId);
-                if (purchaseVerification.success) {
-                    const expiryDate = new Date(purchaseVerification.expires);
-                    const diffInMs = expiryDate - new Date();
-                    const billingCycle = diffInMs > (180 * 24 * 60 * 60 * 1000) ? 'yearly' : 'monthly';
-
-                    updateData = {
-                        plan: purchaseVerification.productId,
-                        billing_cycle: billingCycle,
-                        planExpiresAt: expiryDate,
-                        isPaymentVerified: true,
-                        lastPurchaseToken: user.purchaseToken,
-                        purchaseToken: notification.purchaseToken,
-                        planActivatedAt: new Date()
-                    };
-                    message = 'New subscription purchased successfully';
-                } else {
-                    return { success: false, error: purchaseVerification.error, userId: user._id, message: 'Purchase verification failed' };
-                }
-                break;
-
-            case 4: // SUBSCRIPTION_ON_HOLD
-                updateData = { isPaymentVerified: false };
-                message = 'Subscription on hold - payment issue detected';
-                break;
-
-            case 5: // SUBSCRIPTION_IN_GRACE_PERIOD
-                updateData = { isPaymentVerified: false };
-                message = 'Subscription in grace period - payment retry in progress';
-                break;
-
-            case 6: // SUBSCRIPTION_RESTARTED
-                const restartVerification = await verifyAndroidPurchase('com.sitehaazri.app', notification.purchaseToken, requestId);
-                if (restartVerification.success) {
-                    const expiryDate = new Date(restartVerification.expires);
-                    const diffInMs = expiryDate - new Date();
-                    const billingCycle = diffInMs > (180 * 24 * 60 * 60 * 1000) ? 'yearly' : 'monthly';
-
-                    updateData = {
-                        plan: restartVerification.productId,
-                        billing_cycle: billingCycle,
-                        planExpiresAt: expiryDate,
-                        isPaymentVerified: true,
-                        lastPurchaseToken: user.purchaseToken,
-                        purchaseToken: notification.purchaseToken,
-                        planActivatedAt: new Date()
-                    };
-                    message = 'Subscription restarted successfully';
-                } else {
-                    return { success: false, error: restartVerification.error, userId: user._id, message: 'Restart verification failed' };
-                }
+                message = 'Subscription expired. Reverted to free plan.';
                 break;
 
             default:
-                message = `Unknown notification type: ${notificationType}`;
+                message = `Unknown notification type: ${notificationType} acknowledged.`;
                 return { success: true, message, userId: user._id, updateData: {} };
         }
 
         // Apply database update if needed
         if (Object.keys(updateData).length > 0) {
-            const updateResult = await User.findByIdAndUpdate(user._id, updateData, { new: true });
+            const updateResult = await User.findByIdAndUpdate(user._id, { $set: updateData }, { new: true });
             if (!updateResult) {
                 return { success: false, error: 'Database update failed', userId: user._id, message: 'Database update failed' };
             }
@@ -421,7 +441,7 @@ async function updateUserSubscription(user, notification, notificationType, requ
 }
 
 // Google Cloud Pub/Sub Webhook Endpoint
-router.post('/notifications', async (req, res) => {
+router.post('/notifications', authenticateWebhook, async (req, res) => {
     const requestId = `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     console.log(`[${requestId}] 🔔 Webhook received`);
 

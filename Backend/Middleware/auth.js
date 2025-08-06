@@ -47,12 +47,15 @@ const authenticateToken = async (req, res, next) => {
             req.user.plan = user.plan
             req.user.planExpiresAt = user.planExpiresAt
             req.user.billing_cycle = user.billing_cycle
+            // Note: isTrial and isCancelled are NOT set for supervisors as they're not needed
+
             if (!user.plan || user.plan === null || user.plan === undefined) {
                 // find owner using siteid in supervisor
                 const owner = await User.findOne({ site: supervisor.site })
                 req.user.plan = owner.plan
                 req.user.planExpiresAt = owner.planExpiresAt,
                     req.user.billing_cycle = user.billing_cycle
+                // Note: isCancelled is not set for supervisors
             }
 
             // if special user superviosr request 
@@ -70,17 +73,79 @@ const authenticateToken = async (req, res, next) => {
                 if (user) {
                     req.user.plan = user.plan || 'free';
                     req.user.planExpiresAt = user.planExpiresAt;
-                    req.user.billing_cycle = user.billing_cycle
+                    req.user.billing_cycle = user.billing_cycle;
+                    req.user.isTrial = user.isTrial || false;
+                    req.user.isCancelled = user.isCancelled || false;
+                    req.user.isGrace = user.isGrace || false;
+                    req.user.purchaseToken = user.purchaseToken || null;
                 } else {
                     // Fallback to free plan if user not found
                     req.user.plan = 'free';
                     req.user.planExpiresAt = null;
+                    req.user.isTrial = false;
+                    req.user.isCancelled = false;
+                    req.user.isGrace = false;
+                    req.user.purchaseToken = null;
                 }
             } catch (dbError) {
                 console.warn('Failed to fetch user plan information:', dbError.message);
                 // Fallback to free plan on database error
                 req.user.plan = 'free';
                 req.user.planExpiresAt = null;
+                req.user.isTrial = false;
+                req.user.isCancelled = false;
+                req.user.isGrace = false;
+                req.user.purchaseToken = null;
+            }
+        }
+
+        // Check for expired plans (trials and cancelled subscriptions) - For all users and supervisors
+        if (req.user.plan === 'pro' && req.user.planExpiresAt) {
+            const currentDate = new Date();
+            const expirationDate = new Date(req.user.planExpiresAt);
+
+            if (currentDate > expirationDate) {
+                // Plan has expired, revert to free plan
+                try {
+                    let userIdToUpdate;
+
+                    if (decoded.role === 'Supervisor') {
+                        // For supervisors, update the account owner (supervisor.owner._id)
+                        const supervisor = await Supervisor.findOne({ userId: decoded.email });
+                        if (supervisor && supervisor.owner) {
+                            userIdToUpdate = supervisor.owner._id;
+                        }
+                    } else {
+                        // For regular Admin users, update their own account
+                        userIdToUpdate = decoded.id;
+                    }
+
+                    if (userIdToUpdate) {
+                        await User.findByIdAndUpdate(userIdToUpdate, {
+                            plan: 'free',
+                            isTrial: false,
+                            isCancelled: false, // Reset cancelled status when downgrading
+                            isGrace: false, // Reset grace status when downgrading
+                            planExpiresAt: null
+                        });
+
+                        // Update req.user to reflect the change immediately
+                        req.user.plan = 'free';
+                        req.user.planExpiresAt = null;
+
+                        // Only set isTrial, isCancelled, and isGrace for Admin users (not supervisors)
+                        if (decoded.role !== 'Supervisor') {
+                            req.user.isTrial = false;
+                            req.user.isCancelled = false;
+                            req.user.isGrace = false;
+                        }
+
+                        console.log(`Plan expired for account owner ${userIdToUpdate}, reverted to free plan`);
+                    }
+                } catch (updateError) {
+                    console.error('Error updating expired trial:', updateError.message);
+                    // Continue with the request even if update fails
+                }
             }
         }
 
@@ -161,10 +226,10 @@ const generateSupervisorCredentials = async (name) => {
     }
 };
 
-// Helper function to generate JWT token
-const generateToken = (payload, expiresIn = '7d') => {
+// Helper function to generate JWT token (never expires)
+const generateToken = (payload) => {
     const JWT_SECRET = process.env.JWT_SECRET || 'your-default-secret-key';
-    return jwt.sign(payload, JWT_SECRET, { expiresIn });
+    return jwt.sign(payload, JWT_SECRET); // No expiration set
 };
 
 // Helper function to hash passwords

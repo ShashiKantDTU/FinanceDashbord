@@ -70,6 +70,18 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    isCancelled: {
+      type: Boolean,
+      default: false,
+    },
+    isGrace: {
+      type: Boolean,
+      default: false,
+    },
+    graceExpiresAt: {
+      type: Date,
+      default: null,
+    },
 
     // For safety
     isPaymentVerified: {
