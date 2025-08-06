@@ -858,7 +858,7 @@ const Attendance = () => {
     // --- JSX RENDERING ---
     
     return (
-        <div className={styles.attendanceContainer}>
+        <div className={`${styles.attendanceContainer} ${isEditMode ? styles.editMode : ''}`}>
             <Sidebar />
             <div className={styles.attendanceContent}>
                 <div className={styles.pageHeader}>

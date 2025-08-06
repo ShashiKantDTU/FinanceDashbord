@@ -186,8 +186,8 @@
 }
 
 .saveButton:hover:not(:disabled) {
-    background: var(--color-success-dark);
-    border-color: var(--color-success-dark);
+    background: var(--color-success-hover);
+    border-color: var(--color-success-hover);
 }
 
 .saveButton:disabled {
@@ -1195,6 +1195,22 @@
 
 .attendanceContainer.editMode .attendanceInput:focus {
     will-change: border-color, box-shadow;
+}
+
+/* Make day columns wider in edit mode for better input visibility */
+.attendanceContainer.editMode .dayColumn {
+    min-width: 65px;
+    max-width: 65px;
+    padding: 2px; /* Reduce padding to give more space to input */
+}
+
+/* Ensure input fields take full width of the wider columns */
+.attendanceContainer.editMode .attendanceInput {
+    width: 100%;
+    min-width: 55px; /* Slightly smaller than column to account for padding */
+    padding: 6px 8px; /* Increase padding for better text visibility */
+    font-size: 14px; /* Slightly larger font for better readability */
+    font-weight: 600; /* Make text bolder for better visibility */
 }
 
 /* Disable expensive hover effects during edit mode for better performance */
