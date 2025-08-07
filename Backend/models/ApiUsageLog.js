@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { logConnection } = require('../config/logDatabase');
 
 const apiUsageLogSchema = new mongoose.Schema({
   // --- User & Plan Details ---
@@ -58,6 +59,12 @@ const apiUsageLogSchema = new mongoose.Schema({
 // Compound index to optimize dashboard queries
 apiUsageLogSchema.index({ mainUserId: 1, timestamp: -1 });
 
-const ApiUsageLog = mongoose.model('ApiUsageLog', apiUsageLogSchema);
-
-module.exports = ApiUsageLog;
+// Only use the dedicated logging database connection - no fallback to main database
+if (!logConnection) {
+  console.error('❌ Cannot create ApiUsageLog model: MONGO_URI_LOGS not configured');
+  module.exports = null;
+} else {
+  // Use the specific collection name 'Sitehaazrilogs' as shown in your database
+  const ApiUsageLog = logConnection.model('ApiUsageLog', apiUsageLogSchema, 'Sitehaazrilogs');
+  module.exports = ApiUsageLog;
+}

@@ -130,7 +130,9 @@ async function verifyAndroidPurchase(packageName, purchaseToken, requestId = 'un
     }
 }
 
-// Purchase verification endpoint
+// Purchase verification endpoint (READ-ONLY)
+// This endpoint only verifies the purchase with Google but does NOT update the database
+// The webhook handles all database updates to prevent race conditions
 router.post('/verify-android-purchase', authenticateToken, async (req, res) => {
     try {
         const { purchaseToken } = req.body;
@@ -144,77 +146,29 @@ router.post('/verify-android-purchase', authenticateToken, async (req, res) => {
             return res.status(400).json({ error: 'User is not authenticated.' });
         }
 
-        const verificationResult = await verifyAndroidPurchase(packageName, purchaseToken);
+        const verificationResult = await verifyAndroidPurchase(packageName, purchaseToken, `frontend_${user.id}`);
 
         if (verificationResult.success) {
-            // Determine billing cycle from expiry time
-            const diffInMs = new Date(verificationResult.expires) - new Date();
-            const diffInDays = diffInMs / (1000 * 60 * 60 * 24);
-            const billingCycle = diffInDays > 180 ? 'yearly' : 'monthly';
+            // Determine billing cycle from the original product ID (more reliable)
+            const billingCycle = verificationResult.originalProductId.includes('yearly') ? 'yearly' : 'monthly';
 
-            // Get current user to check if this is a renewal or new purchase
-            const currentUser = await User.findById(user.id);
-            const isRenewal = currentUser.purchaseToken && currentUser.purchaseToken !== purchaseToken;
-
-            // Prepare plan history entry
-            const planHistoryEntry = {
-                plan: verificationResult.productId,
-                purchasedAt: verificationResult.startTime || new Date(),
-                expiresAt: new Date(verificationResult.expires),
-                transactionId: purchaseToken,
-                platform: 'android',
-                source: 'google_play',
-                isActive: true,
-                renewalToken: isRenewal ? purchaseToken : null,
-                originalPurchaseToken: isRenewal ? currentUser.purchaseToken : purchaseToken,
-                originalProductId: verificationResult.originalProductId,
-                subscriptionId: verificationResult.subscriptionId,
-                regionCode: verificationResult.regionCode,
-                verificationData: {
-                    subscriptionState: verificationResult.subscriptionState,
-                    startTime: verificationResult.startTime
-                }
-            };
-
-            // Mark previous plan history entries as inactive ONLY if they exist
-            if (currentUser.planHistory && currentUser.planHistory.length > 0) {
-                await User.updateOne(
-                    { _id: user.id },
-                    { $set: { "planHistory.$[].isActive": false } }
-                );
-            }
-
-            // Update user's subscription in database
-            await User.findByIdAndUpdate(
-                user.id,
-                {
-                    plan: verificationResult.productId,
-                    billing_cycle: billingCycle,
-                    planExpiresAt: new Date(verificationResult.expires),
-                    planActivatedAt: new Date(),
-                    isPaymentVerified: true,
-                    lastPurchaseToken: currentUser.purchaseToken,
-                    purchaseToken: purchaseToken,
-                    isCancelled: false,
-                    isGrace: false,
-                    graceExpiresAt: null,
-                    planSource: 'google_play',
-                    $push: { planHistory: planHistoryEntry }
-                }
-            );
-
-            console.log(`✅ Subscription activated: ${user.email} → ${verificationResult.productId} (${billingCycle})`);
+            // --- CRITICAL CHANGE ---
+            // DO NOT update the database here.
+            // Just return the successful verification result to the app.
+            // The webhook will handle the database update.
+            console.log(`✅ Frontend verification successful for user: ${user.email} → ${verificationResult.productId}. Webhook will handle database update.`);
 
             res.status(200).json({
-                message: 'Subscription activated successfully!',
+                message: 'Purchase verified successfully. Plan will be updated shortly.',
                 plan: verificationResult.productId,
                 billing_cycle: billingCycle,
                 expires_at: verificationResult.expires,
                 purchase_token: purchaseToken,
-                plan_source: 'google_play'
+                plan_source: 'google_play',
+                verification_only: true // Flag to indicate this was verification-only
             });
         } else {
-            console.log(`❌ Purchase verification failed: ${verificationResult.error}`);
+            console.log(`❌ Frontend verification failed for user: ${user.email} - ${verificationResult.error}`);
             res.status(400).json({ error: verificationResult.error });
         }
     } catch (error) {
@@ -447,6 +401,8 @@ async function updateUserSubscription(user, notification, notificationType, requ
 }
 
 // Google Cloud Pub/Sub Webhook Endpoint
+// This is the SINGLE SOURCE OF TRUTH for all subscription state changes
+// The frontend verification endpoint is read-only to prevent race conditions
 router.post('/notifications', authenticateWebhook, async (req, res) => {
     const requestId = `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     console.log(`[${requestId}] 🔔 Webhook received`);

@@ -4,12 +4,21 @@ const ApiUsageLog = require('../models/ApiUsageLog');
 const { authenticateAndTrack } = require('../Middleware/usageTracker');
 const { authorizeRole } = require('../Middleware/auth');
 const { getUserUsageStats, checkUsageLimits } = require('../Middleware/usageTracker');
+const { logConnection } = require('../config/logDatabase');
 
 // GET /api/usage/dashboard
 // Provides a summary of API usage grouped by user.
 // Only accessible by admin users
 router.get('/dashboard', authenticateAndTrack, authorizeRole(['Admin']), async (req, res) => {
     try {
+        // Check if logging database is configured
+        if (!ApiUsageLog) {
+            return res.status(503).json({
+                success: false,
+                message: 'Usage tracking not available: Logging database not configured'
+            });
+        }
+
         const usageData = await ApiUsageLog.aggregate([
             // Stage 1: Group by the main user and the specific actor (user or supervisor)
             {
@@ -108,6 +117,14 @@ router.get('/my-stats', authenticateAndTrack, async (req, res) => {
 // Get usage statistics by endpoint
 router.get('/endpoint-stats', authenticateAndTrack, authorizeRole(['Admin']), async (req, res) => {
     try {
+        // Check if logging database is configured
+        if (!ApiUsageLog) {
+            return res.status(503).json({
+                success: false,
+                message: 'Usage tracking not available: Logging database not configured'
+            });
+        }
+
         const days = parseInt(req.query.days) || 30;
         const startDate = new Date();
         startDate.setDate(startDate.getDate() - days);
@@ -164,6 +181,14 @@ router.get('/endpoint-stats', authenticateAndTrack, authorizeRole(['Admin']), as
 // Get usage breakdown by plan type
 router.get('/plan-usage', authenticateAndTrack, authorizeRole(['Admin']), async (req, res) => {
     try {
+        // Check if logging database is configured
+        if (!ApiUsageLog) {
+            return res.status(503).json({
+                success: false,
+                message: 'Usage tracking not available: Logging database not configured'
+            });
+        }
+
         const days = parseInt(req.query.days) || 30;
         const startDate = new Date();
         startDate.setDate(startDate.getDate() - days);
@@ -220,6 +245,14 @@ router.get('/plan-usage', authenticateAndTrack, authorizeRole(['Admin']), async 
 // Get real-time usage statistics
 router.get('/real-time', authenticateAndTrack, authorizeRole(['Admin']), async (req, res) => {
     try {
+        // Check if logging database is configured
+        if (!ApiUsageLog) {
+            return res.status(503).json({
+                success: false,
+                message: 'Usage tracking not available: Logging database not configured'
+            });
+        }
+
         const last24Hours = new Date();
         last24Hours.setHours(last24Hours.getHours() - 24);
 
@@ -276,6 +309,14 @@ router.get('/real-time', authenticateAndTrack, authorizeRole(['Admin']), async (
 // Clean up old usage logs (admin only)
 router.post('/cleanup', authenticateAndTrack, authorizeRole(['Admin']), async (req, res) => {
     try {
+        // Check if logging database is configured
+        if (!ApiUsageLog) {
+            return res.status(503).json({
+                success: false,
+                message: 'Usage tracking not available: Logging database not configured'
+            });
+        }
+
         const daysToKeep = parseInt(req.body.daysToKeep) || 90;
         const cutoffDate = new Date();
         cutoffDate.setDate(cutoffDate.getDate() - daysToKeep);
@@ -295,6 +336,45 @@ router.post('/cleanup', authenticateAndTrack, authorizeRole(['Admin']), async (r
         res.status(500).json({
             success: false,
             message: 'Internal server error'
+        });
+    }
+});
+
+// GET /api/usage/health
+// Check logging database connection health
+router.get('/health', authenticateAndTrack, authorizeRole(['Admin']), async (req, res) => {
+    try {
+        const health = {
+            loggingDatabase: {
+                connected: false,
+                database: null,
+                collection: null,
+                modelAvailable: !!ApiUsageLog
+            }
+        };
+
+        if (logConnection && logConnection.readyState === 1) {
+            health.loggingDatabase.connected = true;
+            health.loggingDatabase.database = logConnection.db.databaseName;
+            health.loggingDatabase.collection = 'Sitehaazrilogs';
+
+            // Test a simple query to verify the collection is accessible
+            if (ApiUsageLog) {
+                const count = await ApiUsageLog.countDocuments();
+                health.loggingDatabase.documentCount = count;
+            }
+        }
+
+        res.json({
+            success: true,
+            data: health
+        });
+    } catch (error) {
+        console.error('Error checking usage database health:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error checking database health',
+            error: error.message
         });
     }
 });

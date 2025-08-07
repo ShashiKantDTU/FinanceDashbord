@@ -12,7 +12,6 @@ const { authenticateToken } = require('./auth');
  * Usage: app.use(usageTracker);
  */
 const usageTracker = async (req, res, next) => {
-  console.log(`--- Usage tracker running for: ${req.method} ${req.path} ---`); // <-- Add this line
   // Skip tracking for certain endpoints to avoid noise
   const skipEndpoints = [
     '/api/usage/dashboard',
@@ -73,8 +72,13 @@ const usageTracker = async (req, res, next) => {
  */
 const logApiUsage = async (req, res, responseSizeBytes) => {
   try {
+    // Check if ApiUsageLog model is available (logging database configured)
+    if (!ApiUsageLog) {
+      console.warn('⚠️  Usage tracking skipped: MONGO_URI_LOGS not configured');
+      return;
+    }
+
     const { user } = req;
-    console.log('--- Inside logApiUsage. Actor Role:', user.role, 'Actor Email/ID:', user.email || user.id, '---'); // <-- ADD THIS
     // Determine the main user ID (the account owner who will be billed)
     let mainUserId;
     let userPhone;
@@ -139,11 +143,6 @@ const logApiUsage = async (req, res, responseSizeBytes) => {
 
     await usageLog.save();
 
-    // Log for debugging (remove in production)
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`📊 Usage tracked: ${user.role} ${actorInfo.id} -> ${req.method} ${req.path} (${res.statusCode}) - ${responseSizeBytes} bytes`);
-    }
-
   } catch (error) {
     console.error('Error in logApiUsage:', error);
   }
@@ -170,6 +169,11 @@ const enhancedUsageTracker = async (req, res, next) => {
  */
 const getUserUsageStats = async (userId, days = 30) => {
   try {
+    // Check if ApiUsageLog model is available
+    if (!ApiUsageLog) {
+      throw new Error('Usage tracking not available: MONGO_URI_LOGS not configured');
+    }
+
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - days);
 
@@ -208,6 +212,11 @@ const getUserUsageStats = async (userId, days = 30) => {
  */
 const checkUsageLimits = async (userId, userPlan) => {
   try {
+    // Check if ApiUsageLog model is available
+    if (!ApiUsageLog) {
+      throw new Error('Usage tracking not available: MONGO_URI_LOGS not configured');
+    }
+
     // Define plan limits (adjust as needed)
     const planLimits = {
       free: {
