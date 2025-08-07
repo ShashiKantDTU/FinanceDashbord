@@ -1,6 +1,7 @@
 const ApiUsageLog = require('../models/ApiUsageLog');
 const User = require('../models/Userschema');
 const { Supervisor } = require('../models/supervisorSchema');
+const { authenticateToken } = require('./auth');
 
 /**
  * Usage Tracking Middleware
@@ -11,6 +12,7 @@ const { Supervisor } = require('../models/supervisorSchema');
  * Usage: app.use(usageTracker);
  */
 const usageTracker = async (req, res, next) => {
+  console.log(`--- Usage tracker running for: ${req.method} ${req.path} ---`); // <-- Add this line
   // Skip tracking for certain endpoints to avoid noise
   const skipEndpoints = [
     '/api/usage/dashboard',
@@ -37,14 +39,14 @@ const usageTracker = async (req, res, next) => {
   let responseSizeBytes = 0;
 
   // Override res.json to capture response data
-  res.json = function(data) {
+  res.json = function (data) {
     responseData = data;
     responseSizeBytes = JSON.stringify(data).length;
     return originalJson.call(this, data);
   };
 
   // Override res.send to capture response data
-  res.send = function(data) {
+  res.send = function (data) {
     if (!responseData) {
       responseData = data;
       responseSizeBytes = typeof data === 'string' ? data.length : JSON.stringify(data).length;
@@ -52,10 +54,7 @@ const usageTracker = async (req, res, next) => {
     return originalSend.call(this, data);
   };
 
-  // Continue to the next middleware/route
-  next();
-
-  // After the response is sent, log the usage
+  // Attach the finish event listener BEFORE calling next()
   res.on('finish', async () => {
     try {
       await logApiUsage(req, res, responseSizeBytes);
@@ -64,6 +63,9 @@ const usageTracker = async (req, res, next) => {
       // Don't throw error to avoid affecting the main request
     }
   });
+
+  // Continue to the next middleware/route
+  next();
 };
 
 /**
@@ -72,7 +74,7 @@ const usageTracker = async (req, res, next) => {
 const logApiUsage = async (req, res, responseSizeBytes) => {
   try {
     const { user } = req;
-    
+    console.log('--- Inside logApiUsage. Actor Role:', user.role, 'Actor Email/ID:', user.email || user.id, '---'); // <-- ADD THIS
     // Determine the main user ID (the account owner who will be billed)
     let mainUserId;
     let userPhone;
@@ -83,7 +85,7 @@ const logApiUsage = async (req, res, responseSizeBytes) => {
     if (user.role === 'Supervisor') {
       // For supervisor requests, find the owner (main user)
       const supervisor = await Supervisor.findOne({ userId: user.email }).populate('owner');
-      
+
       if (!supervisor || !supervisor.owner) {
         console.warn('Supervisor owner not found for usage tracking:', user.email);
         return;
@@ -92,12 +94,12 @@ const logApiUsage = async (req, res, responseSizeBytes) => {
       mainUserId = supervisor.owner._id;
       userPhone = supervisor.owner.phoneNumber;
       userPlan = supervisor.owner.plan || 'free';
-      
+
       actorInfo = {
         id: supervisor._id.toString(),
         role: 'Supervisor'
       };
-      
+
       supervisorInfo = {
         id: supervisor._id,
         profileName: supervisor.name || 'Unknown Supervisor'
@@ -105,7 +107,7 @@ const logApiUsage = async (req, res, responseSizeBytes) => {
     } else {
       // For regular user requests
       const userData = await User.findById(user.id);
-      
+
       if (!userData) {
         console.warn('User not found for usage tracking:', user.id);
         return;
@@ -114,7 +116,7 @@ const logApiUsage = async (req, res, responseSizeBytes) => {
       mainUserId = userData._id;
       userPhone = userData.phoneNumber;
       userPlan = userData.plan || 'free';
-      
+
       actorInfo = {
         id: userData._id.toString(),
         role: 'User'
@@ -246,8 +248,8 @@ const checkUsageLimits = async (userId, userPlan) => {
     const limits = planLimits[userPlan] || planLimits.free;
 
     return {
-      withinLimits: currentUsage.totalRequests <= limits.requestsPerMonth && 
-                   currentUsage.totalDataBytes <= limits.dataPerMonth,
+      withinLimits: currentUsage.totalRequests <= limits.requestsPerMonth &&
+        currentUsage.totalDataBytes <= limits.dataPerMonth,
       usage: currentUsage,
       limits: limits,
       percentageUsed: {
@@ -261,9 +263,26 @@ const checkUsageLimits = async (userId, userPlan) => {
   }
 };
 
+/**
+ * Combined middleware that does authentication first, then usage tracking
+ * Use this instead of applying authenticateToken and usageTracker separately
+ */
+const authenticateAndTrack = async (req, res, next) => {
+  // First, authenticate the user
+  authenticateToken(req, res, (authError) => {
+    if (authError) {
+      return next(authError);
+    }
+    
+    // If authentication succeeds, apply usage tracking
+    usageTracker(req, res, next);
+  });
+};
+
 module.exports = {
   usageTracker,
   enhancedUsageTracker,
   getUserUsageStats,
-  checkUsageLimits
+  checkUsageLimits,
+  authenticateAndTrack
 };

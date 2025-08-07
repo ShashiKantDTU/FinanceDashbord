@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const path = require('path');
 const fs = require('fs');
-const { authenticateToken } = require('../Middleware/auth');
+const { authenticateAndTrack } = require('../Middleware/usageTracker');
 
 /**
  * @route GET /api/pdf/employee-report
@@ -10,7 +10,7 @@ const { authenticateToken } = require('../Middleware/auth');
  * @access Private
  * @params employeeId, month, year, siteId
  */
-router.get('/employee-report', authenticateToken, async (req, res) => {
+router.get('/employee-report', authenticateAndTrack, async (req, res) => {
     try {
         const { employeeId, month, year, siteId } = req.query;
 
@@ -129,7 +129,7 @@ router.get('/test', async (req, res) => {
  * @desc Get PDF service info
  * @access Private
  */
-router.get('/info', authenticateToken, async (req, res) => {
+router.get('/info', authenticateAndTrack, async (req, res) => {
     try {
         const pdfPath = path.join(__dirname, 'pdf.pdf');
         const pdfExists = fs.existsSync(pdfPath);

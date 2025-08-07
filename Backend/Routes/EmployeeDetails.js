@@ -9,7 +9,7 @@ const {
 } = require("../Utils/Jobs");
 const { trackOptimizedChanges } = require("../Utils/OptimizedChangeTracker");
 const { latestEmpSerialNumber } = require("../Utils/EmployeeUtils");
-const { authenticateToken } = require("../Middleware/auth");
+const { authenticateAndTrack } = require("../Middleware/usageTracker");
 const { pendingAttendance } = require("../Utils/EmployeeUtils");
 const { markEmployeesForRecalculation } = require("../Utils/Jobs");
 const router = express.Router();
@@ -93,7 +93,7 @@ const handleRecalculationMarking = async (siteID, empid, month, year, deletedBy,
 };
 
 // Create new employee endpoint (requires name, siteID, and wage)
-router.post("/addemployee", authenticateToken, async (req, res) => {
+router.post("/addemployee", authenticateAndTrack, async (req, res) => {
   try {
     // console.log("📝 Creating new employee:", req.body);
 
@@ -285,7 +285,7 @@ router.post("/addemployee", authenticateToken, async (req, res) => {
 
 // Delete employee endpoint with ChangeTracker integration and recalculation marking
 // When deleting a specific month, all future months need recalculation due to carry-forward impact
-router.delete("/deleteemployee", authenticateToken, async (req, res) => {
+router.delete("/deleteemployee", authenticateAndTrack, async (req, res) => {
   try {
     // console.log("🗑️ Delete employee request:", req.body);
 
@@ -595,7 +595,7 @@ router.delete("/deleteemployee", authenticateToken, async (req, res) => {
 });
 
 // Import employee from previous month
-router.post("/importemployees", authenticateToken, async (req, res) => {
+router.post("/importemployees", authenticateAndTrack, async (req, res) => {
   try {
     // console.log("📥 Import employees from previous month request:", req.body);
 
@@ -929,7 +929,7 @@ router.post("/importemployees", authenticateToken, async (req, res) => {
 
 // Get employee details with pending payoutes in month
 router.get("/employeewithpendingpayouts",
-  authenticateToken,
+  authenticateAndTrack,
   async (req, res) => {
     // Required query parameters: month, year, and siteID
     // console.log("Query Parameters:", req.query);
@@ -1059,7 +1059,7 @@ router.get("/employeewithpendingpayouts",
 
 // Get all employee details for a month (including zero balance employees)
 // Useful for administrative purposes and data verification
-router.get("/allemployees", authenticateToken, async (req, res) => {
+router.get("/allemployees", authenticateAndTrack, async (req, res) => {
   const { month, year, siteID } = req.query;
 
   // Validate required parameters
@@ -1193,7 +1193,7 @@ router.get("/allemployees", authenticateToken, async (req, res) => {
 
 // This new route replaces the old "/allemployees" logic.
 // It uses a single aggregation pipeline for maximum efficiency.
-router.get("/allemployees-optimized", authenticateToken, async (req, res) => {
+router.get("/allemployees-optimized", authenticateAndTrack, async (req, res) => {
   const { month, year, siteID } = req.query;
 
   // 1. Validate Input Parameters
@@ -1369,7 +1369,7 @@ router.get("/allemployees-optimized", authenticateToken, async (req, res) => {
 
 // Route to get employee with pending attendance on a specific date
 router.get("/employeewithpendingattendance",
-  authenticateToken,
+  authenticateAndTrack,
   async (req, res) => {
     // check for required query parameters
     const dateStr = req.query.date?.toString().trim();
@@ -1539,7 +1539,7 @@ router.get("/employeewithpendingattendance",
 // Get all a single employee's details
 
 // Get available employees for import from specific month/year
-router.get("/availableforimport", authenticateToken, async (req, res) => {
+router.get("/availableforimport", authenticateAndTrack, async (req, res) => {
   try {
     const { sourceMonth, sourceYear, targetMonth, targetYear, siteID } =
       req.query;
@@ -1678,7 +1678,7 @@ router.get("/availableforimport", authenticateToken, async (req, res) => {
 
 
 // Fetch all employee list for a specific month and year
-router.get("/allemployeelist", authenticateToken, async (req, res) => {
+router.get("/allemployeelist", authenticateAndTrack, async (req, res) => {
   const { month, year, siteID } = req.query;
 
   // Validate input parameters
@@ -1718,7 +1718,7 @@ router.get("/allemployeelist", authenticateToken, async (req, res) => {
 // Fetch employee details by ID, month, and year
 
 router.get("/employee/:siteID/:empid/:month/:year",
-  authenticateToken,
+  authenticateAndTrack,
   async (req, res) => {
     const { empid, month, year, siteID } = req.params;
     // console.log(

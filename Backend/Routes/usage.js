@@ -1,13 +1,14 @@
 const express = require('express');
 const router = express.Router();
 const ApiUsageLog = require('../models/ApiUsageLog');
-const { authenticateToken, authorizeRole } = require('../Middleware/auth');
+const { authenticateAndTrack } = require('../Middleware/usageTracker');
+const { authorizeRole } = require('../Middleware/auth');
 const { getUserUsageStats, checkUsageLimits } = require('../Middleware/usageTracker');
 
 // GET /api/usage/dashboard
 // Provides a summary of API usage grouped by user.
 // Only accessible by admin users
-router.get('/dashboard', authenticateToken, authorizeRole(['Admin']), async (req, res) => {
+router.get('/dashboard', authenticateAndTrack, authorizeRole(['Admin']), async (req, res) => {
     try {
         const usageData = await ApiUsageLog.aggregate([
             // Stage 1: Group by the main user and the specific actor (user or supervisor)
@@ -77,7 +78,7 @@ router.get('/dashboard', authenticateToken, authorizeRole(['Admin']), async (req
 
 // GET /api/usage/my-stats
 // Get current user's usage statistics
-router.get('/my-stats', authenticateToken, async (req, res) => {
+router.get('/my-stats', authenticateAndTrack, async (req, res) => {
     try {
         const userId = req.user.id;
         const days = parseInt(req.query.days) || 30;
@@ -105,7 +106,7 @@ router.get('/my-stats', authenticateToken, async (req, res) => {
 
 // GET /api/usage/endpoint-stats
 // Get usage statistics by endpoint
-router.get('/endpoint-stats', authenticateToken, authorizeRole(['Admin']), async (req, res) => {
+router.get('/endpoint-stats', authenticateAndTrack, authorizeRole(['Admin']), async (req, res) => {
     try {
         const days = parseInt(req.query.days) || 30;
         const startDate = new Date();
@@ -161,7 +162,7 @@ router.get('/endpoint-stats', authenticateToken, authorizeRole(['Admin']), async
 
 // GET /api/usage/plan-usage
 // Get usage breakdown by plan type
-router.get('/plan-usage', authenticateToken, authorizeRole(['Admin']), async (req, res) => {
+router.get('/plan-usage', authenticateAndTrack, authorizeRole(['Admin']), async (req, res) => {
     try {
         const days = parseInt(req.query.days) || 30;
         const startDate = new Date();
@@ -217,7 +218,7 @@ router.get('/plan-usage', authenticateToken, authorizeRole(['Admin']), async (re
 
 // GET /api/usage/real-time
 // Get real-time usage statistics
-router.get('/real-time', authenticateToken, authorizeRole(['Admin']), async (req, res) => {
+router.get('/real-time', authenticateAndTrack, authorizeRole(['Admin']), async (req, res) => {
     try {
         const last24Hours = new Date();
         last24Hours.setHours(last24Hours.getHours() - 24);
@@ -273,7 +274,7 @@ router.get('/real-time', authenticateToken, authorizeRole(['Admin']), async (req
 
 // POST /api/usage/cleanup
 // Clean up old usage logs (admin only)
-router.post('/cleanup', authenticateToken, authorizeRole(['Admin']), async (req, res) => {
+router.post('/cleanup', authenticateAndTrack, authorizeRole(['Admin']), async (req, res) => {
     try {
         const daysToKeep = parseInt(req.body.daysToKeep) || 90;
         const cutoffDate = new Date();

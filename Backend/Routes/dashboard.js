@@ -2,13 +2,13 @@ const express = require('express');
 const User = require('../models/Userschema');
 const Site = require('../models/Siteschema');
 const Employee = require('../models/EmployeeSchema');
-const { authenticateToken } = require('../Middleware/auth');
+const { authenticateAndTrack } = require('../Middleware/usageTracker');
 
 const router = express.Router();
 
 
 // Dashboard route
-router.get('/home', authenticateToken, async (req, res) => {
+router.get('/home', authenticateAndTrack, async (req, res) => {
 
     const user = req.user; 
     if (!user) {
@@ -37,7 +37,7 @@ router.get('/home', authenticateToken, async (req, res) => {
 
 
 // NEW, SEPARATE ENDPOINT FOR THE MODERN DASHBOARD
-router.get('/v2/home', authenticateToken, async (req, res) => {
+router.get('/v2/home', authenticateAndTrack, async (req, res) => {
     try {
         const user = req.user;
         if (!user) {
@@ -100,7 +100,7 @@ router.get('/v2/home', authenticateToken, async (req, res) => {
 });
 
 // Add site route
-router.post('/home/addsite', authenticateToken, async (req, res) => {
+router.post('/home/addsite', authenticateAndTrack, async (req, res) => {
     try {
         const user = req.user; 
         console.log('add site route hit')
@@ -179,7 +179,7 @@ router.post('/home/addsite', authenticateToken, async (req, res) => {
 });
 
 // Delete site route
-router.delete('/delete-site', authenticateToken, async (req, res) => {
+router.delete('/delete-site', authenticateAndTrack, async (req, res) => {
     try {
         const user = req.user; 
         if (!user) {
@@ -240,7 +240,7 @@ router.delete('/delete-site', authenticateToken, async (req, res) => {
 });
 
 // Edit site name route
-router.put('/edit-site-name', authenticateToken, async (req, res) => {
+router.put('/edit-site-name', authenticateAndTrack, async (req, res) => {
     try {
         const user = req.user;
         if (!user) {

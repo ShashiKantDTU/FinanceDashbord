@@ -8,7 +8,7 @@ const MONGODB_URI = 'mongodb://localhost:27017/finance-dashboard';
 const SITE_ID = "6870f208c36ebbb9064d6649";
 const CREATED_BY = "sunnypoddar1919@gmail.com";
 const START_DATE = new Date(2024, 5, 1); // June 2024
-const END_DATE = new Date(2025, 6, 29); // July 29, 2025
+const END_DATE = new Date(); // Today's date
 
 // Employee Schema Definition
 const employeeSchema = new mongoose.Schema({
@@ -100,7 +100,7 @@ const employeeSchema = new mongoose.Schema({
     createdBy: {
         type: String,
         required: true
-    },    attendanceHistory: {
+    }, attendanceHistory: {
         type: Map,
         of: {
             attendance: [String],
@@ -130,11 +130,11 @@ function getDaysInMonth(year, month) {
 function generateAttendance(year, month) {
     const daysInMonth = getDaysInMonth(year, month);
     const attendance = [];
-    
+
     // Add employee variation - different attendance patterns
     const employeeReliability = Math.random();
     let baseAttendanceRate;
-    
+
     if (employeeReliability < 0.2) {
         baseAttendanceRate = 0.7; // 20% are irregular workers (70% attendance)
     } else if (employeeReliability < 0.6) {
@@ -144,16 +144,16 @@ function generateAttendance(year, month) {
     } else {
         baseAttendanceRate = 0.98; // 10% are very reliable workers (98% attendance)
     }
-    
+
     // Some employees are more likely to do overtime
     const overtimeWorker = Math.random() < 0.3; // 30% are overtime workers
-    
+
     for (let day = 1; day <= daysInMonth; day++) {
         const isPresent = Math.random() < baseAttendanceRate;
-        
+
         if (isPresent) {
             let overtimeHours = 0;
-            
+
             if (overtimeWorker) {
                 // Overtime workers do overtime 40% of their working days
                 if (Math.random() < 0.4) {
@@ -165,7 +165,7 @@ function generateAttendance(year, month) {
                     overtimeHours = Math.floor(Math.random() * 4) + 1; // 1-4 hours
                 }
             }
-            
+
             attendance.push(overtimeHours > 0 ? `P${overtimeHours}` : "P");
         } else {
             // Even when absent, very rarely might do some work (emergency calls)
@@ -178,18 +178,18 @@ function generateAttendance(year, month) {
             }
         }
     }
-    
+
     return attendance;
 }
 
 // Helper function to generate random additional required payments
 function generateAdditionalReqPays() {
     const payments = [];
-    
+
     // Add variation - some employees get more benefits than others
     const employeeType = Math.random();
     let numPayments;
-    
+
     if (employeeType < 0.4) {
         numPayments = 0; // 40% get no additional payments
     } else if (employeeType < 0.7) {
@@ -199,7 +199,7 @@ function generateAdditionalReqPays() {
     } else {
         numPayments = 3; // 10% get 3 additional payments (senior employees)
     }
-    
+
     const paymentTypes = [
         { name: "Transport allowance", min: 300, max: 800 },
         { name: "Food allowance", min: 200, max: 600 },
@@ -211,21 +211,21 @@ function generateAdditionalReqPays() {
         { name: "Skill bonus", min: 600, max: 1500 },
         { name: "Safety bonus", min: 200, max: 500 }
     ];
-    
+
     // Shuffle payment types to add randomness
     const shuffledTypes = paymentTypes.sort(() => Math.random() - 0.5);
-    
+
     for (let i = 0; i < numPayments; i++) {
         const paymentType = shuffledTypes[i];
         const amount = Math.floor(Math.random() * (paymentType.max - paymentType.min + 1)) + paymentType.min;
-        
+
         payments.push({
             value: amount,
             remark: paymentType.name,
             date: new Date(2024 + Math.floor(Math.random() * 2), Math.floor(Math.random() * 12), Math.floor(Math.random() * 28) + 1)
         });
     }
-    
+
     return payments;
 }
 
@@ -233,16 +233,16 @@ function generateAdditionalReqPays() {
 function generatePayouts(estimatedMonthlyWage, additionalPayments = 0) {
     const payouts = [];
     const totalEarnings = estimatedMonthlyWage + additionalPayments;
-    
+
     // Ensure minimum earnings for calculation
     const minimumMonthlyEarnings = 3000;
     const baseEarnings = Math.max(totalEarnings, minimumMonthlyEarnings);
-    
+
     // Create realistic payout scenarios
     const payoutScenario = Math.random();
     let payoutPercentage;
     let numPayouts;
-    
+
     if (payoutScenario < 0.15) {
         // 15% - Employee gets overpaid (advance from next month)
         payoutPercentage = Math.random() * 0.4 + 1.1; // 110-150% of earnings
@@ -264,16 +264,16 @@ function generatePayouts(estimatedMonthlyWage, additionalPayments = 0) {
         payoutPercentage = Math.random() * 0.25 + 0.4; // 40-65% of earnings
         numPayouts = Math.floor(Math.random() * 2) + 2; // 2-3 payments
     }
-    
+
     const totalPayouts = Math.floor(baseEarnings * payoutPercentage);
-    
+
     // Generate payment amounts with variation
     const payments = [];
     let remainingAmount = totalPayouts;
-    
+
     for (let i = 0; i < numPayouts; i++) {
         let paymentAmount;
-        
+
         if (i === numPayouts - 1) {
             // Last payment gets remaining amount
             paymentAmount = Math.max(500, remainingAmount);
@@ -283,15 +283,15 @@ function generatePayouts(estimatedMonthlyWage, additionalPayments = 0) {
             paymentAmount = Math.floor(remainingAmount * percentage);
             paymentAmount = Math.max(500, paymentAmount);
         }
-        
+
         remainingAmount -= paymentAmount;
         payments.push(paymentAmount);
     }
-    
+
     // Create payout objects with varied dates and remarks
     const remarks = [
         "Weekly salary advance",
-        "Bi-weekly payment", 
+        "Bi-weekly payment",
         "Emergency advance",
         "Festival advance",
         "Monthly advance",
@@ -304,12 +304,12 @@ function generatePayouts(estimatedMonthlyWage, additionalPayments = 0) {
         "Extra advance",
         "Full month advance"
     ];
-    
+
     for (let i = 0; i < payments.length; i++) {
         // Generate dates spread throughout the month
         const dayOfMonth = Math.floor((30 / numPayouts) * i) + Math.floor(Math.random() * 7) + 1;
         const paymentDay = Math.min(28, Math.max(1, dayOfMonth));
-        
+
         payouts.push({
             value: payments[i],
             remark: remarks[Math.floor(Math.random() * remarks.length)],
@@ -317,67 +317,70 @@ function generatePayouts(estimatedMonthlyWage, additionalPayments = 0) {
             createdBy: CREATED_BY
         });
     }
-    
+
     return payouts;
 }
 
-// Employee names for variety
-const employeeNames = [
-    "Rajesh Kumar",
-    "Priya Sharma",
-    "Amit Patel",
-    "Sunita Singh",
-    "Vikash Yadav",
-    "Meera Gupta",
-    "Rohit Verma",
-    "Kavita Joshi",
-    "Deepak Mishra",
-    "Pooja Agarwal",
-    "Suresh Pandey",
-    "Anjali Tiwari",
-    "Manoj Kumar",
-    "Rekha Devi",
-    "Santosh Rai",
-    "Geeta Kumari",
-    "Dinesh Singh",
-    "Kiran Patel",
-    "Ramesh Gupta",
-    "Sita Sharma",
-    "Arjun Singh",
-    "Nisha Patel",
-    "Ravi Sharma",
-    "Seema Gupta",
-    "Manish Verma",
-    "Shreya Joshi",
-    "Anil Kumar",
-    "Poonam Singh",
-    "Vikas Mishra",
-    "Neha Agarwal"
+// Employee names for variety - expanded list for 250 employees
+const firstNames = [
+    "Rajesh", "Priya", "Amit", "Sunita", "Vikash", "Meera", "Rohit", "Kavita", "Deepak", "Pooja",
+    "Suresh", "Anjali", "Manoj", "Rekha", "Santosh", "Geeta", "Dinesh", "Kiran", "Ramesh", "Sita",
+    "Arjun", "Nisha", "Ravi", "Seema", "Manish", "Shreya", "Anil", "Poonam", "Vikas", "Neha",
+    "Sanjay", "Ritu", "Ashok", "Sushma", "Vinod", "Shanti", "Mukesh", "Usha", "Rajeev", "Sunita",
+    "Prakash", "Kamala", "Sunil", "Radha", "Ajay", "Lata", "Naresh", "Savita", "Yogesh", "Manju",
+    "Rakesh", "Pushpa", "Mahesh", "Sudha", "Ramesh", "Anita", "Sudhir", "Veena", "Pankaj", "Shila",
+    "Mohan", "Asha", "Kishore", "Nirmala", "Jagdish", "Saroj", "Bharat", "Kanta", "Lalit", "Meena",
+    "Gopal", "Suman", "Harish", "Renu", "Satish", "Shobha", "Arun", "Parvati", "Brijesh", "Sarita",
+    "Umesh", "Vandana", "Girish", "Sunita", "Rajendra", "Kiran", "Subhash", "Mala", "Devendra", "Nisha",
+    "Mahendra", "Sushila", "Narendra", "Sharda", "Surendra", "Urmila", "Upendra", "Vidya", "Jitendra", "Kavita"
 ];
+
+const lastNames = [
+    "Kumar", "Sharma", "Patel", "Singh", "Yadav", "Gupta", "Verma", "Joshi", "Mishra", "Agarwal",
+    "Pandey", "Tiwari", "Devi", "Rai", "Kumari", "Chandra", "Prasad", "Lal", "Das", "Roy",
+    "Sinha", "Jha", "Thakur", "Chouhan", "Rajput", "Shukla", "Dubey", "Tripathi", "Upadhyay", "Chaturvedi",
+    "Saxena", "Bansal", "Agrawal", "Goel", "Mittal", "Jain", "Arora", "Kapoor", "Malhotra", "Khanna",
+    "Bhatia", "Sethi", "Chopra", "Tandon", "Sood", "Khurana", "Ahuja", "Grover", "Sachdeva", "Anand"
+];
+
+// Function to generate unique employee names
+function generateEmployeeName(index) {
+    const firstNameIndex = index % firstNames.length;
+    const lastNameIndex = Math.floor(index / firstNames.length) % lastNames.length;
+    const suffix = Math.floor(index / (firstNames.length * lastNames.length));
+    
+    let name = `${firstNames[firstNameIndex]} ${lastNames[lastNameIndex]}`;
+    if (suffix > 0) {
+        name += ` ${suffix + 1}`;
+    }
+    
+    return name;
+}
 
 // Generate employees data
 function generateEmployeesData() {
     const employees = [];
-    const numEmployees = 20; // Generate 20 employees
-    
-    for (let i = 0; i < numEmployees; i++) {        const empId = `EMP${String(i + 1).padStart(3, '0')}`; // Changed to 3 digits for better formatting
-        const name = employeeNames[i % employeeNames.length]; // Use modulo to cycle through names if needed
+    const numEmployees = 250; // Generate 250 employees
+
+    for (let i = 0; i < numEmployees; i++) {
+        const empId = `EMP${String(i + 1).padStart(4, '0')}`; // Changed to 4 digits for 250+ employees
+        const name = generateEmployeeName(i); // Use function to generate unique names
         const rate = Math.floor(Math.random() * 351) + 550; // 550-900 daily rate
-        
+
         // Generate data for each month from June 2024 to May 2025
         const currentDate = new Date(START_DATE);
         const endDate = new Date(END_DATE);
-          while (currentDate <= endDate) {
+        while (currentDate <= endDate) {
             const month = currentDate.getMonth();
             const year = currentDate.getFullYear();
-            
+
             // Generate attendance for this month
             const attendance = generateAttendance(year, month);
-              // Calculate estimated monthly wage for realistic payouts
+            // Calculate estimated monthly wage for realistic payouts
             // Count present days and overtime from attendance
             let presentDays = 0;
             let overtimeHours = 0;
-            
+
             attendance.forEach(att => {
                 if (att.includes('P')) {
                     presentDays += 1;
@@ -393,21 +396,21 @@ function generateEmployeesData() {
                     }
                 }
             });
-            
+
             // Calculate estimated wage properly
             // Base wage = rate * present days (8 hours each)
             const baseWage = rate * presentDays;
-            
+
             // Overtime wage = rate * (overtime hours / 8) 
             // Assuming overtime is paid at same rate as regular hours
             const overtimeWage = rate * (overtimeHours / 8);
-            
+
             const estimatedMonthlyWage = Math.floor(baseWage + overtimeWage);
-            
+
             // Generate additional payments
             const additionalPayments = generateAdditionalReqPays();
             const totalAdditionalAmount = additionalPayments.reduce((sum, pay) => sum + pay.value, 0);
-            
+
             const employee = {
                 name: name,
                 empid: empId,
@@ -429,17 +432,17 @@ function generateEmployeesData() {
                 attendanceHistory: {},
                 recalculationneeded: true // Set to true for all records
             };
-            
+
             employees.push(employee);
-            
+
             // Move to next month
             currentDate.setMonth(currentDate.getMonth() + 1);
         }
-        
+
         // Reset date for next employee
         currentDate.setTime(START_DATE.getTime());
     }
-    
+
     return employees;
 }
 
@@ -462,7 +465,7 @@ async function insertDataToMongoDB() {
 
         // Insert data in batches for better performance
         console.log("Inserting employee data to MongoDB...");
-        const batchSize = 30;
+        const batchSize = 50; // Increased batch size for better performance with 250 employees
         let insertedCount = 0;
 
         for (let i = 0; i < employeesData.length; i += batchSize) {
@@ -473,14 +476,15 @@ async function insertDataToMongoDB() {
         }
 
         console.log(`\n🎉 Successfully inserted ${employeesData.length} employee records!`);
-        console.log(`📊 Period: June 2024 to May 29, 2025`);
+        console.log(`👥 Employees per month: 250`);
+        console.log(`📊 Period: June 2024 to July 29, 2025`);
         console.log(`🏢 Site ID: ${SITE_ID}`);
         console.log(`👤 Created by: ${CREATED_BY}`);
 
         // Optional: Create JSON backup files
         const jsonLines = employeesData.map(employee => JSON.stringify(employee)).join('\n');
         fs.writeFileSync('employee_dummy_data_backup.json', jsonLines);
-        
+
         const outputData = {
             employees: employeesData,
             metadata: {

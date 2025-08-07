@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { authenticateToken } = require('../Middleware/auth');
+const { authenticateAndTrack } = require('../Middleware/usageTracker');
 // switched email to name for Info message 
 
 // Import the new optimized change tracking functions
@@ -132,7 +132,7 @@ router.get('/test-connection', (req, res) => {
 });
 
 // Test endpoint with auth to verify auth middleware
-router.get('/test-auth', authenticateToken, (req, res) => {
+router.get('/test-auth', authenticateAndTrack, (req, res) => {
     // console.log('🔥 TEST AUTH ENDPOINT HIT');
     // console.log('👤 User from token:', req.user);
     res.json({
@@ -160,7 +160,7 @@ const validateRequest = (requiredFields) => {
 
 // Get change tracking history for a specific employee (OPTIMIZED VERSION)
 // GET /api/change-tracking/employee/:employeeID
-router.get('/employee/:employeeID', authenticateToken, validateRequest(['siteID']), async (req, res) => {
+router.get('/employee/:employeeID', authenticateAndTrack, validateRequest(['siteID']), async (req, res) => {
     try {
         const { employeeID } = req.params;
         const { siteID, page, limit, sortBy, sortOrder, fromDate, toDate, year, month, changeType, correctedBy } = req.query;
@@ -239,7 +239,7 @@ router.get('/employee/:employeeID', authenticateToken, validateRequest(['siteID'
 
 // Get change tracking statistics (OPTIMIZED VERSION)
 // GET /api/change-tracking/statistics
-router.get('/statistics', authenticateToken, async (req, res) => {
+router.get('/statistics', authenticateAndTrack, async (req, res) => {
     try {
         const { siteID, fromDate, toDate } = req.query;
 
@@ -268,7 +268,7 @@ router.get('/statistics', authenticateToken, async (req, res) => {
 
 // Get recent changes across all employees (OPTIMIZED VERSION)
 // GET /api/change-tracking/recent
-router.get('/recent', authenticateToken, async (req, res) => {
+router.get('/recent', authenticateAndTrack, async (req, res) => {
     try {
         const { limit, siteID, field, changeType, changedBy } = req.query;
 
@@ -331,7 +331,7 @@ router.get('/recent', authenticateToken, async (req, res) => {
 
 
 // Route to update employee attendance FOR MOBILE APP
-router.put('/employee/mobapi/attendance/update', authenticateToken, async (req, res) => {
+router.put('/employee/mobapi/attendance/update', authenticateAndTrack, async (req, res) => {
     try {
 
         const { employeeId, attendance, date, siteID } = req.body;
@@ -488,7 +488,7 @@ router.put('/employee/mobapi/attendance/update', authenticateToken, async (req, 
 
 // Update employee data endpoint (OPTIMIZED VERSION)
 // PUT /api/change-tracking/employee/:employeeID/update
-router.put('/employee/:employeeID/update', authenticateToken, async (req, res) => {
+router.put('/employee/:employeeID/update', authenticateAndTrack, async (req, res) => {
     try {
         const { employeeID } = req.params;
         const { updateData, month, year, siteID, correctedBy, remark } = req.body;
@@ -626,7 +626,7 @@ router.put('/employee/:employeeID/update', authenticateToken, async (req, res) =
 
 
 // UPDATE EMPLOYEE DATA ENDPOINT FOR MOBILE APP
-router.put('/employee/mobapi/addpayout', authenticateToken, async (req, res) => {
+router.put('/employee/mobapi/addpayout', authenticateAndTrack, async (req, res) => {
     try {
         // console.log('Mobile API to update payouts hit successfully')
         const { empid, updateData, month, year, siteID } = req.body;
@@ -741,7 +741,7 @@ router.put('/employee/mobapi/addpayout', authenticateToken, async (req, res) => 
 
 // NEW PATCH UPDATE ENDPOINT - SIMPLER AND MORE PERFORMANT
 // PUT /api/change-tracking/attendance/patch-update
-router.put('/attendance/patch-update', authenticateToken, async (req, res) => {
+router.put('/attendance/patch-update', authenticateAndTrack, async (req, res) => {
     try {
         const { month, siteID, updates } = req.body;
 
@@ -815,7 +815,7 @@ router.put('/attendance/patch-update', authenticateToken, async (req, res) => {
 // CURRENTLY BEING USED AT UPDATE EMPLOYEE ATTENDANCE WEB FRONTEND
 // Bulk attendance update endpoint (OPTIMIZED VERSION)
 // PUT /api/change-tracking/attendance/updateattendance
-router.put('/attendance/updateattendance', authenticateToken, async (req, res) => {
+router.put('/attendance/updateattendance', authenticateAndTrack, async (req, res) => {
     const startTime = Date.now();
 
     try {

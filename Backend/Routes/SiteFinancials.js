@@ -4,11 +4,11 @@ const SiteExpense = require("../models/SiteExpenseSchema");
 const SitePayment = require("../models/SitePaymentSchema");
 const Employee = require("../models/EmployeeSchema");
 const Site = require("../models/Siteschema");
-const { authenticateToken } = require("../Middleware/auth");
+const { authenticateAndTrack } = require("../Middleware/usageTracker");
 const router = express.Router();
 
 // POST /expenses - Add a new site expense
-router.post("/expenses", authenticateToken, async (req, res) => {
+router.post("/expenses", authenticateAndTrack, async (req, res) => {
     try {
         const { siteID, value, category, date, remark } = req.body;
 
@@ -77,7 +77,7 @@ router.post("/expenses", authenticateToken, async (req, res) => {
 });
 
 // POST /payments - Add a new site payment (incoming money)
-router.post("/payments", authenticateToken, async (req, res) => {
+router.post("/payments", authenticateAndTrack, async (req, res) => {
     try {
         const { siteID, value, date, remark } = req.body;
 
@@ -145,7 +145,7 @@ router.post("/payments", authenticateToken, async (req, res) => {
 });
 
 // GET /sites/:siteID/financial-summary - Get comprehensive financial summary
-router.get("/sites/:siteID/financial-summary", authenticateToken, async (req, res) => {
+router.get("/sites/:siteID/financial-summary", authenticateAndTrack, async (req, res) => {
     const { siteID } = req.params;
     const { month, year } = req.query;
 
@@ -335,7 +335,7 @@ router.get("/sites/:siteID/financial-summary", authenticateToken, async (req, re
 });
 
 // GET /sites/:siteID/expenses - Get all expenses for a site with optional date filtering
-router.get("/sites/:siteID/expenses", authenticateToken, async (req, res) => {
+router.get("/sites/:siteID/expenses", authenticateAndTrack, async (req, res) => {
     const { siteID } = req.params;
     const { month, year, category, limit = 50, page = 1 } = req.query;
 
@@ -400,7 +400,7 @@ router.get("/sites/:siteID/expenses", authenticateToken, async (req, res) => {
 });
 
 // GET /sites/:siteID/payments - Get all payments for a site with optional date filtering
-router.get("/sites/:siteID/payments", authenticateToken, async (req, res) => {
+router.get("/sites/:siteID/payments", authenticateAndTrack, async (req, res) => {
     const { siteID } = req.params;
     const { month, year, limit = 50, page = 1 } = req.query;
 
@@ -460,7 +460,7 @@ router.get("/sites/:siteID/payments", authenticateToken, async (req, res) => {
 });
 
 // DELETE /expenses/:expenseID - Delete a specific expense
-router.delete("/expenses/:expenseID", authenticateToken, async (req, res) => {
+router.delete("/expenses/:expenseID", authenticateAndTrack, async (req, res) => {
     const { expenseID } = req.params;
 
     // Validate expenseID format
@@ -498,7 +498,7 @@ router.delete("/expenses/:expenseID", authenticateToken, async (req, res) => {
 });
 
 // DELETE /payments/:paymentID - Delete a specific payment
-router.delete("/payments/:paymentID", authenticateToken, async (req, res) => {
+router.delete("/payments/:paymentID", authenticateAndTrack, async (req, res) => {
     const { paymentID } = req.params;
 
     // Validate paymentID format

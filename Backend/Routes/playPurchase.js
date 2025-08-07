@@ -195,6 +195,9 @@ router.post('/verify-android-purchase', authenticateToken, async (req, res) => {
                     isPaymentVerified: true,
                     lastPurchaseToken: currentUser.purchaseToken,
                     purchaseToken: purchaseToken,
+                    isCancelled: false,
+                    isGrace: false,
+                    graceExpiresAt: null,
                     planSource: 'google_play',
                     $push: { planHistory: planHistoryEntry }
                 }
@@ -313,7 +316,7 @@ async function findUserByPurchaseToken(purchaseToken, requestId = 'unknown') {
         const user = await User.findOne(searchQuery);
 
         if (user) {
-            console.log(`[${requestId}] ✅ User found: ${user.email} (${user.plan})`);
+            console.log(`[${requestId}] ✅ User found: ${user.phoneNumber} (${user.plan})`);
         } else {
             console.log(`[${requestId}] ❌ No user found for token: ${purchaseToken?.substring(0, 20)}...`);
         }
@@ -369,6 +372,9 @@ async function updateUserSubscription(user, notification, notificationType, requ
             case 3: // SUBSCRIPTION_CANCELED
                 updateData = {
                     isCancelled: true,
+                    isGrace: false,
+                    graceExpiresAt: null,
+                    isPaymentVerified: false,
                     lastPurchaseToken: user.purchaseToken
                 };
                 message = 'Subscription cancellation recorded.';
