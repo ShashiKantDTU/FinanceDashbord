@@ -56,13 +56,14 @@ async function patchEmployeeAttendance(siteID, month, updates, user) {
 
         aggregatedLogEntry = {
             siteID: siteID,
+            employeeID: `${updates.length} employees`, // Frontend compatibility for batch updates
             month: monthNum,
             year: year,
             field: 'attendance',
             fieldDisplayName: 'Attendance',
             fieldType: 'array_string',
             changeType: 'modified', // Using 'modified' as it fits the schema
-            changeDescription: `Bulk attendance update for ${updates.length} employees.`,
+            changeDescription: `Attendance marked for ${updates.length} employees on ${displayDate}`,
             changeData: {
                 employeeCount: updates.length,
                 employeeIds: employeeIds, // Log all affected employee IDs for reference
@@ -70,7 +71,7 @@ async function patchEmployeeAttendance(siteID, month, updates, user) {
             },
             changedBy: updatedBy,
             // UPDATED REMARK
-            remark: `Bulk attendance marked via patch API at ${formattedTimestamp}`, // Use the friendly timestamp
+            remark: `Attendance updated for multiple employees on ${formattedTimestamp}`,
             timestamp: now, // The main timestamp field should still be a proper Date object
             metadata: {
                 displayMessage: displayMessage, // The display message is already clean.
@@ -104,7 +105,10 @@ async function patchEmployeeAttendance(siteID, month, updates, user) {
         message: `Successfully processed attendance for ${updates.length} employees.`,
         summary: {
             employeesUpdated: writeResult.modifiedCount,
-            changesLogged: aggregatedLogEntry ? 1 : 0 // We now only log 1 change
+            changesLogged: aggregatedLogEntry ? 1 : 0, // We now only log 1 change
+            // Frontend compatibility properties
+            successful: writeResult.modifiedCount || updates.length,
+            totalEmployees: updates.length
         }
     };
 }
@@ -295,7 +299,7 @@ router.get('/recent', authenticateAndTrack, async (req, res) => {
             data: recentChanges.map(change => {
                 // NEW LOGIC: Check if it's an aggregated log (no employeeID)
                 const isAggregatedLog = !change.employeeID;
-                
+
                 return {
                     // If it's aggregated, the title IS the display message.
                     // Otherwise, build a title like before.
@@ -567,7 +571,7 @@ router.put('/employee/:employeeID/update', authenticateAndTrack, async (req, res
             yearNum,
             processedUpdateData,
             changedBy,
-            remark || 'Employee data update via API'
+            remark || 'Employee information updated'
         );
 
         // Mark all future months for recalculation
@@ -743,13 +747,19 @@ router.put('/employee/mobapi/addpayout', authenticateAndTrack, async (req, res) 
 // PUT /api/change-tracking/attendance/patch-update
 router.put('/attendance/patch-update', authenticateAndTrack, async (req, res) => {
     try {
-        const { month, siteID, updates } = req.body;
+        let { month, siteID, updates } = req.body;
+
+        // Handle common variations in property names
+        if (!updates && req.body.update) {
+            updates = req.body.update;
+        }
 
         // Validate required fields
         if (!month || !siteID || !updates || !Array.isArray(updates)) {
             return res.status(400).json({
                 success: false,
                 message: 'Missing required fields: month, siteID, and updates (array) are required',
+
                 example: {
                     month: "2025-05",
                     siteID: "6833ff004bd307e45abbfb41",
@@ -934,7 +944,7 @@ router.put('/attendance/updateattendance', authenticateAndTrack, async (req, res
                     yearNum,
                     { attendance: attendance },
                     updatedBy,
-                    `Bulk attendance update for ${monthNum}/${yearNum} by ${updatedBy}`
+                    `Attendance updated for ${monthNum}/${yearNum} by ${updatedBy}`
                 );
 
                 // Mark all future months for recalculation
@@ -978,7 +988,7 @@ router.put('/attendance/updateattendance', authenticateAndTrack, async (req, res
         // Send response
         return res.status(200).json({
             success: true,
-            message: `Bulk attendance update completed: ${successful.length}/${attendanceData.length} employees updated successfully`,
+            message: `Attendance updated successfully for ${successful.length} out of ${attendanceData.length} employees`,
             summary: {
                 totalEmployees: attendanceData.length,
                 successful: successful.length,
@@ -995,7 +1005,7 @@ router.put('/attendance/updateattendance', authenticateAndTrack, async (req, res
         console.error('❌ Error in bulk attendance update:', error);
         return res.status(500).json({
             success: false,
-            message: 'Internal server error during bulk attendance update',
+            message: 'Failed to update attendance. Please try again.',
             error: error.message,
             timestamp: new Date().toISOString()
         });
