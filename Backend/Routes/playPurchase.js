@@ -153,10 +153,14 @@ router.post('/verify-android-purchase', authenticateToken, async (req, res) => {
             const billingCycle = verificationResult.originalProductId.includes('yearly') ? 'yearly' : 'monthly';
 
             // --- CRITICAL CHANGE ---
-            // DO NOT update the database here.
+            // update the database here to add purchase token for webhook.
             // Just return the successful verification result to the app.
             // The webhook will handle the database update.
-            console.log(`✅ Frontend verification successful for user: ${user.email} → ${verificationResult.productId}. Webhook will handle database update.`);
+            const dbUpdateResult = await User.updateOne(
+                { _id: user.id },
+                { $set: { purchaseToken: purchaseToken, billing_cycle: billingCycle } }
+            );
+            console.log(`✅ Frontend verification successful for user: ${user.phoneNumber} → ${verificationResult.productId}. Webhook will handle database update.`);
 
             res.status(200).json({
                 message: 'Purchase verified successfully. Plan will be updated shortly.',
