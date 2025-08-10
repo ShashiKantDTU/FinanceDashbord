@@ -53,8 +53,14 @@ function getNotificationTypeName(notificationType) {
         4: 'SUBSCRIPTION_ON_HOLD',
         5: 'SUBSCRIPTION_IN_GRACE_PERIOD',
         6: 'SUBSCRIPTION_RESTARTED',
+    7: 'PRICE_CHANGE_CONFIRMED',
+    8: 'SUBSCRIPTION_DEFERRED',
+    9: 'SUBSCRIPTION_PAUSED',
+    10: 'SUBSCRIPTION_PAUSE_SCHEDULE_CHANGED',
+    11: 'SUBSCRIPTION_REVOKED',
         12: 'SUBSCRIPTION_EXPIRED',
-        13: 'SUBSCRIPTION_RECOVERED'
+    13: 'SUBSCRIPTION_RECOVERED',
+    15: 'SUBSCRIPTION_PENDING'
     };
     return notificationTypes[notificationType] || `UNKNOWN_TYPE_${notificationType}`;
 }
@@ -152,24 +158,35 @@ router.post('/verify-android-purchase', authenticateToken, async (req, res) => {
             // Determine billing cycle from the original product ID (more reliable)
             const billingCycle = verificationResult.originalProductId.includes('yearly') ? 'yearly' : 'monthly';
 
-            // --- CRITICAL CHANGE ---
-            // update the database here to add purchase token for webhook.
-            // Just return the successful verification result to the app.
-            // The webhook will handle the database update.
-            const dbUpdateResult = await User.updateOne(
+            // Provisional access: set plan and expiry immediately, but keep isPaymentVerified=false
+            await User.updateOne(
                 { _id: user.id },
-                { $set: { purchaseToken: purchaseToken, billing_cycle: billingCycle, plan:verificationResult.productId, planSource:"google_play" } }
+                {
+                    $set: {
+                        plan: verificationResult.productId,
+                        planExpiresAt: verificationResult.expires,
+                        billing_cycle: billingCycle,
+                        planSource: 'google_play',
+                        purchaseToken: purchaseToken,
+                        lastPurchaseToken: user.purchaseToken || null,
+                        isPaymentVerified: false,
+                        isCancelled: false,
+                        isGrace: false,
+                        graceExpiresAt: null
+                    }
+                }
             );
-            console.log(`✅ Frontend verification successful for user: ${user.phoneNumber} → ${verificationResult.productId}. Webhook will handle database update.`);
+
+            console.log(`✅ Provisional access granted for user: ${user.phoneNumber || user.email} → ${verificationResult.productId}. Awaiting webhook for final verification.`);
 
             res.status(200).json({
-                message: 'Purchase verified successfully. Plan will be updated shortly.',
+                message: 'Purchase successful! Your plan is now active (awaiting final verification).',
                 plan: verificationResult.productId,
                 billing_cycle: billingCycle,
                 expires_at: verificationResult.expires,
                 purchase_token: purchaseToken,
                 plan_source: 'google_play',
-                verification_only: true // Flag to indicate this was verification-only
+                provisional: true
             });
         } else {
             console.log(`❌ Frontend verification failed for user: ${user.email} - ${verificationResult.error}`);
@@ -329,6 +346,8 @@ async function updateUserSubscription(user, notification, notificationType, requ
 
             // Simple status change cases - trust the authenticated webhook
             case 3: // SUBSCRIPTION_CANCELED
+                // Mark auto-renew/cancellation flag, but do not forcefully clear entitlements here.
+                // Entitlement changes are handled by EXPIRED/REVOKED or a subsequent active event.
                 updateData = {
                     isCancelled: true,
                     isGrace: false,
@@ -341,7 +360,9 @@ async function updateUserSubscription(user, notification, notificationType, requ
 
             case 4: // SUBSCRIPTION_ON_HOLD
                 updateData = {
-                    isPaymentVerified: false
+                    isPaymentVerified: false,
+                    // Ensure cancelled flag is not left stale if user returns from hold
+                    isCancelled: false
                 };
                 message = 'Subscription is On Hold.';
                 break;
@@ -353,6 +374,7 @@ async function updateUserSubscription(user, notification, notificationType, requ
                     updateData = {
                         isGrace: true,
                         isPaymentVerified: false,
+                        isCancelled: false,
                         graceExpiresAt: graceVerification.gracePeriodEndTime,
                         lastPurchaseToken: user.purchaseToken
                     };
@@ -362,10 +384,93 @@ async function updateUserSubscription(user, notification, notificationType, requ
                     updateData = {
                         isGrace: true,
                         isPaymentVerified: false,
+                        isCancelled: false,
                         lastPurchaseToken: user.purchaseToken
                     };
                     message = 'Subscription in grace period.';
                 }
+                break;
+
+            case 7: // PRICE_CHANGE_CONFIRMED
+                // Keep entitlement; refresh expiry and plan to be safe
+                {
+                    const verifyPrice = await verifyAndroidPurchase('com.sitehaazri.app', notification.purchaseToken, requestId);
+                    if (verifyPrice.success) {
+                        const billingCycle = verifyPrice.originalProductId.includes('yearly') ? 'yearly' : 'monthly';
+                        updateData = {
+                            plan: verifyPrice.productId,
+                            billing_cycle: billingCycle,
+                            planExpiresAt: verifyPrice.expires,
+                            isPaymentVerified: true,
+                            isCancelled: false,
+                            isGrace: false,
+                            graceExpiresAt: null,
+                            lastPurchaseToken: user.purchaseToken,
+                            purchaseToken: notification.purchaseToken,
+                            planSource: 'google_play'
+                        };
+                        message = 'Price change confirmed; subscription remains active.';
+                    } else {
+                        updateData = { isCancelled: false };
+                        message = 'Price change notification acknowledged.';
+                    }
+                }
+                break;
+
+            case 8: // SUBSCRIPTION_DEFERRED
+                // New expiry date; verify and update
+                {
+                    const verifyDeferred = await verifyAndroidPurchase('com.sitehaazri.app', notification.purchaseToken, requestId);
+                    if (verifyDeferred.success) {
+                        const billingCycle = verifyDeferred.originalProductId.includes('yearly') ? 'yearly' : 'monthly';
+                        updateData = {
+                            plan: verifyDeferred.productId,
+                            billing_cycle: billingCycle,
+                            planExpiresAt: verifyDeferred.expires,
+                            isPaymentVerified: true,
+                            isCancelled: false,
+                            isGrace: false,
+                            graceExpiresAt: null,
+                            lastPurchaseToken: user.purchaseToken,
+                            purchaseToken: notification.purchaseToken,
+                            planSource: 'google_play'
+                        };
+                        message = 'Subscription deferred; expiry updated.';
+                    } else {
+                        message = 'Subscription deferred; verification failed.';
+                    }
+                }
+                break;
+
+            case 9: // SUBSCRIPTION_PAUSED
+                updateData = {
+                    isPaymentVerified: false,
+                    isCancelled: false
+                };
+                message = 'Subscription paused.';
+                break;
+
+            case 10: // SUBSCRIPTION_PAUSE_SCHEDULE_CHANGED
+                // Just acknowledge and ensure flags aren’t stale
+                updateData = {
+                    isCancelled: false
+                };
+                message = 'Subscription pause schedule changed.';
+                break;
+
+            case 11: // SUBSCRIPTION_REVOKED
+                updateData = {
+                    plan: 'free',
+                    billing_cycle: 'monthly',
+                    isPaymentVerified: false,
+                    isCancelled: false,
+                    isGrace: false,
+                    lastPurchaseToken: user.purchaseToken,
+                    purchaseToken: null,
+                    planExpiresAt: null,
+                    graceExpiresAt: null
+                };
+                message = 'Subscription revoked. Reverted to free plan.';
                 break;
 
             // The final downgrade state
@@ -382,6 +487,14 @@ async function updateUserSubscription(user, notification, notificationType, requ
                     graceExpiresAt: null
                 };
                 message = 'Subscription expired. Reverted to free plan.';
+                break;
+
+            case 15: // SUBSCRIPTION_PENDING
+                updateData = {
+                    isPaymentVerified: false,
+                    isCancelled: false
+                };
+                message = 'Subscription pending.';
                 break;
 
             default:

@@ -2,6 +2,14 @@ const cron = require('node-cron');
 const User = require('../models/Userschema');
 const { google } = require('googleapis');
 
+// Configurable knobs (module-level constants)
+const EXPIRED_BATCH_SIZE = 50; // users per batch when processing expired cancellations
+const EXPIRED_DELAY_BETWEEN_BATCHES_MS = 1000; // 1s delay between expired batches
+const GRACE_BATCH_SIZE = 20; // users per batch for grace checks (Google API limited)
+const GRACE_DELAY_BETWEEN_BATCHES_MS = 1500; // 1.5s delay between grace batches
+const PROVISIONAL_AGE_MINUTES = 15; // only finalize provisional users older than 15 minutes
+const PROVISIONAL_VERIFY_LIMIT = 500; // cap per run to avoid overload
+
 // Import the verification function logic
 async function verifyAndroidPurchase(packageName, purchaseToken, requestId = 'cron-job') {
     console.log(`[${requestId}] Verifying purchase: ${purchaseToken?.substring(0, 20)}...`);
@@ -86,6 +94,9 @@ class CronJobService {
         // Run daily at 3 AM for all subscription cleanup tasks
         this.scheduleJob('daily-subscription-cleanup', '0 3 * * *', this.runDailyCleanup.bind(this));
 
+    // Safety net: finalize provisional Google Play purchases every 2 hours
+    this.scheduleJob('finalize-provisional-google-play', '0 */2 * * *', this.finalizeProvisionalGooglePlay.bind(this));
+
 
 
         console.log('✅ All cron jobs initialized');
@@ -132,12 +143,77 @@ class CronJobService {
         }
     }
 
+    // Safety net to confirm provisional purchases where webhook may be delayed/missed
+    async finalizeProvisionalGooglePlay() {
+        console.log('🧯 Running provisional purchase finalizer...');
+        try {
+            const cutoff = new Date(Date.now() - PROVISIONAL_AGE_MINUTES * 60 * 1000);
+            const candidates = await User.find({
+                isPaymentVerified: false,
+                planSource: 'google_play',
+                purchaseToken: { $ne: null },
+                updatedAt: { $lt: cutoff }
+            }).limit(PROVISIONAL_VERIFY_LIMIT);
+
+            console.log(`🔍 Found ${candidates.length} provisional Google Play users to verify`);
+
+            for (const user of candidates) {
+                try {
+                    const verificationResult = await verifyAndroidPurchase(
+                        'com.sitehaazri.app',
+                        user.purchaseToken,
+                        `provisional-check-${user._id}`
+                    );
+
+                    if (verificationResult.success && (verificationResult.subscriptionState === 'SUBSCRIPTION_STATE_ACTIVE' || verificationResult.subscriptionState === 'SUBSCRIPTION_STATE_IN_GRACE_PERIOD')) {
+                        const billingCycle = verificationResult.originalProductId.includes('yearly') ? 'yearly' : 'monthly';
+                        await User.findByIdAndUpdate(user._id, {
+                            $set: {
+                                plan: verificationResult.productId,
+                                billing_cycle: billingCycle,
+                                planExpiresAt: verificationResult.expires,
+                                isPaymentVerified: true,
+                                isCancelled: false,
+                                isGrace: verificationResult.subscriptionState === 'SUBSCRIPTION_STATE_IN_GRACE_PERIOD',
+                                graceExpiresAt: verificationResult.gracePeriodEndTime || null
+                            }
+                        });
+                        console.log(`✅ Finalized provisional subscription for ${user.email || user.phoneNumber}`);
+                    } else {
+                        // If token invalid or expired, downgrade to free to avoid dangling provisional
+                        await User.findByIdAndUpdate(user._id, {
+                            $set: {
+                                plan: 'free',
+                                billing_cycle: 'monthly',
+                                isPaymentVerified: false,
+                                isCancelled: false,
+                                isGrace: false,
+                                planExpiresAt: null,
+                                graceExpiresAt: null,
+                                lastPurchaseToken: user.purchaseToken,
+                                purchaseToken: null,
+                                planSource: null
+                            }
+                        });
+                        console.log(`⚠️  Reverted provisional subscription for ${user.email || user.phoneNumber} (not confirmed by Google)`);
+                    }
+                } catch (innerErr) {
+                    console.error(`❌ Error finalizing provisional for ${user._id}:`, innerErr.message);
+                }
+            }
+
+            console.log('🧯 Provisional finalizer run complete');
+        } catch (error) {
+            console.error('❌ Provisional finalizer failed:', error.message);
+        }
+    }
+
     // Handle users with isCancelled: true and planExpiresAt < current date
     async handleExpiredUsers() {
         try {
             const currentDate = new Date();
-            const BATCH_SIZE = 50; // Process 50 users at a time
-            const DELAY_BETWEEN_BATCHES = 1000; // 1 second delay between batches
+            const BATCH_SIZE = EXPIRED_BATCH_SIZE; // env-configured
+            const DELAY_BETWEEN_BATCHES = EXPIRED_DELAY_BETWEEN_BATCHES_MS; // env-configured
 
             const expiredUsers = await User.find({
                 isCancelled: true,
@@ -151,8 +227,11 @@ class CronJobService {
                 const batch = expiredUsers.slice(i, i + BATCH_SIZE);
                 console.log(`📦 Processing batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(expiredUsers.length / BATCH_SIZE)} (${batch.length} users)`);
 
-                // Process batch concurrently
-                await Promise.all(batch.map(user => this.processExpiredUser(user)));
+                // Process batch concurrently with per-user error isolation
+                await Promise.all(
+                    batch.map(user => this.processExpiredUser(user)
+                        .catch(err => console.error(`❌ Error processing expired user ${user._id}:`, err.message)))
+                );
 
                 // Add delay between batches if there are more users to process
                 if (i + BATCH_SIZE < expiredUsers.length) {
@@ -171,8 +250,8 @@ class CronJobService {
     async handleGraceExpiredUsers() {
         try {
             const currentDate = new Date();
-            const BATCH_SIZE = 20; // Process 20 users at a time for Google API calls
-            const DELAY_BETWEEN_BATCHES = 1500; // 1.5 second delay between batches
+            const BATCH_SIZE = GRACE_BATCH_SIZE; // env-configured for API limits
+            const DELAY_BETWEEN_BATCHES = GRACE_DELAY_BETWEEN_BATCHES_MS; // env-configured delay
 
             const graceExpiredUsers = await User.find({
                 isGrace: true,
@@ -191,7 +270,7 @@ class CronJobService {
                     // Stagger API calls to avoid rate limits
                     await new Promise(resolve => setTimeout(resolve, index * 200));
                     return this.processGraceExpiredUser(user);
-                });
+                }).map(p => p.catch(err => console.error('❌ Error in grace batch item:', err.message)));
                 await Promise.all(promises);
 
                 // Add delay between batches if there are more users to process
