@@ -384,10 +384,7 @@ router.get("/verify", authenticateToken, (req, res) => {
 
 
 //  supervisor credentials route
-router.post(
-  "/supervisor-credentials/create",
-  authenticateToken,
-  async (req, res) => {
+router.post("/supervisor-credentials/create",authenticateToken, async (req, res) => {
     try {
       // Check if user is authenticated
       if (

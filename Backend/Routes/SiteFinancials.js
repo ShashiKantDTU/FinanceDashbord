@@ -170,6 +170,9 @@ router.get("/sites/:siteID/financial-summary", authenticateAndTrack, async (req,
         const parsedMonth = parseInt(month);
         const parsedYear = parseInt(year);
 
+        // Calculation type for overtime handling (kept consistent with /allemployees-optimized)
+        const calculationType = req.user?.calculationType || 'default';
+
         // Validate month and year ranges
         if (parsedMonth < 1 || parsedMonth > 12) {
             return res.status(400).json({
@@ -246,39 +249,99 @@ router.get("/sites/:siteID/financial-summary", authenticateAndTrack, async (req,
                 year: parsedYear
             }),
 
-            // 8. Get detailed employee breakdown with individual advances (using ObjectId)
+            // 8. Get detailed employee breakdown with individual advances and computed totalWage (consistent with /allemployees-optimized)
             Employee.aggregate([
                 { $match: { siteID: siteObjectId, month: parsedMonth, year: parsedYear } },
+                {
+                    $addFields: {
+                        totalPayouts: { $sum: "$payouts.value" },
+                        totalAdditionalReqPays: { $sum: "$additional_req_pays.value" },
+                        carryForward: { $ifNull: ["$carry_forwarded.value", 0] },
+                        totalDays: {
+                            $size: {
+                                $filter: {
+                                    input: "$attendance",
+                                    as: "att",
+                                    cond: { $regexMatch: { input: "$$att", regex: /^P/ } }
+                                }
+                            }
+                        },
+                        totalovertime: {
+                            $sum: {
+                                $map: {
+                                    input: "$attendance",
+                                    as: "att",
+                                    in: {
+                                        $let: {
+                                            vars: {
+                                                overtimeStr: { $arrayElemAt: [ { $regexFindAll: { input: "$$att", regex: /\d+/ } }, 0 ] }
+                                            },
+                                            in: { $ifNull: [ { $toInt: "$$overtimeStr.match" }, 0 ] }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                {
+                    $addFields: {
+                        overtimeDays: {
+                            $cond: {
+                                if: { $eq: [ calculationType, 'special' ] },
+                                then: {
+                                    $add: [
+                                        { $floor: { $divide: ["$totalovertime", 8] } },
+                                        { $divide: [ { $mod: ["$totalovertime", 8] }, 10 ] }
+                                    ]
+                                },
+                                else: { $divide: ["$totalovertime", 8] }
+                            }
+                        }
+                    }
+                },
+                {
+                    $addFields: {
+                        totalAttendance: { $add: ["$totalDays", "$overtimeDays"] },
+                        totalWage: { $multiply: ["$rate", { $add: ["$totalDays", "$overtimeDays"] }] },
+                        closing_balance: {
+                            $subtract: [
+                                { $add: [ { $multiply: ["$rate", { $add: ["$totalDays", "$overtimeDays"] }] }, "$totalAdditionalReqPays", "$carryForward" ] },
+                                "$totalPayouts"
+                            ]
+                        }
+                    }
+                },
                 {
                     $project: {
                         empid: 1,
                         name: 1,
                         rate: 1,
                         wage: 1,
-                        closing_balance: 1,
+                        month: 1,
+                        year: 1,
+                        siteID: 1,
                         carry_forwarded: 1,
-                        totalAdvances: {
-                            $reduce: {
-                                input: "$payouts",
-                                initialValue: 0,
-                                in: { $add: ["$$value", "$$this.value"] }
-                            }
-                        },
-                        payoutCount: { $size: { $ifNull: ["$payouts", []] } },
                         payouts: {
                             $map: {
                                 input: "$payouts",
                                 as: "payout",
-                                in: {
-                                    value: "$$payout.value",
-                                    remark: "$$payout.remark",
-                                    date: "$$payout.date"
-                                }
+                                in: { value: "$$payout.value", remark: "$$payout.remark", date: "$$payout.date" }
                             }
-                        }
+                        },
+                        payoutCount: { $size: { $ifNull: ["$payouts", []] } },
+                        totalAdvances: "$totalPayouts",
+                        totalWage: 1,
+                        totalAttendance: 1,
+                        totalDays: 1,
+                        totalovertime: 1,
+                        overtimeDays: 1,
+                        totalAdditionalReqPays: 1,
+                        carryForward: 1,
+                        closing_balance: 1
                     }
                 },
-                { $sort: { totalAdvances: -1 } }
+                { $sort: { totalWage: -1 } }
             ])
         ]);
 
@@ -286,14 +349,20 @@ router.get("/sites/:siteID/financial-summary", authenticateAndTrack, async (req,
         const advances = advancesResult[0]?.total || 0;
         const expenses = expensesResult[0]?.total || 0;
         const payments = paymentsResult[0]?.total || 0;
-        const totalCosts = advances + expenses;
-        const finalProfit = payments - totalCosts;
+        // Compute total wages across all employees (sum of computed totalWage)
+        const wages = Array.isArray(employeeBreakdown)
+            ? employeeBreakdown.reduce((sum, emp) => sum + (emp.totalWage || 0), 0)
+            : 0;
+    // Use wages (gross payment) + expenses for total costs as per new requirement
+    const totalCosts = wages + expenses;
+    const finalProfit = payments - totalCosts;
 
         // Construct the summary object
         const summary = {
             advances,
             expenses,
             payments,
+            wages,
             totalCosts,
             finalProfit
         };
@@ -315,6 +384,7 @@ router.get("/sites/:siteID/financial-summary", authenticateAndTrack, async (req,
                     siteID: siteID,
                     month: parsedMonth,
                     year: parsedYear,
+                    calculationType,
                     dateRange: {
                         start: startDate,
                         end: endDate
