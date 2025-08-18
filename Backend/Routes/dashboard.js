@@ -74,6 +74,7 @@ router.get('/v2/home', authenticateAndTrack, async (req, res) => {
             _id: site._id,
             sitename: site.sitename,
             createdAt: site.createdAt,
+            isActive: site.isActive,
             employeeCount: countMap.get(site._id.toString()) || 0
         }));
 
