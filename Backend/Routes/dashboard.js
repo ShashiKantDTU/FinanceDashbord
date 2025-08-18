@@ -47,7 +47,7 @@ router.get('/v2/home', authenticateAndTrack, async (req, res) => {
         // 1. Fetch the user and their site details in one go.
         const userdata = await User.findById(user.id).populate({
             path: 'site',
-            select: 'sitename createdAt' // Only select fields the new UI needs.
+            select: 'sitename createdAt isActive' // Only select fields the new UI needs.
         });
 
         if (!userdata) {
