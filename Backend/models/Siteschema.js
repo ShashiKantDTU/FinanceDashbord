@@ -13,6 +13,10 @@ const siteSchema = new mongoose.Schema(
         ref: "Supervisor",
       },
     ],
+    isActive: {
+      type: Boolean,
+      default: true,
+    },
     owner: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",

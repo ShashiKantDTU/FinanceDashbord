@@ -19,37 +19,48 @@ router.get('/dashboard', authenticateAndTrack, authorizeRole(['Admin']), async (
             });
         }
 
+        // Identify users strictly by phone; tolerate missing nested fields
         const usageData = await ApiUsageLog.aggregate([
-            // Stage 1: Group by the main user and the specific actor (user or supervisor)
+            // Normalize fields and keep only what we need
+            {
+                $project: {
+                    phone: { $ifNull: ['$userPhone', '$phone'] },
+                    plan: { $ifNull: ['$userPlan', 'unknown'] },
+                    actorId: { $ifNull: ['$actor.id', null] },
+                    actorRole: { $ifNull: ['$actor.role', null] },
+                    supervisorName: { $ifNull: ['$supervisor.profileName', null] },
+                    endpoint: 1,
+                    responseSizeBytes: { $ifNull: ['$responseSizeBytes', 0] },
+                    timestamp: 1
+                }
+            },
+            // Group by phone + actor to build per-actor breakdown per phone
             {
                 $group: {
                     _id: {
-                        mainUserId: '$mainUserId',
-                        userPhone: '$userPhone',
-                        userPlan: '$userPlan',
-                        actorId: '$actor.id',
-                        actorRole: '$actor.role',
-                        supervisorName: '$supervisor.profileName',
+                        phone: '$phone',
+                        actorId: '$actorId',
+                        actorRole: '$actorRole',
+                        supervisorName: '$supervisorName',
+                        plan: '$plan'
                     },
                     totalRequests: { $sum: 1 },
                     totalDataBytes: { $sum: '$responseSizeBytes' },
-                    endpointsCalled: { $addToSet: '$endpoint' } // List unique endpoints called
+                    endpointsCalled: { $addToSet: '$endpoint' }
                 }
             },
-            // Stage 2: Group the results again, this time only by the main user
+            // Group again by phone to form the dashboard rows
             {
                 $group: {
-                    _id: '$_id.mainUserId',
-                    phone: { $first: '$_id.userPhone' },
-                    plan: { $first: '$_id.userPlan' },
+                    _id: '$_id.phone',
                     totalRequests: { $sum: '$totalRequests' },
                     totalDataBytes: { $sum: '$totalDataBytes' },
-                    // Create an array of usage by each actor (user or their supervisors)
                     usageByActor: {
                         $push: {
                             actorId: '$_id.actorId',
                             actorRole: '$_id.actorRole',
                             supervisorName: '$_id.supervisorName',
+                            plan: '$_id.plan',
                             requests: '$totalRequests',
                             dataBytes: '$totalDataBytes',
                             endpoints: '$endpointsCalled'
@@ -57,24 +68,24 @@ router.get('/dashboard', authenticateAndTrack, authorizeRole(['Admin']), async (
                     }
                 }
             },
-            // Stage 3: Project for a cleaner output
+            // Final projection; pick a representative plan (first seen) if multiple
             {
                 $project: {
                     _id: 0,
-                    userId: '$_id',
-                    phone: 1,
-                    plan: 1,
+                    userId: '$_id', // Keep field name but now equals phone for consistent identification
+                    phone: '$_id',
+                    plan: {
+                        $let: {
+                            vars: { plans: { $map: { input: '$usageByActor', as: 'u', in: '$$u.plan' } } },
+                            in: { $ifNull: [ { $arrayElemAt: ['$$plans', 0] }, 'unknown' ] }
+                        }
+                    },
                     totalRequests: 1,
                     totalDataBytes: 1,
-                    usageByActor: 1,
+                    usageByActor: 1
                 }
             },
-            // Optional: Sort by the highest usage
-            {
-                $sort: {
-                    totalDataBytes: -1
-                }
-            }
+            { $sort: { totalDataBytes: -1 } }
         ]);
 
         res.json(usageData);
@@ -129,7 +140,7 @@ router.get('/endpoint-stats', authenticateAndTrack, authorizeRole(['Admin']), as
         const startDate = new Date();
         startDate.setDate(startDate.getDate() - days);
 
-        const endpointStats = await ApiUsageLog.aggregate([
+    const endpointStats = await ApiUsageLog.aggregate([
             {
                 $match: {
                     timestamp: { $gte: startDate }
@@ -141,7 +152,7 @@ router.get('/endpoint-stats', authenticateAndTrack, authorizeRole(['Admin']), as
                     totalRequests: { $sum: 1 },
                     totalDataBytes: { $sum: '$responseSizeBytes' },
                     avgResponseSize: { $avg: '$responseSizeBytes' },
-                    uniqueUsers: { $addToSet: '$mainUserId' },
+            uniqueUsers: { $addToSet: { $ifNull: ['$userPhone', '$phone'] } },
                     methods: { $addToSet: '$method' }
                 }
             },
@@ -151,7 +162,7 @@ router.get('/endpoint-stats', authenticateAndTrack, authorizeRole(['Admin']), as
                     totalRequests: 1,
                     totalDataBytes: 1,
                     avgResponseSize: { $round: ['$avgResponseSize', 2] },
-                    uniqueUserCount: { $size: '$uniqueUsers' },
+            uniqueUserCount: { $size: '$uniqueUsers' },
                     methods: 1,
                     _id: 0
                 }
@@ -193,7 +204,7 @@ router.get('/plan-usage', authenticateAndTrack, authorizeRole(['Admin']), async 
         const startDate = new Date();
         startDate.setDate(startDate.getDate() - days);
 
-        const planUsage = await ApiUsageLog.aggregate([
+    const planUsage = await ApiUsageLog.aggregate([
             {
                 $match: {
                     timestamp: { $gte: startDate }
@@ -201,10 +212,10 @@ router.get('/plan-usage', authenticateAndTrack, authorizeRole(['Admin']), async 
             },
             {
                 $group: {
-                    _id: '$userPlan',
+            _id: { $ifNull: ['$userPlan', 'unknown'] },
                     totalRequests: { $sum: 1 },
                     totalDataBytes: { $sum: '$responseSizeBytes' },
-                    uniqueUsers: { $addToSet: '$mainUserId' },
+            uniqueUsers: { $addToSet: { $ifNull: ['$userPhone', '$phone'] } },
                     avgRequestsPerUser: { $avg: 1 }
                 }
             },
@@ -256,7 +267,7 @@ router.get('/real-time', authenticateAndTrack, authorizeRole(['Admin']), async (
         const last24Hours = new Date();
         last24Hours.setHours(last24Hours.getHours() - 24);
 
-        const realTimeStats = await ApiUsageLog.aggregate([
+    const realTimeStats = await ApiUsageLog.aggregate([
             {
                 $match: {
                     timestamp: { $gte: last24Hours }
@@ -272,7 +283,7 @@ router.get('/real-time', authenticateAndTrack, authorizeRole(['Admin']), async (
                     },
                     requests: { $sum: 1 },
                     dataBytes: { $sum: '$responseSizeBytes' },
-                    uniqueUsers: { $addToSet: '$mainUserId' }
+            uniqueUsers: { $addToSet: { $ifNull: ['$userPhone', '$phone'] } }
                 }
             },
             {
