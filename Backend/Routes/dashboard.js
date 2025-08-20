@@ -314,6 +314,14 @@ router.put("/edit-site-name", authenticateAndTrack, async (req, res) => {
 router.post("/sites/activate", authenticateAndTrack, async (req, res) => {
   try {
     const user = req.user;
+    // get current date
+    // Use IST (Indian Standard Time) for all date checks
+    const currentDate = new Date();
+    // Convert to IST
+    const istOffset = 5.5 * 60 * 60 * 1000;
+    const istDate = new Date(currentDate.getTime() + istOffset);
+
+  // Note: gating checks will be applied after loading user record, and only if lastSiteUpdated was within 30 days
     if (!user) {
       return res.status(401).json({ error: "Access denied. Authentication required." });
     }
@@ -326,6 +334,24 @@ router.post("/sites/activate", authenticateAndTrack, async (req, res) => {
     const userdata = await User.findById(user.id);
     if (!userdata) {
       return res.status(404).json({ error: "User not found." });
+    }
+
+    // Apply gating only if user updated sites within last 30 days
+    const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+    const lastUpdate = userdata.lastSiteUpdated ? new Date(userdata.lastSiteUpdated) : null;
+    const updatedWithin30Days = lastUpdate && (istDate - lastUpdate < THIRTY_DAYS_MS);
+
+    if (updatedWithin30Days) {
+      const isFirstOfMonth = istDate.getDate() === 1;
+      const planActivatedAt = userdata.planActivatedAt || user.planActivatedAt;
+      const isRecentPurchase = planActivatedAt && (istDate - new Date(planActivatedAt) < 24 * 60 * 60 * 1000);
+
+      if (!isFirstOfMonth && !isRecentPurchase) {
+        return res.status(403).json({
+          error:
+            "Site activation is only allowed within 24 hours of purchase or on the 1st of the month (IST).",
+        });
+      }
     }
 
     // Plan limits
@@ -372,7 +398,10 @@ router.post("/sites/activate", authenticateAndTrack, async (req, res) => {
       const createdIds = savedSites.map((s) => s._id);
       await User.updateOne(
         { _id: userdata._id },
-        { $addToSet: { site: { $each: createdIds } } }
+        {
+          $addToSet: { site: { $each: createdIds } },
+          $set: { lastSiteUpdated: new Date() },
+        }
       );
     }
 
@@ -384,11 +413,17 @@ router.post("/sites/activate", authenticateAndTrack, async (req, res) => {
       { owner: userdata._id, _id: { $nin: keepActiveIds } },
       { $set: { isActive: false } }
     );
-    if (keepActiveIds.length > 0) {
+  if (keepActiveIds.length > 0) {
       await Site.updateMany(
         { owner: userdata._id, _id: { $in: keepActiveIds } },
         { $set: { isActive: true } }
       );
+    }
+
+    // Track when user last updated site active status via API
+    // If we already set it during site creation above, skip redundant write
+    if (toCreateNames.length === 0) {
+      await User.updateOne({ _id: userdata._id }, { $set: { lastSiteUpdated: new Date() } });
     }
 
     return res.status(200).json({

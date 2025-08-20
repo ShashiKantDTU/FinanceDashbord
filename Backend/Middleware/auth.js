@@ -46,6 +46,7 @@ const authenticateToken = async (req, res, next) => {
             const user = await User.findById(supervisor.owner._id)
             req.user.plan = user.plan
             req.user.planExpiresAt = user.planExpiresAt
+            req.user.planActivatedAt = user.planActivatedAt
             req.user.billing_cycle = user.billing_cycle
             // Note: isTrial and isCancelled are NOT set for supervisors as they're not needed
 
@@ -53,8 +54,9 @@ const authenticateToken = async (req, res, next) => {
                 // find owner using siteid in supervisor
                 const owner = await User.findOne({ site: supervisor.site })
                 req.user.plan = owner.plan
-                req.user.planExpiresAt = owner.planExpiresAt,
-                    req.user.billing_cycle = user.billing_cycle
+                req.user.planExpiresAt = owner.planExpiresAt
+                req.user.planActivatedAt = owner.planActivatedAt
+                req.user.billing_cycle = user.billing_cycle
                 // Note: isCancelled is not set for supervisors
             }
 
@@ -73,6 +75,7 @@ const authenticateToken = async (req, res, next) => {
                 if (user) {
                     req.user.plan = user.plan || 'free';
                     req.user.planExpiresAt = user.planExpiresAt;
+                    req.user.planActivatedAt = user.planActivatedAt;
                     req.user.billing_cycle = user.billing_cycle;
                     req.user.isTrial = user.isTrial || false;
                     req.user.isCancelled = user.isCancelled || false;
@@ -82,6 +85,7 @@ const authenticateToken = async (req, res, next) => {
                     // Fallback to free plan if user not found
                     req.user.plan = 'free';
                     req.user.planExpiresAt = null;
+                    req.user.planActivatedAt = null;
                     req.user.isTrial = false;
                     req.user.isCancelled = false;
                     req.user.isGrace = false;
@@ -92,6 +96,7 @@ const authenticateToken = async (req, res, next) => {
                 // Fallback to free plan on database error
                 req.user.plan = 'free';
                 req.user.planExpiresAt = null;
+                req.user.planActivatedAt = null;
                 req.user.isTrial = false;
                 req.user.isCancelled = false;
                 req.user.isGrace = false;
@@ -132,6 +137,7 @@ const authenticateToken = async (req, res, next) => {
                         // Update req.user to reflect the change immediately
                         req.user.plan = 'free';
                         req.user.planExpiresAt = null;
+                        req.user.planActivatedAt = null;
 
                         // Only set isTrial, isCancelled, and isGrace for Admin users (not supervisors)
                         if (decoded.role !== 'Supervisor') {

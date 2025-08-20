@@ -99,6 +99,7 @@ class CronJobService {
 
 
 
+
         console.log('✅ All cron jobs initialized');
     }
 
@@ -125,6 +126,7 @@ class CronJobService {
         this.jobs.set(name, job);
         console.log(`📅 Scheduled job: ${name} with schedule: ${schedule}`);
     }
+
 
     // Run both cleanup tasks sequentially
     async runDailyCleanup() {
@@ -173,6 +175,7 @@ class CronJobService {
                                 billing_cycle: billingCycle,
                                 planExpiresAt: verificationResult.expires,
                                 isPaymentVerified: true,
+                                planActivatedAt: new Date(),
                                 isCancelled: false,
                                 isGrace: verificationResult.subscriptionState === 'SUBSCRIPTION_STATE_IN_GRACE_PERIOD',
                                 graceExpiresAt: verificationResult.gracePeriodEndTime || null
@@ -192,7 +195,8 @@ class CronJobService {
                                 graceExpiresAt: null,
                                 lastPurchaseToken: user.purchaseToken,
                                 purchaseToken: null,
-                                planSource: null
+                                planSource: null,
+                                planActivatedAt: new Date(),
                             }
                         });
                         console.log(`⚠️  Reverted provisional subscription for ${user.email || user.phoneNumber} (not confirmed by Google)`);
@@ -366,7 +370,8 @@ class CronJobService {
                 isPaymentVerified: false,
                 lastPurchaseToken: user.purchaseToken,
                 purchaseToken: null,
-                planSource: null
+                planSource: null,
+                planActivatedAt: new Date(),
             });
 
             console.log(`✅ Downgraded user: ${user.email || user.phoneNumber} to free plan`);
@@ -423,6 +428,8 @@ class CronJobService {
         console.log('🔧 Manual trigger: Grace expired users check');
         await this.handleGraceExpiredUsers();
     }
+
+    
 
 
 }

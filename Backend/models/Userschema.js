@@ -148,6 +148,11 @@ const userSchema = new mongoose.Schema(
         }
       }],
       default: [] // Ensure every user has an empty array by default
+    },
+    // Tracks the last time user updated active site selection via API
+    lastSiteUpdated: {
+      type: Date,
+      default: null
     }
   },
   {

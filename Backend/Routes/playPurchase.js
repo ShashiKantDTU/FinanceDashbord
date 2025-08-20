@@ -3,11 +3,23 @@ const { google } = require('googleapis');
 const { OAuth2Client } = require('google-auth-library');
 const router = express.Router();
 const User = require('../models/Userschema');
+const Site = require('../models/Siteschema');
 const { authenticateToken } = require('../Middleware/auth');
 
 require("dotenv").config();
 
 const client = new OAuth2Client();
+
+// Function to activate all sites of User inCase of plan upgrade
+async function activateAllUserSites(userId) {
+    try {
+    // Activate all sites owned by the user in one efficient query
+    await Site.updateMany({ owner: userId }, { $set: { isActive: true } });
+    console.log(`All sites activated for user: ${userId}`);
+    } catch (error) {
+        console.error('Error activating user sites:', error);
+    }
+}
 
 // JWT Authentication Middleware for Webhook
 async function authenticateWebhook(req, res, next) {
@@ -172,10 +184,14 @@ router.post('/verify-android-purchase', authenticateToken, async (req, res) => {
                         isPaymentVerified: false,
                         isCancelled: false,
                         isGrace: false,
-                        graceExpiresAt: null
+                        graceExpiresAt: null,
+                        planActivatedAt: new Date()
                     }
                 }
             );
+
+            // Instant access: activate all sites immediately; webhook will reconcile if needed
+            await activateAllUserSites(user.id);
 
             console.log(`✅ Provisional access granted for user: ${user.phoneNumber || user.email} → ${verificationResult.productId}. Awaiting webhook for final verification.`);
 
@@ -211,6 +227,7 @@ router.get("/plan", authenticateToken, async (req, res) => {
         plan: req.user.plan,
         billing_cycle: req.user.billing_cycle,
         planExpiry: req.user.planExpiresAt,
+        planActivatedAt: req.user.planActivatedAt,
         planSource: req.user.planSource,
         isPaymentVerified: req.user.isPaymentVerified
     };
@@ -308,6 +325,7 @@ async function updateUserSubscription(user, notification, notificationType, requ
     try {
         let updateData = {};
         let message = '';
+    let shouldActivateAllSites = false;
 
         switch (notificationType) {
             // Cases where a NEW expiry date is generated. We MUST verify to get the official date.
@@ -334,6 +352,7 @@ async function updateUserSubscription(user, notification, notificationType, requ
                         planSource:'google_play'
                     };
                     message = `Subscription active. Type: ${getNotificationTypeName(notificationType)}.`;
+                    shouldActivateAllSites = true;
                 } else {
                     return {
                         success: false,
@@ -410,6 +429,7 @@ async function updateUserSubscription(user, notification, notificationType, requ
                             planSource: 'google_play'
                         };
                         message = 'Price change confirmed; subscription remains active.';
+                        shouldActivateAllSites = true;
                     } else {
                         updateData = { isCancelled: false };
                         message = 'Price change notification acknowledged.';
@@ -436,6 +456,7 @@ async function updateUserSubscription(user, notification, notificationType, requ
                             planSource: 'google_play'
                         };
                         message = 'Subscription deferred; expiry updated.';
+                        shouldActivateAllSites = true;
                     } else {
                         message = 'Subscription deferred; verification failed.';
                     }
@@ -468,6 +489,7 @@ async function updateUserSubscription(user, notification, notificationType, requ
                     lastPurchaseToken: user.purchaseToken,
                     purchaseToken: null,
                     planExpiresAt: null,
+                    planActivatedAt: new Date(),
                     graceExpiresAt: null
                 };
                 message = 'Subscription revoked. Reverted to free plan.';
@@ -484,6 +506,7 @@ async function updateUserSubscription(user, notification, notificationType, requ
                     lastPurchaseToken: user.purchaseToken,
                     purchaseToken: null,
                     planExpiresAt: null,
+                    planActivatedAt: new Date(),
                     graceExpiresAt: null
                 };
                 message = 'Subscription expired. Reverted to free plan.';
@@ -507,6 +530,10 @@ async function updateUserSubscription(user, notification, notificationType, requ
             const updateResult = await User.findByIdAndUpdate(user._id, { $set: updateData }, { new: true });
             if (!updateResult) {
                 return { success: false, error: 'Database update failed', userId: user._id, message: 'Database update failed' };
+            }
+            // If plan is (re)activated, ensure all sites are active for this user
+            if (shouldActivateAllSites) {
+                await activateAllUserSites(user._id);
             }
         }
 
