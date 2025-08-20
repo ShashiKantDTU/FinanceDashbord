@@ -59,20 +59,21 @@ async function authenticateWebhook(req, res, next) {
 
 function getNotificationTypeName(notificationType) {
     const notificationTypes = {
-        1: 'SUBSCRIPTION_PURCHASED',
+        1: 'SUBSCRIPTION_RECOVERED',
         2: 'SUBSCRIPTION_RENEWED',
         3: 'SUBSCRIPTION_CANCELED',
-        4: 'SUBSCRIPTION_ON_HOLD',
-        5: 'SUBSCRIPTION_IN_GRACE_PERIOD',
-        6: 'SUBSCRIPTION_RESTARTED',
-    7: 'PRICE_CHANGE_CONFIRMED',
-    8: 'SUBSCRIPTION_DEFERRED',
-    9: 'SUBSCRIPTION_PAUSED',
-    10: 'SUBSCRIPTION_PAUSE_SCHEDULE_CHANGED',
-    11: 'SUBSCRIPTION_REVOKED',
-        12: 'SUBSCRIPTION_EXPIRED',
-    13: 'SUBSCRIPTION_RECOVERED',
-    15: 'SUBSCRIPTION_PENDING'
+        4: 'SUBSCRIPTION_PURCHASED',
+        5: 'SUBSCRIPTION_ON_HOLD',
+        6: 'SUBSCRIPTION_IN_GRACE_PERIOD',
+        7: 'SUBSCRIPTION_RESTARTED',
+        8: 'SUBSCRIPTION_PRICE_CHANGE_CONFIRMED_DEPRECATED',
+        9: 'SUBSCRIPTION_DEFERRED',
+        10: 'SUBSCRIPTION_PAUSED',
+        11: 'SUBSCRIPTION_PAUSE_SCHEDULE_CHANGED',
+        12: 'SUBSCRIPTION_REVOKED',
+        13: 'SUBSCRIPTION_EXPIRED',
+        19: 'SUBSCRIPTION_PRICE_CHANGE_UPDATED',
+        20: 'SUBSCRIPTION_PENDING_PURCHASE_CANCELED'
     };
     return notificationTypes[notificationType] || `UNKNOWN_TYPE_${notificationType}`;
 }
@@ -328,11 +329,11 @@ async function updateUserSubscription(user, notification, notificationType, requ
     let shouldActivateAllSites = false;
 
         switch (notificationType) {
-            // Cases where a NEW expiry date is generated. We MUST verify to get the official date.
-            case 1:  // SUBSCRIPTION_PURCHASED
+            // Cases where a NEW expiry date is generated or entitlement should be active.
+            case 4:  // SUBSCRIPTION_PURCHASED
             case 2:  // SUBSCRIPTION_RENEWED
-            case 6:  // SUBSCRIPTION_RESTARTED
-            case 13: // SUBSCRIPTION_RECOVERED
+            case 7:  // SUBSCRIPTION_RESTARTED
+            case 1:  // SUBSCRIPTION_RECOVERED
                 const verification = await verifyAndroidPurchase('com.sitehaazri.app', notification.purchaseToken, requestId);
                 if (verification.success) {
                     // Determine billing cycle from the Product ID (more reliable than date calculation)
@@ -377,7 +378,7 @@ async function updateUserSubscription(user, notification, notificationType, requ
                 message = 'Subscription cancellation recorded.';
                 break;
 
-            case 4: // SUBSCRIPTION_ON_HOLD
+            case 5: // SUBSCRIPTION_ON_HOLD
                 updateData = {
                     isPaymentVerified: false,
                     // Ensure cancelled flag is not left stale if user returns from hold
@@ -386,7 +387,7 @@ async function updateUserSubscription(user, notification, notificationType, requ
                 message = 'Subscription is On Hold.';
                 break;
 
-            case 5: // SUBSCRIPTION_IN_GRACE_PERIOD
+            case 6: // SUBSCRIPTION_IN_GRACE_PERIOD
                 // Verify to get the gracePeriodEndTime for accurate tracking
                 const graceVerification = await verifyAndroidPurchase('com.sitehaazri.app', notification.purchaseToken, requestId);
                 if (graceVerification.success && graceVerification.gracePeriodEndTime) {
@@ -410,7 +411,7 @@ async function updateUserSubscription(user, notification, notificationType, requ
                 }
                 break;
 
-            case 7: // PRICE_CHANGE_CONFIRMED
+            case 8: // SUBSCRIPTION_PRICE_CHANGE_CONFIRMED_DEPRECATED
                 // Keep entitlement; refresh expiry and plan to be safe
                 {
                     const verifyPrice = await verifyAndroidPurchase('com.sitehaazri.app', notification.purchaseToken, requestId);
@@ -428,7 +429,7 @@ async function updateUserSubscription(user, notification, notificationType, requ
                             purchaseToken: notification.purchaseToken,
                             planSource: 'google_play'
                         };
-                        message = 'Price change confirmed; subscription remains active.';
+                        message = 'Price change confirmed (deprecated RTDN); subscription remains active.';
                         shouldActivateAllSites = true;
                     } else {
                         updateData = { isCancelled: false };
@@ -437,7 +438,7 @@ async function updateUserSubscription(user, notification, notificationType, requ
                 }
                 break;
 
-            case 8: // SUBSCRIPTION_DEFERRED
+            case 9: // SUBSCRIPTION_DEFERRED
                 // New expiry date; verify and update
                 {
                     const verifyDeferred = await verifyAndroidPurchase('com.sitehaazri.app', notification.purchaseToken, requestId);
@@ -463,7 +464,7 @@ async function updateUserSubscription(user, notification, notificationType, requ
                 }
                 break;
 
-            case 9: // SUBSCRIPTION_PAUSED
+            case 10: // SUBSCRIPTION_PAUSED
                 updateData = {
                     isPaymentVerified: false,
                     isCancelled: false
@@ -471,7 +472,7 @@ async function updateUserSubscription(user, notification, notificationType, requ
                 message = 'Subscription paused.';
                 break;
 
-            case 10: // SUBSCRIPTION_PAUSE_SCHEDULE_CHANGED
+            case 11: // SUBSCRIPTION_PAUSE_SCHEDULE_CHANGED
                 // Just acknowledge and ensure flags aren’t stale
                 updateData = {
                     isCancelled: false
@@ -479,7 +480,7 @@ async function updateUserSubscription(user, notification, notificationType, requ
                 message = 'Subscription pause schedule changed.';
                 break;
 
-            case 11: // SUBSCRIPTION_REVOKED
+            case 12: // SUBSCRIPTION_REVOKED
                 updateData = {
                     plan: 'free',
                     billing_cycle: 'monthly',
@@ -496,7 +497,7 @@ async function updateUserSubscription(user, notification, notificationType, requ
                 break;
 
             // The final downgrade state
-            case 12: // SUBSCRIPTION_EXPIRED
+            case 13: // SUBSCRIPTION_EXPIRED
                 updateData = {
                     plan: 'free',
                     billing_cycle: 'monthly',
@@ -512,12 +513,36 @@ async function updateUserSubscription(user, notification, notificationType, requ
                 message = 'Subscription expired. Reverted to free plan.';
                 break;
 
-            case 15: // SUBSCRIPTION_PENDING
+            case 19: // SUBSCRIPTION_PRICE_CHANGE_UPDATED
+                {
+                    const verifyUpdated = await verifyAndroidPurchase('com.sitehaazri.app', notification.purchaseToken, requestId);
+                    if (verifyUpdated.success) {
+                        const billingCycle = verifyUpdated.originalProductId.includes('yearly') ? 'yearly' : 'monthly';
+                        updateData = {
+                            plan: verifyUpdated.productId,
+                            billing_cycle: billingCycle,
+                            planExpiresAt: verifyUpdated.expires,
+                            isPaymentVerified: true,
+                            isCancelled: false,
+                            isGrace: false,
+                            graceExpiresAt: null,
+                            lastPurchaseToken: user.purchaseToken,
+                            purchaseToken: notification.purchaseToken,
+                            planSource: 'google_play'
+                        };
+                        message = 'Subscription price change updated; subscription remains active.';
+                    } else {
+                        message = 'Subscription price change updated.';
+                    }
+                }
+                break;
+
+            case 20: // SUBSCRIPTION_PENDING_PURCHASE_CANCELED
                 updateData = {
                     isPaymentVerified: false,
                     isCancelled: false
                 };
-                message = 'Subscription pending.';
+                message = 'Pending subscription purchase canceled.';
                 break;
 
             default:
