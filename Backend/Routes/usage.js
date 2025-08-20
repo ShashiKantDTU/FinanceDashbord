@@ -25,6 +25,7 @@ router.get('/dashboard', authenticateAndTrack, authorizeRole(['Admin']), async (
             {
                 $project: {
                     phone: { $ifNull: ['$userPhone', '$phone'] },
+                    name: { $ifNull: ['$userName', null] },
                     plan: { $ifNull: ['$userPlan', 'unknown'] },
                     actorId: { $ifNull: ['$actor.id', null] },
                     actorRole: { $ifNull: ['$actor.role', null] },
@@ -39,6 +40,7 @@ router.get('/dashboard', authenticateAndTrack, authorizeRole(['Admin']), async (
                 $group: {
                     _id: {
                         phone: '$phone',
+                        name: '$name',
                         actorId: '$actorId',
                         actorRole: '$actorRole',
                         supervisorName: '$supervisorName',
@@ -52,7 +54,7 @@ router.get('/dashboard', authenticateAndTrack, authorizeRole(['Admin']), async (
             // Group again by phone to form the dashboard rows
             {
                 $group: {
-                    _id: '$_id.phone',
+                    _id: { phone: '$_id.phone', name: '$_id.name' },
                     totalRequests: { $sum: '$totalRequests' },
                     totalDataBytes: { $sum: '$totalDataBytes' },
                     usageByActor: {
@@ -72,8 +74,9 @@ router.get('/dashboard', authenticateAndTrack, authorizeRole(['Admin']), async (
             {
                 $project: {
                     _id: 0,
-                    userId: '$_id', // Keep field name but now equals phone for consistent identification
-                    phone: '$_id',
+                    userId: '$_id.phone', // Keep legacy name but equals phone
+                    phone: '$_id.phone',
+                    name: '$_id.name',
                     plan: {
                         $let: {
                             vars: { plans: { $map: { input: '$usageByActor', as: 'u', in: '$$u.plan' } } },

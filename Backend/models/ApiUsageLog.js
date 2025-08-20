@@ -10,6 +10,10 @@ const apiUsageLogSchema = new mongoose.Schema({
     required: true,
     index: true, // Index for faster grouping
   },
+  // Display name of the primary account owner (denormalized for cross-DB aggregation)
+  userName: {
+    type: String,
+  },
   userPhone: {
     type: String,
     required: true,

@@ -81,8 +81,9 @@ const logApiUsage = async (req, res, responseSizeBytes) => {
     const { user } = req;
     // Determine the main user ID (the account owner who will be billed)
     let mainUserId;
-    let userPhone;
+  let userPhone;
     let userPlan;
+  let userName; // denormalized for reporting
     let actorInfo;
     let supervisorInfo = {};
 
@@ -96,8 +97,9 @@ const logApiUsage = async (req, res, responseSizeBytes) => {
       }
 
       mainUserId = supervisor.owner._id;
-      userPhone = supervisor.owner.phoneNumber;
+  userPhone = supervisor.owner.phoneNumber;
       userPlan = supervisor.owner.plan || 'free';
+  userName = supervisor.owner.name || null;
 
       actorInfo = {
         id: supervisor._id.toString(),
@@ -110,7 +112,7 @@ const logApiUsage = async (req, res, responseSizeBytes) => {
       };
     } else {
       // For regular user requests
-      const userData = await User.findById(user.id);
+  const userData = await User.findById(user.id);
 
       if (!userData) {
         console.warn('User not found for usage tracking:', user.id);
@@ -118,8 +120,9 @@ const logApiUsage = async (req, res, responseSizeBytes) => {
       }
 
       mainUserId = userData._id;
-      userPhone = userData.phoneNumber;
+  userPhone = userData.phoneNumber;
       userPlan = userData.plan || 'free';
+  userName = userData.name || null;
 
       actorInfo = {
         id: userData._id.toString(),
@@ -130,10 +133,11 @@ const logApiUsage = async (req, res, responseSizeBytes) => {
     // Create the usage log entry
     const usageLog = new ApiUsageLog({
       mainUserId,
-      userPhone,
+  userPhone,
+  userName,
       userPlan,
       actor: actorInfo,
-      supervisor: Object.keys(supervisorInfo).length > 0 ? supervisorInfo : undefined,
+  supervisor: Object.keys(supervisorInfo).length > 0 ? supervisorInfo : undefined,
       endpoint: req.path,
       method: req.method,
       status: res.statusCode,
