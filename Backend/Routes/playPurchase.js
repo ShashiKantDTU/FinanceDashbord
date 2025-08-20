@@ -173,11 +173,10 @@ router.post('/verify-android-purchase', authenticateToken, async (req, res) => {
 
             // Provisional access: set plan and expiry immediately, but keep isPaymentVerified=false
             await User.updateOne(
-                { _id: user.id },
+                { _id: user.id, isPaymentVerified: { $ne: true } },
                 {
                     $set: {
                         plan: verificationResult.productId,
-                        planExpiresAt: verificationResult.expires,
                         billing_cycle: billingCycle,
                         planSource: 'google_play',
                         purchaseToken: purchaseToken,
@@ -187,6 +186,9 @@ router.post('/verify-android-purchase', authenticateToken, async (req, res) => {
                         isGrace: false,
                         graceExpiresAt: null,
                         planActivatedAt: new Date()
+                    },
+                    $max: {
+                        planExpiresAt: verificationResult.expires
                     }
                 }
             );
