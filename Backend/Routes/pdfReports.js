@@ -178,15 +178,9 @@ function generateHeader(doc, reportData) {
         .text(`Generated: ${new Date().toLocaleDateString('en-IN')} at ${new Date().toLocaleTimeString('en-IN', { hour12: false })}`, 600, 55, { align: 'right' })
         .text(`Total Employees: ${reportData.employees.length}`, 600, 68, { align: 'right' });
 
-    // Professional separator with gradient effect
+    // Simplified single separator bar (replaces 3 gradient rectangles for size optimization)
     doc.fillColor('#2b6cb0')
        .rect(30, 90, 810, 2)
-       .fill()
-       .fillColor('#3182ce')
-       .rect(30, 92, 810, 1)
-       .fill()
-       .fillColor('#63b3ed')
-       .rect(30, 93, 810, 0.5)
        .fill();
 }
 
@@ -318,7 +312,7 @@ function generateIndividualEmployeeDetails(doc, reportData) {
     for (const employee of reportData.employees) {
         // --- Smart Page Break Logic ---
         // Calculate the height of the upcoming employee section
-        const sectionHeight = calculateEmployeeDetailSectionHeight(employee);
+        const sectionHeight = calculateEmployeeDetailSectionHeight(employee, reportData.rawMonth, reportData.rawYear);
         
         // If the section doesn't fit on the current page, create a new one
         if (y + sectionHeight > pageBottom) {
@@ -328,7 +322,7 @@ function generateIndividualEmployeeDetails(doc, reportData) {
         }
         
         // Draw the section and update the Y position
-        y = generateEmployeeDetailSection(doc, employee, y);
+        y = generateEmployeeDetailSection(doc, employee, y, reportData);
         y += 25; // Add consistent spacing between employee blocks
     }
 }
@@ -339,7 +333,7 @@ function generateIndividualEmployeeDetails(doc, reportData) {
  * @param {object} employee - The employee data object.
  * @returns {number} - The calculated height in PDF units.
  */
-function calculateEmployeeDetailSectionHeight(employee) {
+function calculateEmployeeDetailSectionHeight(employee, monthNumber, yearNumber) {
     let height = 0;
     
     // Header and Summary section heights (fixed)
@@ -378,8 +372,13 @@ function calculateEmployeeDetailSectionHeight(employee) {
     }
     
     // The total height is determined by the tallest of the three columns
-    height += Math.max(col1Height, col2Height, col3Height);
+    const columnsHeight = Math.max(col1Height, col2Height, col3Height);
+    height += columnsHeight;
     height += 15; // Bottom separator line buffer
+
+    // --- Calendar Height Estimation ---
+    // We always plan space for the calendar so page breaks account for it.
+    height += estimateCalendarHeight(monthNumber, yearNumber);
     
     return height;
 }
@@ -391,7 +390,9 @@ function calculateEmployeeDetailSectionHeight(employee) {
  * @param {number} startY - The Y position to start drawing at.
  * @returns {number} - The Y position after this section has been drawn.
  */
-function generateEmployeeDetailSection(doc, employee, startY) {
+function generateEmployeeDetailSection(doc, employee, startY, reportData) {
+    const monthNumber = reportData.rawMonth;
+    const yearNumber = reportData.rawYear;
     let y = startY;
     const sectionStartX = 30;
     const sectionWidth = 780;
@@ -406,8 +407,8 @@ function generateEmployeeDetailSection(doc, employee, startY) {
        .text(`Employee ID: ${employee.id}`, sectionStartX + 260, y + 12, { width: sectionWidth - 320, align: 'right' });
     y += 50;
 
-    // --- Payment Summary Box ---
-    doc.roundedRect(sectionStartX, y, sectionWidth, 60, 5).fillAndStroke('#f7fafc', '#e2e8f0');
+    // --- Payment Summary Box (simplified: rect instead of roundedRect to reduce path complexity) ---
+    doc.rect(sectionStartX, y, sectionWidth, 60).fillAndStroke('#f7fafc', '#e2e8f0');
     const summaryY = y + 15;
     const summaryCol1 = 45, summaryCol2 = 240, summaryCol3 = 430, summaryCol4 = 600;
     const summaryColumnWidth = 180; // Define a width for summary columns
@@ -497,7 +498,153 @@ function generateEmployeeDetailSection(doc, employee, startY) {
     finalY = Math.max(col1Y, col2Y, col3Y, y + 60); // Ensure a minimum height
     doc.strokeColor("#cbd5e0").lineWidth(1).moveTo(sectionStartX, finalY + 10).lineTo(sectionStartX + sectionWidth, finalY + 10).stroke();
 
-    return finalY; // Return the final Y position
+    // --- Attendance Calendar (Placed after separator) ---
+    let calendarStartY = finalY + 25; // spacing below line
+    const calendarNeededHeight = estimateCalendarHeight(monthNumber, yearNumber);
+    const pageBottom = doc.page.height - doc.page.margins.bottom;
+    if (calendarStartY + calendarNeededHeight > pageBottom) {
+        doc.addPage({ layout: 'landscape', margin: 20 });
+        generateHeader(doc, reportData);
+        calendarStartY = 105; // align with other content start below header
+    }
+    // Use a slightly reduced width to preserve a right margin so calendar doesn't touch page edge
+    const calendarWidth = sectionWidth - 20; // adds ~20px right breathing room
+    drawAttendanceCalendar(doc, employee.attendance || [], monthNumber, yearNumber, sectionStartX, calendarStartY, calendarWidth);
+    const calendarBottom = calendarStartY + calendarNeededHeight - 10; // -10 because estimate includes extra padding
+
+    return calendarBottom; // Return bottom Y including calendar
+}
+
+// ---------------- Calendar Helpers ----------------
+/**
+ * Estimate calendar (grid + legend + totals) height for page-break planning.
+ */
+function estimateCalendarHeight(monthNumber, yearNumber) {
+    if (!monthNumber || !yearNumber) return 0;
+    const cellSize = 24; // square cell
+    const titleHeight = 20; // "Monthly Attendance" label
+    const legendHeight = 35; // legend + totals line
+    const padding = 20; // spacing buffer
+    const weeks = computeWeeksInMonth(monthNumber, yearNumber);
+    const gridHeight = weeks * cellSize + 10; // include header row for weekdays
+    return titleHeight + gridHeight + legendHeight + padding;
+}
+
+/**
+ * Compute number of grid rows (weeks) for month (Monday-first)
+ */
+function computeWeeksInMonth(monthNumber, yearNumber) {
+    const firstDay = new Date(yearNumber, monthNumber - 1, 1);
+    let startIdx = firstDay.getDay(); // 0=Sun ... 6=Sat
+    // Shift to Monday-first (Mon=0 ... Sun=6)
+    startIdx = (startIdx + 6) % 7;
+    const daysInMonth = new Date(yearNumber, monthNumber, 0).getDate();
+    return Math.ceil((startIdx + daysInMonth) / 7);
+}
+
+/**
+ * Draw attendance calendar for an employee.
+ * attendanceEntries: sequential array where index i represents day i+1 (e.g., 'P2', 'A', 'W', 'P').
+ */
+function drawAttendanceCalendar(doc, attendanceEntries, monthNumber, yearNumber, x, y, width) {
+    const title = `Monthly Attendance (${monthNumber}/${yearNumber})`;
+    doc.fillColor('#2d3748').font('Helvetica-Bold').fontSize(12).text(title, x, y, { width });
+    y += 20;
+
+    const cellHeight = 24; // keep height constant per requirement
+    const columns = 7;
+    const cellWidth = Math.floor(width / columns);
+    const daysInMonth = new Date(yearNumber, monthNumber, 0).getDate();
+    const firstDay = new Date(yearNumber, monthNumber - 1, 1);
+    let startIdx = firstDay.getDay();
+    startIdx = (startIdx + 6) % 7; // Monday-first shift
+    const weekDayLabels = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+
+    // Weekday header row
+    doc.font('Helvetica-Bold').fontSize(8).fillColor('#4a5568');
+    for (let c = 0; c < columns; c++) {
+        doc.text(weekDayLabels[c], x + c * cellWidth, y, { width: cellWidth, align: 'center' });
+    }
+    y += 12;
+
+        // Grid drawing
+        // Draw full grid lines once (less vector objects than per-cell borders)
+        const weeks = computeWeeksInMonth(monthNumber, yearNumber);
+        doc.save().strokeColor('#e2e8f0').lineWidth(0.25);
+        for (let r = 0; r <= weeks; r++) {
+            const lineY = y + r * cellHeight;
+            doc.moveTo(x, lineY).lineTo(x + columns * cellWidth, lineY);
+        }
+        for (let c = 0; c <= columns; c++) {
+            const lineX = x + c * cellWidth;
+            doc.moveTo(lineX, y).lineTo(lineX, y + weeks * cellHeight);
+        }
+        doc.stroke().restore();
+    let dayCounter = 1;
+    let presentCount = 0, absentCount = 0, weekoffCount = 0, overtimeHours = 0;
+    while (dayCounter <= daysInMonth) {
+        for (let col = 0; col < columns; col++) {
+            const colX = x + col * cellWidth;
+            if ((dayCounter === 1 && col < startIdx) || dayCounter > daysInMonth) {
+                continue;
+            }
+            const cellY = y;
+            const entry = attendanceEntries[dayCounter - 1] || '';
+            const statusChar = entry.charAt(0) || '';
+            const overtimeMatch = entry.match(/\d+/);
+            const overtime = overtimeMatch ? parseInt(overtimeMatch[0]) : 0;
+            overtimeHours += overtime;
+
+            // Counts
+            if (statusChar === 'P') presentCount++; else if (statusChar === 'A') absentCount++; else if (statusChar === 'W') weekoffCount++;
+
+            // Day number (small, top-left)
+            doc.fillColor('#2d3748').font('Helvetica').fontSize(7)
+               .text(dayCounter.toString(), colX + 2, cellY + 2, { width: cellWidth - 4, align: 'left' });
+
+            // Status letter centered (green P, red A, blue W) larger for clarity
+            let statusColor = '#718096';
+            if (statusChar === 'P') statusColor = '#2f855a';
+            else if (statusChar === 'A') statusColor = '#e53e3e';
+            else if (statusChar === 'W') statusColor = '#3182ce';
+            const statusLetter = ['P','A','W'].includes(statusChar) ? statusChar : '';
+            if (statusLetter) {
+                doc.fillColor(statusColor).font('Helvetica-Bold').fontSize(11)
+                   .text(statusLetter, colX, cellY + 8, { width: cellWidth, align: 'center' });
+            }
+
+            // Overtime badge (orange rounded pill bottom-right) if OT > 0
+            if (overtime > 0) {
+                const badgeW = 16;
+                const badgeH = 10;
+                const badgeX = colX + cellWidth - badgeW - 2;
+                const badgeY = cellY + cellHeight - badgeH - 2;
+                doc.save().fillColor('#dd6b20').roundedRect(badgeX, badgeY, badgeW, badgeH, 2).fill();
+                doc.fillColor('#ffffff').font('Helvetica-Bold').fontSize(7)
+                   .text(overtime.toString(), badgeX, badgeY + 1.2, { width: badgeW, align: 'center' });
+                doc.restore();
+            }
+
+            dayCounter++;
+        }
+        y += cellHeight; // next week row
+    }
+    y += 8;
+
+    // Legend & Totals (colored circles + labels)
+    const legendItems = [
+        { label: 'Present (P)', color: '#2f855a', value: presentCount },
+        { label: 'Absent (A)', color: '#e53e3e', value: absentCount },
+        { label: 'Weekly Off (W)', color: '#3182ce', value: weekoffCount },
+        { label: 'OT Hours', color: '#dd6b20', value: overtimeHours }
+    ];
+    let legendX = x;
+    doc.font('Helvetica').fontSize(8);
+    legendItems.forEach(item => {
+        doc.circle(legendX + 5, y + 6, 5).fill(item.color);
+        doc.fillColor('#2d3748').text(`${item.label}: ${item.value}`, legendX + 15, y, { width: 125 });
+        legendX += 140;
+    });
 }
 
 // POST endpoint to generate employee payment report PDF
@@ -588,6 +735,8 @@ router.post("/generate-payment-report", authenticateAndTrack, async (req, res) =
         // Create report data object
         const reportData = {
             month: getMonthName(month) + ' ' + year,
+            rawMonth: parseInt(month),
+            rawYear: parseInt(year),
             siteName: siteInfo.sitename,
             siteID: siteID,
             employees: employees.map(emp => ({
