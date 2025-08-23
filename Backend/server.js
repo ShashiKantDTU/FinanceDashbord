@@ -85,6 +85,7 @@ const playPurchaseRoutes = require('./Routes/playPurchase');
 const siteFinancialRoutes = require('./Routes/SiteFinancials');
 const usageRoutes = require('./Routes/usage');
 const cronRoutes = require('./Routes/cronRoutes');
+const pdfReportRoutes = require('./Routes/pdfReports');
 // const optimizedEmployeeRoutes = require('./Routes/optimizedEmployeeRoutes');
 
 // Import cron job service
@@ -124,6 +125,7 @@ app.use('/api/play-purchase', playPurchaseRoutes);
 app.use('/api/financials', siteFinancialRoutes);
 app.use('/api/usage', usageRoutes);
 app.use('/api/cron', cronRoutes);
+app.use('/api/reports', pdfReportRoutes);
 // app.use('/api/employee-optimized', optimizedEmployeeRoutes);
 
 // Basic route
