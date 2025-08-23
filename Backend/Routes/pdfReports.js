@@ -297,185 +297,207 @@ function generateHr(doc, y) {
 }
 
 /**
- * Generates individual employee detail pages
+ * Generates individual employee detail pages with intelligent page breaks.
  * @param {PDFDocument} doc - The PDF document instance.
  * @param {object} reportData - The data containing the list of employees.
  */
 function generateIndividualEmployeeDetails(doc, reportData) {
     doc.addPage({ layout: 'landscape', margin: 20 });
-    generateHeader(doc, reportData);
+    generateHeader(doc, reportData); // Re-add header for the new section
     
-    let yPosition = 105;
-    
+    let y = 105; // Starting Y position
+    const pageBottom = doc.page.height - doc.page.margins.bottom;
+
     doc.fillColor('#2d3748')
        .font('Helvetica-Bold')
        .fontSize(16)
-       .text('INDIVIDUAL EMPLOYEE DETAILS', 30, yPosition);
+       .text('INDIVIDUAL EMPLOYEE DETAILS', 30, y);
     
-    yPosition += 30;
+    y += 40; // Space after the section title
     
-    reportData.employees.forEach((employee, index) => {
-        if (yPosition > 500) {
+    for (const employee of reportData.employees) {
+        // --- Smart Page Break Logic ---
+        // Calculate the height of the upcoming employee section
+        const sectionHeight = calculateEmployeeDetailSectionHeight(employee);
+        
+        // If the section doesn't fit on the current page, create a new one
+        if (y + sectionHeight > pageBottom) {
             doc.addPage({ layout: 'landscape', margin: 20 });
             generateHeader(doc, reportData);
-            yPosition = 105;
+            y = 105; // Reset Y position for the new page
         }
         
-        yPosition = generateEmployeeDetailSection(doc, employee, yPosition, reportData.month);
-        yPosition += 20;
-    });
+        // Draw the section and update the Y position
+        y = generateEmployeeDetailSection(doc, employee, y);
+        y += 25; // Add consistent spacing between employee blocks
+    }
 }
 
 /**
- * Generates detailed section for a single employee
+ * Calculates the required height for an employee detail section without drawing it.
+ * This allows for intelligent page break decisions.
+ * @param {object} employee - The employee data object.
+ * @returns {number} - The calculated height in PDF units.
+ */
+function calculateEmployeeDetailSectionHeight(employee) {
+    let height = 0;
+    
+    // Header and Summary section heights (fixed)
+    height += 35; // Employee Header
+    height += 45; // Spacing
+    height += 50; // Summary Box
+    height += 65; // Spacing
+    
+    // Calculate heights of the three columns
+    let col1Height = 47; // Title height
+    if (employee.payouts && employee.payouts.length > 0) {
+        col1Height += 23; // Table header
+        col1Height += employee.payouts.length * 12; // Each payout row
+        col1Height += 28; // Total and spacing
+    } else {
+        col1Height += 25; // "No advances" text
+    }
+
+    let col2Height = 47; // Title height
+    if (employee.additional_req_pays && employee.additional_req_pays.length > 0) {
+        col2Height += 23; // Table header
+        col2Height += employee.additional_req_pays.length * 12; // Each payment row
+        col2Height += 28; // Total and spacing
+    } else {
+        col2Height += 25; // "No bonus" text
+    }
+    
+    let col3Height = 47; // Title height
+    col3Height += 3 * 14; // Attendance info lines
+    col3Height += 10; // Spacing
+    if (employee.carry_forwarded && employee.carry_forwarded.value !== 0) {
+        col3Height += 18; // Header
+        col3Height += 40; // Balance details
+    } else {
+        col3Height += 20; // "No previous balance" text
+    }
+    
+    // The total height is determined by the tallest of the three columns
+    height += Math.max(col1Height, col2Height, col3Height);
+    height += 15; // Bottom separator line buffer
+    
+    return height;
+}
+
+/**
+ * Generates a detailed, professionally styled section for a single employee.
  * @param {PDFDocument} doc - The PDF document instance.
  * @param {object} employee - The employee data object.
- * @param {number} startY - Starting Y position.
- * @param {string} month - Month and year string.
- * @returns {number} New Y position after the section.
+ * @param {number} startY - The Y position to start drawing at.
+ * @returns {number} - The Y position after this section has been drawn.
  */
-function generateEmployeeDetailSection(doc, employee, startY, month) {
-    let yPos = startY;
+function generateEmployeeDetailSection(doc, employee, startY) {
+    let y = startY;
+    const sectionStartX = 30;
+    const sectionWidth = 780;
+
+    // --- Employee Header ---
+    doc.fillColor('#1a365d').rect(sectionStartX, y, sectionWidth, 35).fill();
+    doc.fillColor('#ffffff').font('Helvetica-Bold').fontSize(14)
+       // FIXED: Added a width to the employee name to prevent overflow.
+       .text(employee.name, sectionStartX + 10, y + 10, { width: 500 });
+    doc.fillColor('#e2e8f0').font('Helvetica').fontSize(11)
+       // Adjusted: shift Employee ID left so it doesn't hug page edge (adds an intentional right margin).
+       .text(`Employee ID: ${employee.id}`, sectionStartX + 260, y + 12, { width: sectionWidth - 320, align: 'right' });
+    y += 50;
+
+    // --- Payment Summary Box ---
+    doc.roundedRect(sectionStartX, y, sectionWidth, 60, 5).fillAndStroke('#f7fafc', '#e2e8f0');
+    const summaryY = y + 15;
+    const summaryCol1 = 45, summaryCol2 = 240, summaryCol3 = 430, summaryCol4 = 600;
+    const summaryColumnWidth = 180; // Define a width for summary columns
+    const summaryFinalWidth = 170; // Constrain FINAL PAYMENT box so it respects right margin
+
+    doc.fillColor('#2d3748').font('Helvetica-Bold').fontSize(10);
+    // FIXED: Added width to all summary text blocks.
+    doc.text(`Gross Payment: ${formatCurrency(employee.grossPayment)}`, summaryCol1, summaryY, { width: summaryColumnWidth });
+    doc.text(`Total Advances: ${formatCurrency(employee.advances)}`, summaryCol2, summaryY, { width: summaryColumnWidth });
+    doc.text(`Bonus/Additional: ${formatCurrency(employee.bonus)}`, summaryCol3, summaryY, { width: summaryColumnWidth });
     
-    doc.fillColor('#3498db')
-       .rect(30, yPos, 750, 25)
-       .fill()
-       .fillColor('#ffffff')
-       .font('Helvetica-Bold')
-       .fontSize(12)
-       .text(`${employee.name} (${employee.id})`, 40, yPos + 7);
-    
-    yPos += 35;
-    
-    // Split into two columns for better landscape layout
-    const leftColumnX = 30;
-    const rightColumnX = 420;
-    const columnWidth = 350;
-    
-    // Left column - Basic Information
-    doc.fillColor('#2c3e50')
-       .font('Helvetica-Bold')
-       .fontSize(10)
-       .text('Basic Information:', leftColumnX, yPos);
-    
-    let leftYPos = yPos + 15;
-    
-    const basicInfo = [
-        `Daily Rate: ${formatCurrency(employee.dailyRate)}`,
-        `Present Days: ${employee.present}`,
-        `Overtime Hours: ${employee.overtime}`,
-        `Total Wage: ${formatCurrency(employee.grossPayment)}`,
-        `Final Payment: ${formatCurrency(employee.finalPayment)}`
-    ];
-    
-    doc.fillColor('#34495e')
-       .font('Helvetica')
-       .fontSize(9);
-    
-    basicInfo.forEach(info => {
-        doc.text(`• ${info}`, leftColumnX + 10, leftYPos);
-        leftYPos += 12;
-    });
-    
-    // Right column - Advances/Payouts
-    let rightYPos = yPos + 15;
-    
+    doc.fillColor(employee.prevBalance >= 0 ? '#2d3748' : '#c53030')
+       .text(`Previous Balance: ${formatCurrency(employee.prevBalance)}`, summaryCol1, summaryY + 25, { width: summaryColumnWidth });
+       
+    doc.fillColor(employee.finalPayment >= 0 ? '#22543d' : '#c53030').font('Helvetica-Bold').fontSize(12)
+       .text(`FINAL PAYMENT: ${formatCurrency(employee.finalPayment)}`, summaryCol4, summaryY + 12, { width: summaryFinalWidth, align: 'right' });
+    y += 80;
+
+    // --- Three-Column Layout ---
+    // Shift column 3 slightly left and reduce width to avoid touching page edge (was 570 + 240 = 810 exactly)
+    const col1X = 30, col2X = 300, col3X = 560;
+    const colWidth = 220; // Reduced from 240 to create breathing room at right margin
+    let contentY = y + 25; // Shared baseline for all column content
+    let finalY = y; // This will track the final height of the tallest column
+
+    // Draw Column Titles
+    doc.fillColor('#2d3748').font('Helvetica-Bold').fontSize(11);
+    doc.text('ADVANCES & PAYOUTS', col1X, y);
+    doc.text('BONUS & ADDITIONAL', col2X, y);
+    doc.text('ATTENDANCE & BALANCE', col3X, y);
+    doc.strokeColor("#bdc3c7").lineWidth(0.5).moveTo(sectionStartX, y + 20).lineTo(sectionStartX + sectionWidth, y + 20).stroke();
+
+    // --- Column 1: Payouts (No changes needed here, widths were already defined) ---
+    let col1Y = contentY;
     if (employee.payouts && employee.payouts.length > 0) {
-        doc.fillColor('#e74c3c')
-           .font('Helvetica-Bold')
-           .fontSize(10)
-           .text('Advances/Payouts:', rightColumnX, yPos);
-        
-        doc.fillColor('#34495e')
-           .font('Helvetica')
-           .fontSize(8);
-        
         employee.payouts.forEach(payout => {
-            if (rightYPos > 480) return; // Prevent overflow
-            const date = payout.date ? new Date(payout.date).toLocaleDateString() : 'N/A';
-            const remark = payout.remark || 'No remark';
-            const value = formatCurrency(payout.value || 0);
-            
-            doc.text(`• ${date} - ${value}`, rightColumnX + 10, rightYPos, { width: columnWidth - 20 });
-            rightYPos += 10;
-            doc.text(`  ${remark}`, rightColumnX + 15, rightYPos, { width: columnWidth - 25 });
-            rightYPos += 12;
+            const date = payout.date ? new Date(payout.date).toLocaleDateString('en-IN') : 'N/A';
+            const amount = formatCurrency(payout.value || 0);
+            doc.font('Helvetica').fontSize(8).fillColor('#4a5568').text(date, col1X, col1Y, { width: 70 });
+            doc.text(amount, col1X + 80, col1Y, { width: 70, align: 'right' });
+            col1Y += 12;
         });
+        col1Y += 8;
+        doc.font('Helvetica-Bold').fontSize(9).fillColor('#c53030').text(`Total: ${formatCurrency(employee.advances)}`, col1X, col1Y, { width: 150, align: 'right' });
+    } else {
+        doc.font('Helvetica-Oblique').fontSize(9).fillColor('#718096').text('No advances recorded.', col1X, col1Y);
     }
-    
-    // Move to next row for additional sections
-    yPos = Math.max(leftYPos, rightYPos) + 15;
-    
-    // Additional payments section (left column)
+
+    // --- Column 2: Bonus (No changes needed here, widths were already defined) ---
+    let col2Y = contentY;
+    // ... (code for column 2 remains the same)
     if (employee.additional_req_pays && employee.additional_req_pays.length > 0) {
-        doc.fillColor('#27ae60')
-           .font('Helvetica-Bold')
-           .fontSize(10)
-           .text('Additional Payments/Bonus:', leftColumnX, yPos);
-        
-        yPos += 15;
-        
-        doc.fillColor('#34495e')
-           .font('Helvetica')
-           .fontSize(8);
-        
         employee.additional_req_pays.forEach(payment => {
-            if (yPos > 480) return; // Prevent overflow
-            const date = payment.date ? new Date(payment.date).toLocaleDateString() : 'N/A';
-            const remark = payment.remark || 'No remark';
-            const value = formatCurrency(payment.value || 0);
-            
-            doc.text(`• ${date} - ${value} - ${remark}`, leftColumnX + 10, yPos, { width: columnWidth - 20 });
-            yPos += 12;
+            const date = payment.date ? new Date(payment.date).toLocaleDateString('en-IN') : 'N/A';
+            const amount = formatCurrency(payment.value || 0);
+            doc.font('Helvetica').fontSize(8).fillColor('#4a5568').text(date, col2X, col2Y, { width: 70 });
+            doc.text(amount, col2X + 80, col2Y, { width: 70, align: 'right' });
+            col2Y += 12;
         });
-        
-        yPos += 5;
+        col2Y += 8;
+        doc.font('Helvetica-Bold').fontSize(9).fillColor('#2f855a').text(`Total: ${formatCurrency(employee.bonus)}`, col2X, col2Y, { width: 150, align: 'right' });
+    } else {
+        doc.font('Helvetica-Oblique').fontSize(9).fillColor('#718096').text('No bonus payments recorded.', col2X, col2Y);
     }
     
-    // Carry forward information (right column if space available)
+    // --- Column 3: Attendance & Balance ---
+    let col3Y = contentY;
+    doc.font('Helvetica').fontSize(9).fillColor('#4a5568');
+    // FIXED: Added width to attendance details to keep them inside their column.
+    doc.text(`• Total Present Days: ${employee.present}`, col3X, col3Y, { width: colWidth }); col3Y += 14;
+    doc.text(`• Overtime Hours: ${employee.overtime}`, col3X, col3Y, { width: colWidth }); col3Y += 14;
+    doc.text(`• Equivalent Work Days: ${(employee.present + (employee.overtime / 8)).toFixed(1)}`, col3X, col3Y, { width: colWidth }); col3Y += 20;
+
     if (employee.carry_forwarded && employee.carry_forwarded.value !== 0) {
-        doc.fillColor('#f39c12')
-           .font('Helvetica-Bold')
-           .fontSize(10)
-           .text('Carry Forward:', rightColumnX, yPos);
-        
-        const carryDate = employee.carry_forwarded.date ? 
-            new Date(employee.carry_forwarded.date).toLocaleDateString() : 'N/A';
-        const carryRemark = employee.carry_forwarded.remark || 'No remark';
-        const carryValue = formatCurrency(employee.carry_forwarded.value || 0);
-        
-        doc.fillColor('#34495e')
-           .font('Helvetica')
-           .fontSize(8)
-           .text(`• ${carryDate} - ${carryValue}`, rightColumnX + 10, yPos + 15, { width: columnWidth - 20 });
-        doc.text(`  ${carryRemark}`, rightColumnX + 15, yPos + 27, { width: columnWidth - 25 });
-        
-        yPos += 45;
+        doc.font('Helvetica-Bold').text('Previous Balance:', col3X, col3Y, { width: colWidth }); col3Y += 14;
+        let carryValue = formatCurrency(employee.carry_forwarded.value || 0);
+        // Safety: truncate very long numeric strings to prevent overflow
+        if (carryValue.length > 24) {
+            carryValue = carryValue.slice(0, 21) + '...';
+        }
+        doc.font('Helvetica').fontSize(8).text(carryValue, col3X, col3Y, { width: colWidth, align: 'right'});
+    } else {
+        doc.font('Helvetica-Oblique').fontSize(9).text('No previous balance.', col3X, col3Y, { width: colWidth });
     }
-    
-    // Attendance summary
-    if (employee.attendance && employee.attendance.length > 0) {
-        doc.fillColor('#9b59b6')
-           .font('Helvetica-Bold')
-           .fontSize(10)
-           .text('Attendance Summary:', leftColumnX, yPos);
-        
-        doc.fillColor('#34495e')
-           .font('Helvetica')
-           .fontSize(8)
-           .text(`Total attendance entries: ${employee.attendance.length}`, leftColumnX + 10, yPos + 15);
-        
-        yPos += 30;
-    }
-    
-    // Add separator line
-    doc.strokeColor("#bdc3c7")
-       .lineWidth(1)
-       .moveTo(30, yPos)
-       .lineTo(780, yPos)
-       .stroke();
-    
-    return yPos + 10;
+
+    // --- Finalize Section ---
+    finalY = Math.max(col1Y, col2Y, col3Y, y + 60); // Ensure a minimum height
+    doc.strokeColor("#cbd5e0").lineWidth(1).moveTo(sectionStartX, finalY + 10).lineTo(sectionStartX + sectionWidth, finalY + 10).stroke();
+
+    return finalY; // Return the final Y position
 }
 
 // POST endpoint to generate employee payment report PDF
