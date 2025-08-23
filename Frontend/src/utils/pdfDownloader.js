@@ -71,7 +71,7 @@ export const downloadPDFReport = async ({
         }
 
         // Notify progress
-        if (onProgress) onProgress('Preparing download...');
+        if (onProgress) onProgress('Processing PDF data...');
 
         // Get PDF blob from response
         const blob = await response.blob();

@@ -21,6 +21,7 @@ const Payments = () => {
     const [pendingChanges, setPendingChanges] = useState({});
     const [remarkText, setRemarkText] = useState(''); // Add remark state
     const [isUpdating, setIsUpdating] = useState(false); // Loading state for update operation
+    const [isDownloadingPDF, setIsDownloadingPDF] = useState(false); // Loading state for PDF download
 
 
     const { siteID } = useParams(); // Get siteID from URL parameters
@@ -654,22 +655,32 @@ const Payments = () => {
             return;
         }
 
-        await downloadPDFReport({
-            siteID,
-            month: selectedMonth,
-            year: selectedYear,
-            onProgress: (message) => {
-                // Show progress message
-                showSuccess(message);
-            },
-            onSuccess: (filename) => {
-                showSuccess(`PDF report downloaded successfully: ${filename}`);
-            },
-            onError: (errorMessage) => {
-                showError(errorMessage);
-            }
-        });
-    }, [siteID, selectedMonth, selectedYear, employeeData, showError, showSuccess]);
+        if (isDownloadingPDF) {
+            return; // Prevent multiple downloads
+        }
+
+        setIsDownloadingPDF(true);
+
+        try {
+            await downloadPDFReport({
+                siteID,
+                month: selectedMonth,
+                year: selectedYear,
+                onProgress: (message) => {
+                    // Show progress message
+                    showSuccess(message);
+                },
+                onSuccess: (filename) => {
+                    showSuccess(`PDF report downloaded successfully: ${filename}`);
+                },
+                onError: (errorMessage) => {
+                    showError(errorMessage);
+                }
+            });
+        } finally {
+            setIsDownloadingPDF(false);
+        }
+    }, [siteID, selectedMonth, selectedYear, employeeData, showError, showSuccess, isDownloadingPDF, setIsDownloadingPDF]);
 
     if (loading) {
         return (
@@ -848,11 +859,11 @@ const Payments = () => {
                     <button
                         type="button"
                         onClick={handleDownloadPDF}
-                        disabled={loading || employeeData.length === 0}
-                        className={styles.pdfDownloadButton}
-                        title={`Download PDF Report - ${employeeData.length} employees (${getEstimatedPDFSize(employeeData.length)})`}
+                        disabled={loading || employeeData.length === 0 || isDownloadingPDF}
+                        className={`${styles.pdfDownloadButton} ${isDownloadingPDF ? styles.loading : ''}`}
+                        title={isDownloadingPDF ? 'Generating PDF...' : `Download PDF Report - ${employeeData.length} employees (${getEstimatedPDFSize(employeeData.length)})`}
                     >
-                        📄 PDF
+                        {isDownloadingPDF ? '⏳ Generating...' : '📄 PDF'}
                     </button>
                 </div>
 

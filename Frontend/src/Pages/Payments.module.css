@@ -2510,3 +2510,17 @@
   cursor: not-allowed;
   background: var(--color-bg-disabled);
 }
+
+.pdfDownloadButton.loading {
+  background: var(--color-accent-primary);
+  color: white;
+  border-color: var(--color-accent-primary);
+  opacity: 0.8;
+  cursor: wait;
+}
+
+.pdfDownloadButton.loading:hover {
+  background: var(--color-accent-primary);
+  color: white;
+  border-color: var(--color-accent-primary);
+}
