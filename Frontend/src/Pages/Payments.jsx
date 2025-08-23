@@ -6,8 +6,8 @@ import Sidebar from '../components/Sidebar';
 import { useParams, Link } from 'react-router-dom';
 import { api } from '../utils/api';
 import { FaCalendarAlt } from 'react-icons/fa';
-import { generateEmployeeReportPDF } from '../utils/pdfReportGenerator';
 import CustomSpinner from '../components/CustomSpinner';
+import { downloadPDFReport, getEstimatedPDFSize } from '../utils/pdfDownloader';
 
 const Payments = () => {
     const { user } = useAuth();
@@ -647,22 +647,29 @@ const Payments = () => {
         setCalendarYear(selectedYear);
     }, [selectedYear]);
 
-    // PDF download handler
-    const handleDownloadPDF = useCallback(() => {
-        try {
-            if (!employeeData || employeeData.length === 0) {
-                showError('No employee data available to generate PDF');
-                return;
-            }
-
-            // Use the existing transformed employee data
-            generateEmployeeReportPDF(employeeData);
-            showSuccess('PDF report generated successfully!');
-        } catch (error) {
-            console.error('Error generating PDF:', error);
-            showError('Failed to generate PDF report. Please try again.');
+    // PDF download handler - Modern server-side PDF generation
+    const handleDownloadPDF = useCallback(async () => {
+        if (!employeeData || employeeData.length === 0) {
+            showError('No employee data available to generate PDF');
+            return;
         }
-    }, [employeeData, showError, showSuccess]);
+
+        await downloadPDFReport({
+            siteID,
+            month: selectedMonth,
+            year: selectedYear,
+            onProgress: (message) => {
+                // Show progress message
+                showSuccess(message);
+            },
+            onSuccess: (filename) => {
+                showSuccess(`PDF report downloaded successfully: ${filename}`);
+            },
+            onError: (errorMessage) => {
+                showError(errorMessage);
+            }
+        });
+    }, [siteID, selectedMonth, selectedYear, employeeData, showError, showSuccess]);
 
     if (loading) {
         return (
@@ -843,7 +850,7 @@ const Payments = () => {
                         onClick={handleDownloadPDF}
                         disabled={loading || employeeData.length === 0}
                         className={styles.pdfDownloadButton}
-                        title="Download PDF Report"
+                        title={`Download PDF Report - ${employeeData.length} employees (${getEstimatedPDFSize(employeeData.length)})`}
                     >
                         📄 PDF
                     </button>
