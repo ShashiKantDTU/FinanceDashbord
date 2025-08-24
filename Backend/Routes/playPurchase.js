@@ -13,9 +13,9 @@ const client = new OAuth2Client();
 // Function to activate all sites of User inCase of plan upgrade
 async function activateAllUserSites(userId) {
     try {
-    // Activate all sites owned by the user in one efficient query
-    await Site.updateMany({ owner: userId }, { $set: { isActive: true } });
-    console.log(`All sites activated for user: ${userId}`);
+        // Activate all sites owned by the user in one efficient query
+        await Site.updateMany({ owner: userId }, { $set: { isActive: true } });
+        console.log(`All sites activated for user: ${userId}`);
     } catch (error) {
         console.error('Error activating user sites:', error);
     }
@@ -165,6 +165,22 @@ router.post('/verify-android-purchase', authenticateToken, async (req, res) => {
             return res.status(400).json({ error: 'User is not authenticated.' });
         }
 
+        // --- NEW LOGIC: CHECK FIRST ---
+        // Check if the webhook has already processed this exact token.
+        if (user.purchaseToken === purchaseToken && user.isPaymentVerified === true) {
+            console.log(`✅ Plan already activated by webhook for user: ${user.phoneNumber || user.email}. Skipping provisional update.`);
+            return res.status(200).json({
+                message: 'Your plan is already active.',
+                plan: user.plan,
+                billing_cycle: user.billing_cycle,
+                expires_at: user.planExpiresAt,
+                purchase_token: user.purchaseToken,
+                plan_source: user.planSource,
+                provisional: false // It's fully verified
+            });
+        }
+        // --- END OF NEW LOGIC ---
+
         const verificationResult = await verifyAndroidPurchase(packageName, purchaseToken, `frontend_${user.id}`);
 
         if (verificationResult.success) {
@@ -173,7 +189,7 @@ router.post('/verify-android-purchase', authenticateToken, async (req, res) => {
 
             // Provisional access: set plan and expiry immediately, but keep isPaymentVerified=false
             await User.updateOne(
-                { _id: user.id, isPaymentVerified: { $ne: true } },
+                { _id: user.id }, // We can simplify the condition now
                 {
                     $set: {
                         plan: verificationResult.productId,
@@ -196,7 +212,7 @@ router.post('/verify-android-purchase', authenticateToken, async (req, res) => {
             // Instant access: activate all sites immediately; webhook will reconcile if needed
             await activateAllUserSites(user.id);
 
-            console.log(`✅ Provisional access granted for user: ${user.phoneNumber || user.email} → ${verificationResult.productId}. Awaiting webhook for final verification.`);
+            console.log(`✅ Provisional access granted for user: ${user.phoneNumber || user.email} → ${verificationResult.productId}. Awaiting webhook.`);
 
             res.status(200).json({
                 message: 'Purchase successful! Your plan is now active (awaiting final verification).',
@@ -328,7 +344,7 @@ async function updateUserSubscription(user, notification, notificationType, requ
     try {
         let updateData = {};
         let message = '';
-    let shouldActivateAllSites = false;
+        let shouldActivateAllSites = false;
 
         switch (notificationType) {
             // Cases where a NEW expiry date is generated or entitlement should be active.
@@ -352,7 +368,7 @@ async function updateUserSubscription(user, notification, notificationType, requ
                         lastPurchaseToken: user.purchaseToken,
                         purchaseToken: notification.purchaseToken,
                         planActivatedAt: new Date(),
-                        planSource:'google_play'
+                        planSource: 'google_play'
                     };
                     message = `Subscription active. Type: ${getNotificationTypeName(notificationType)}.`;
                     shouldActivateAllSites = true;
@@ -483,6 +499,12 @@ async function updateUserSubscription(user, notification, notificationType, requ
                 break;
 
             case 12: // SUBSCRIPTION_REVOKED
+                // --- ADD THIS PROTECTIVE CHECK ---
+                if (notification.purchaseToken !== user.purchaseToken) {
+                    message = `Ignoring stale REVOKED notification for an old token. User is on a newer plan.`;
+                    console.log(`[${requestId}] ✅ ${message}`);
+                    return { success: true, message, userId: user._id, updateData: {} };
+                }
                 updateData = {
                     plan: 'free',
                     billing_cycle: 'monthly',
@@ -500,6 +522,12 @@ async function updateUserSubscription(user, notification, notificationType, requ
 
             // The final downgrade state
             case 13: // SUBSCRIPTION_EXPIRED
+                // --- ADD THIS PROTECTIVE CHECK ---
+                if (notification.purchaseToken !== user.purchaseToken) {
+                    message = `Ignoring stale EXPIRED notification for an old token. User is on a newer plan.`;
+                    console.log(`[${requestId}] ✅ ${message}`);
+                    return { success: true, message, userId: user._id, updateData: {} };
+                }
                 updateData = {
                     plan: 'free',
                     billing_cycle: 'monthly',
