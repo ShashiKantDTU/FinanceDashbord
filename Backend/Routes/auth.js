@@ -179,6 +179,8 @@ router.post("/login", async (req, res) => {
               role: "Supervisor",
               siteid: existingSupervisor.site[0],
               siteName: site.sitename,
+              isActive: site.isActive,
+              siteStatus: site.isActive ? "Active" : "Inactive"
             },
           });
         }
@@ -372,13 +374,87 @@ router.get("/profile/:siteId?", authenticateToken, async (req, res) => {
   }
 });
 
-// Protected route - Verify token
-router.get("/verify", authenticateToken, (req, res) => {
-  // If we reach here, the token is valid
-  res.status(200).json({
-    message: "Token is valid",
-    user: req.user,
-  });
+// Protected route - Verify token (enhanced / backward compatible)
+// Returns 200 with enriched user payload if token valid
+// Base fields always: id, email, name, role
+// Additional (required) fields for Supervisors: siteid, siteName, isActive (plus siteStatus for parity with login response)
+router.get("/verify", authenticateToken, async (req, res) => {
+  try {
+    // Start with base fields from token/middleware
+    const baseUser = {
+      id: req.user?.id,
+      email: req.user?.email,
+      name: req.user?.name,
+      role: req.user?.role,
+    };
+
+    // Fallback: ensure email/name for Admin if missing (older tokens)
+    if (baseUser.role === "Admin" && (!baseUser.email || !baseUser.name)) {
+      try {
+        const dbUser = await User.findById(baseUser.id).select("email name").lean();
+        if (dbUser) {
+          baseUser.email = baseUser.email || dbUser.email;
+            // prefer token name if present
+          if (!baseUser.name) baseUser.name = dbUser.name;
+        }
+      } catch (_) {
+        // Silent — verification should still succeed if token valid
+      }
+    }
+
+    if (baseUser.role === "Supervisor") {
+      try {
+        // Get supervisor document for authoritative site assignment
+        const supervisor = await Supervisor.findById(baseUser.id).lean();
+        if (supervisor) {
+          // site may be stored as array (as seen in login) — pick first
+          const siteId = Array.isArray(supervisor.site)
+            ? supervisor.site[0]
+            : supervisor.site;
+          baseUser.siteid = siteId || null;
+
+          if (siteId) {
+            const site = await Site.findById(siteId).lean();
+            if (site) {
+              baseUser.siteName = site.sitename || "Unknown Site";
+              baseUser.isActive = !!site.isActive;
+              baseUser.siteStatus = site.isActive ? "Active" : "Inactive"; // keep existing pattern
+            } else {
+              baseUser.siteName = "Unknown Site";
+              baseUser.isActive = false;
+              baseUser.siteStatus = "Inactive";
+            }
+          } else {
+            baseUser.siteName = "Unknown Site";
+            baseUser.isActive = false;
+            baseUser.siteStatus = "Inactive";
+          }
+        } else {
+          // Supervisor record missing (edge case — still return required fields)
+            baseUser.siteid = null;
+            baseUser.siteName = "Unknown Site";
+            baseUser.isActive = false;
+            baseUser.siteStatus = "Inactive";
+        }
+      } catch (e) {
+        // On any lookup error, still respond successfully (token already validated)
+        if (!("siteid" in baseUser)) {
+          baseUser.siteid = null;
+          baseUser.siteName = "Unknown Site";
+          baseUser.isActive = false;
+          baseUser.siteStatus = "Inactive";
+        }
+      }
+    }
+
+    res.status(200).json({
+      message: "Token is valid",
+      user: baseUser,
+    });
+  } catch (error) {
+    // Should rarely occur; treat as server error while token was valid
+    res.status(500).json({ message: "Error verifying token", error: error.message });
+  }
 });
 
 

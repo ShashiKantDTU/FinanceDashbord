@@ -86,6 +86,7 @@ const siteFinancialRoutes = require('./Routes/SiteFinancials');
 const usageRoutes = require('./Routes/usage');
 const cronRoutes = require('./Routes/cronRoutes');
 const pdfReportRoutes = require('./Routes/pdfReports');
+const excelReportRoutes = require('./Routes/excelReports');
 // const optimizedEmployeeRoutes = require('./Routes/optimizedEmployeeRoutes');
 
 // Import cron job service
@@ -126,6 +127,7 @@ app.use('/api/financials', siteFinancialRoutes);
 app.use('/api/usage', usageRoutes);
 app.use('/api/cron', cronRoutes);
 app.use('/api/reports', pdfReportRoutes);
+app.use('/api/reports', excelReportRoutes); // New Excel (placeholder) report endpoint
 // app.use('/api/employee-optimized', optimizedEmployeeRoutes);
 
 // Basic route

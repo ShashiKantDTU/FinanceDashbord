@@ -757,9 +757,11 @@ router.post("/generate-payment-report", authenticateAndTrack, async (req, res) =
             }))
         };
         
-        // Generate unique filename
-        const timestamp = new Date().toISOString().replace(/[:.]/g, '-').split('T')[0];
-        const filename = `Employee_Payment_Report_${siteInfo.sitename.replace(/\s+/g, '_')}_${month}_${year}_${timestamp}.pdf`;
+        // Generate unique filename with sitename and full timestamp down to seconds
+        const now = new Date();
+        const timestamp = now.toISOString().replace(/[:.]/g, '-').replace('T', '_').slice(0, -5); // Format: YYYY-MM-DD_HH-MM-SS
+        const sanitizedSiteName = siteInfo.sitename.replace(/[^a-zA-Z0-9]/g, '_'); // Replace any non-alphanumeric chars with underscore
+        const filename = `${sanitizedSiteName}_${month}_${year}_${timestamp}.pdf`;
         const filepath = path.join(__dirname, '../temp', filename);
         
         // Ensure temp directory exists
