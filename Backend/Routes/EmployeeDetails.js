@@ -745,7 +745,11 @@ router.post("/importemployees", authenticateAndTrack, async (req, res) => {
         // );
 
         // Calculate carry forward amount from source employee's closing balance
-        const carryForwardAmount = preserveCarryForward
+        // Only carry forward when importing to a future month (chronologically after source month)
+        const isTargetInFuture = (parseInt(targetYear) > parseInt(sourceYear)) || 
+                                 (parseInt(targetYear) === parseInt(sourceYear) && parseInt(targetMonth) > parseInt(sourceMonth));
+        
+        const carryForwardAmount = preserveCarryForward && isTargetInFuture
           ? sourceEmployee.closing_balance || 0
           : 0;
 
@@ -769,7 +773,9 @@ router.post("/importemployees", authenticateAndTrack, async (req, res) => {
             remark:
               carryForwardAmount > 0
                 ? `Carried forward from ${sourceMonth}/${sourceYear} - Previous balance: ${carryForwardAmount}`
-                : `New month import from ${sourceMonth}/${sourceYear} - No carry forward`,
+                : isTargetInFuture
+                ? `New month import from ${sourceMonth}/${sourceYear} - No carry forward (zero balance)`
+                : `Import from ${sourceMonth}/${sourceYear} to past month - No carry forward applied`,
             date: new Date(),
           },
           createdBy: importedBy,
@@ -793,7 +799,7 @@ router.post("/importemployees", authenticateAndTrack, async (req, res) => {
             parseInt(targetMonth),
             parseInt(targetYear),
             importedBy,
-            `Employee "${sourceEmployee.name}" imported from ${sourceMonth}/${sourceYear} to ${targetMonth}/${targetYear} by ${importedBy}. Carry forward: ${carryForwardAmount}`,
+            `Employee "${sourceEmployee.name}" imported from ${sourceMonth}/${sourceYear} to ${targetMonth}/${targetYear} by ${importedBy}. ${isTargetInFuture ? `Carry forward: ${carryForwardAmount}` : `Past month import - No carry forward applied`}`,
             {}, // oldEmployeeData (empty for import)
             savedEmployee.toObject() // newEmployeeData
           );
