@@ -1,5 +1,5 @@
 /* Payments Container (Main Wrapper) - Enhanced with Transitions */
-.PaymentsContainer{
+.PaymentsContainer {
   display: flex;
   flex-direction: row;
   height: 100vh;
@@ -22,19 +22,17 @@
 
 /* Ultra Compact Header Section - Enhanced Professional Design */
 .headerUltraCompact {
-  background: linear-gradient(
-    135deg,
-    rgba(255, 255, 255, 0.98) 0%,
-    rgba(248, 250, 252, 0.95) 25%,
-    rgba(241, 245, 249, 0.95) 50%,
-    rgba(248, 250, 252, 0.95) 75%,
-    rgba(255, 255, 255, 0.98) 100%
-  );
+  background: linear-gradient(135deg,
+      rgba(255, 255, 255, 0.98) 0%,
+      rgba(248, 250, 252, 0.95) 25%,
+      rgba(241, 245, 249, 0.95) 50%,
+      rgba(248, 250, 252, 0.95) 75%,
+      rgba(255, 255, 255, 0.98) 100%);
   backdrop-filter: blur(25px);
   -webkit-backdrop-filter: blur(25px);
   border: 1px solid rgba(5, 150, 105, 0.2);
   border-radius: var(--border-radius-xl);
-  box-shadow: 
+  box-shadow:
     0 12px 40px rgba(5, 150, 105, 0.15),
     0 6px 20px rgba(0, 0, 0, 0.08),
     0 2px 8px rgba(5, 150, 105, 0.1),
@@ -58,14 +56,12 @@
   left: 0;
   right: 0;
   height: 3px;
-  background: linear-gradient(
-    90deg,
-    var(--color-primary) 0%,
-    var(--color-secondary) 25%,
-    #0891b2 50%,
-    var(--color-secondary) 75%,
-    var(--color-primary) 100%
-  );
+  background: linear-gradient(90deg,
+      var(--color-primary) 0%,
+      var(--color-secondary) 25%,
+      #0891b2 50%,
+      var(--color-secondary) 75%,
+      var(--color-primary) 100%);
   background-size: 200% 100%;
   animation: shimmer 3s ease-in-out infinite;
   transform: scaleX(0);
@@ -74,8 +70,15 @@
 }
 
 @keyframes shimmer {
-  0%, 100% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
+
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+
+  50% {
+    background-position: 100% 50%;
+  }
 }
 
 .headerUltraCompact:hover::before {
@@ -84,7 +87,7 @@
 
 .headerUltraCompact:hover {
   transform: translateY(-3px);
-  box-shadow: 
+  box-shadow:
     0 16px 50px rgba(5, 150, 105, 0.2),
     0 8px 25px rgba(0, 0, 0, 0.12),
     0 4px 12px rgba(5, 150, 105, 0.15),
@@ -104,12 +107,10 @@
   font-size: var(--font-size-2xl);
   font-weight: var(--font-weight-bold);
   margin: 0 0 var(--space-1) 0;
-  background: linear-gradient(
-    135deg,
-    var(--color-primary) 0%,
-    var(--color-secondary) 50%,
-    var(--color-primary) 100%
-  );
+  background: linear-gradient(135deg,
+      var(--color-primary) 0%,
+      var(--color-secondary) 50%,
+      var(--color-primary) 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -274,7 +275,7 @@
   transition: color 0.2s ease;
 }
 
-.searchInputMini:focus + .searchIconMini {
+.searchInputMini:focus+.searchIconMini {
   color: var(--color-accent-primary);
 }
 
@@ -304,27 +305,27 @@
     gap: 0.5rem;
     padding: 0.5rem;
   }
-  
+
   .titleCompact {
     font-size: 1rem;
     text-align: center;
     white-space: normal;
   }
-  
+
   .statsRowCompact {
     justify-content: center;
     gap: 0.5rem;
   }
-  
+
   .statItemCompact {
     min-width: 50px;
   }
-  
+
   .controlsMini {
     flex-direction: column;
     gap: 0.5rem;
   }
-  
+
   .searchBoxMini {
     max-width: none;
     margin: 0;
@@ -407,7 +408,7 @@
     margin: var(--space-sm) 0;
     padding: var(--space-sm);
   }
-  
+
   .dateFilters {
     gap: var(--space-sm);
     flex-direction: column;
@@ -669,7 +670,7 @@
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-medium);
   cursor: pointer;
-  transition: 
+  transition:
     all var(--transition-duration-normal) var(--transition-timing-spring),
     transform var(--transition-duration-fast) var(--transition-timing-spring),
     box-shadow var(--transition-duration-normal) var(--transition-timing-ease);
@@ -689,7 +690,7 @@
   left: -100%;
   width: 100%;
   height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
   transition: left var(--transition-duration-slow) var(--transition-timing-ease);
 }
 
@@ -740,7 +741,7 @@
   background: #fef3c7;
   color: #92400e;
   border: 1px solid #fbbf24;
-  transition: 
+  transition:
     all var(--transition-duration-normal) var(--transition-timing-spring),
     transform var(--transition-duration-fast) var(--transition-timing-spring),
     box-shadow var(--transition-duration-normal) var(--transition-timing-ease);
@@ -758,7 +759,7 @@
   background: #fee2e2;
   color: #991b1b;
   border: 1px solid #f87171;
-  transition: 
+  transition:
     all var(--transition-duration-normal) var(--transition-timing-spring),
     transform var(--transition-duration-fast) var(--transition-timing-spring),
     box-shadow var(--transition-duration-normal) var(--transition-timing-ease);
@@ -778,7 +779,7 @@
   opacity: 0;
   max-height: 0;
   overflow: hidden;
-  transition: 
+  transition:
     max-height var(--transition-duration-slow) var(--transition-timing-spring),
     opacity var(--transition-duration-normal) var(--transition-timing-ease),
     background-color var(--transition-duration-fast) var(--transition-timing-ease);
@@ -791,16 +792,19 @@
     max-height: 0;
     transform: translateY(-15px) scale(0.98);
   }
+
   30% {
     opacity: 0.4;
     max-height: 150px;
     transform: translateY(-8px) scale(0.99);
   }
+
   70% {
     opacity: 0.8;
     max-height: 400px;
     transform: translateY(-2px) scale(1);
   }
+
   100% {
     opacity: 1;
     max-height: 1000px;
@@ -815,16 +819,19 @@
     max-height: 1000px;
     transform: translateY(0) scale(1);
   }
+
   30% {
     opacity: 0.8;
     max-height: 300px;
     transform: translateY(-2px) scale(1);
   }
+
   70% {
     opacity: 0.3;
     max-height: 80px;
     transform: translateY(-8px) scale(0.99);
   }
+
   100% {
     opacity: 0;
     max-height: 0;
@@ -836,7 +843,7 @@
   padding: 1.5rem;
   border-top: 1px solid var(--color-border-medium);
   transform: translateY(0);
-  transition: 
+  transition:
     transform var(--transition-duration-normal) var(--transition-timing-spring),
     padding var(--transition-duration-fast) var(--transition-timing-ease),
     border-color var(--transition-duration-fast) var(--transition-timing-ease);
@@ -857,6 +864,7 @@
     opacity: 0;
     transform: translateX(-10px);
   }
+
   100% {
     opacity: 1;
     transform: translateX(0);
@@ -876,6 +884,7 @@
     opacity: 0;
     transform: translateY(10px);
   }
+
   100% {
     opacity: 1;
     transform: translateY(0);
@@ -887,7 +896,7 @@
   padding: 1rem;
   border-radius: var(--border-radius-sm);
   border: 1px solid var(--color-border-light);
-  transition: 
+  transition:
     border-color var(--transition-duration-normal) var(--transition-timing-ease),
     transform var(--transition-duration-fast) var(--transition-timing-spring),
     box-shadow var(--transition-duration-normal) var(--transition-timing-ease),
@@ -902,6 +911,7 @@
     opacity: 0;
     transform: translateY(15px) scale(0.98);
   }
+
   100% {
     opacity: 1;
     transform: translateY(0) scale(1);
@@ -937,13 +947,15 @@
 
 .detailAmountPositive {
   font-weight: var(--font-weight-semibold);
-  color: var(--color-success); /* Green color for bonuses/additional wages */
+  color: var(--color-success);
+  /* Green color for bonuses/additional wages */
   font-size: 0.95rem;
 }
 
 .detailAmountNegative {
   font-weight: var(--font-weight-semibold);
-  color: var(--color-error); /* Red color for advances */
+  color: var(--color-error);
+  /* Red color for advances */
   font-size: 0.95rem;
 }
 
@@ -1000,8 +1012,15 @@
 
 /* Fade animation for loading text */
 @keyframes fadeInOut {
-  0%, 100% { opacity: 0.7; }
-  50% { opacity: 1; }
+
+  0%,
+  100% {
+    opacity: 0.7;
+  }
+
+  50% {
+    opacity: 1;
+  }
 }
 
 .spinner {
@@ -1018,8 +1037,13 @@
 
 /* Simple spinner animation - performance optimized */
 @keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+  0% {
+    transform: rotate(0deg);
+  }
+
+  100% {
+    transform: rotate(360deg);
+  }
 }
 
 /* No Results State */
@@ -1054,16 +1078,16 @@
   .paymentsTable {
     font-size: 0.8rem;
   }
-  
+
   .paymentsTable th,
   .paymentsTable td {
     padding: 0.75rem 0.5rem;
   }
-  
+
   .cellWithDetails {
     gap: 0.25rem;
   }
-  
+
   .detailBtn {
     padding: 0.2rem 0.4rem;
     font-size: 0.65rem;
@@ -1074,28 +1098,28 @@
   .container {
     padding: 1rem;
   }
-  
+
   .header {
     padding: 1.5rem;
   }
-  
+
   .title {
     font-size: 1.75rem;
   }
-  
+
   .headerStats {
     grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   }
-  
+
   .statCard {
     padding: 1rem;
   }
-  
+
   .controls {
     flex-direction: column;
     align-items: stretch;
   }
-  
+
   .searchBox {
     max-width: none;
   }
@@ -1105,35 +1129,36 @@
   .tableContainer {
     overflow-x: auto;
   }
-  
+
   .paymentsTable {
     min-width: 900px;
     font-size: 0.75rem;
   }
-  
+
   .cellWithDetails {
     flex-direction: column;
     align-items: flex-start;
     gap: 0.25rem;
   }
-  
+
   .detailBtn {
     align-self: flex-end;
     font-size: 0.6rem;
     padding: 0.15rem 0.3rem;
   }
-  
+
   .advanceCell,
   .deductionCell {
     min-width: 120px;
   }
-  
+
   .detailsGrid {
     grid-template-columns: 1fr;
   }
-  
+
   .expandedContent {
-    padding: 1rem;  }
+    padding: 1rem;
+  }
 }
 
 /* Header Responsive Design */
@@ -1141,25 +1166,25 @@
   .header {
     padding: 0.75rem 1rem;
   }
-  
+
   .title {
     font-size: 1.5rem;
   }
-  
+
   .titleIcon {
     font-size: 1.25rem;
     margin-right: 0.375rem;
   }
-  
+
   .headerStats {
     grid-template-columns: 1fr;
     gap: 0.75rem;
   }
-  
+
   .statCard {
     padding: 0.75rem;
   }
-  
+
   .statValue {
     font-size: 1.125rem;
   }
@@ -1169,11 +1194,11 @@
   .header {
     padding: 1.25rem 1.5rem;
   }
-  
+
   .title {
     font-size: 2rem;
   }
-  
+
   .titleIcon {
     font-size: 1.75rem;
   }
@@ -1181,19 +1206,20 @@
 
 /* Print Styles */
 @media print {
+
   .controls,
   .detailBtn {
     display: none;
   }
-  
+
   .expandedRow {
     background: white !important;
   }
-  
+
   .paymentsTable {
     font-size: 0.7rem;
   }
-  
+
   .cellWithDetails {
     justify-content: flex-start;
   }
@@ -1446,7 +1472,8 @@
   padding: var(--space-sm) var(--space-lg);
   background: var(--color-bg-secondary);
   color: var(--color-text-default);
-  border: 1px solid var(--color-border-medium);  border-radius: var(--border-radius-md);
+  border: 1px solid var(--color-border-medium);
+  border-radius: var(--border-radius-md);
   cursor: pointer;
   transition: all 0.3s;
   font-weight: var(--font-weight-medium);
@@ -1643,7 +1670,8 @@
   border: 1px solid var(--color-border-focus);
   border-radius: var(--border-radius-sm);
   background: var(--color-bg-input);
-  color: var(--color-text-default);  font-size: var(--font-size-sm);
+  color: var(--color-text-default);
+  font-size: var(--font-size-sm);
   transition: all 0.3s;
   box-sizing: border-box;
 }
@@ -1660,7 +1688,9 @@
   align-items: center;
 }
 
-.editBtn, .saveBtn, .cancelBtn {
+.editBtn,
+.saveBtn,
+.cancelBtn {
   padding: 0.5rem;
   border: none;
   border-radius: var(--border-radius-sm);
@@ -1746,7 +1776,8 @@
   color: white;
   border: none;
   border-radius: var(--border-radius-sm);
-  cursor: pointer;  font-size: var(--font-size-sm);
+  cursor: pointer;
+  font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);
   transition: all 0.3s;
 }
@@ -1995,17 +2026,17 @@
     font-size: 0.75rem;
     padding: 0.3rem;
   }
-  
+
   .editDetailInput {
     max-width: 100px;
     min-width: 70px;
   }
-  
+
   .editDetailDate {
     min-width: 100px;
     max-width: 120px;
   }
-  
+
   .detailsGrid {
     grid-template-columns: 1fr;
     gap: 0.75rem;
@@ -2016,55 +2047,55 @@
   .container {
     padding: 0.5rem;
   }
-  
+
   .searchBox {
     max-width: 100%;
   }
-  
+
   .searchInput {
     font-size: 0.875rem;
     padding: 0.6rem 2rem 0.6rem 0.8rem;
   }
-  
+
   .editInput {
     max-width: 80px;
     font-size: 0.7rem;
     padding: 0.25rem;
   }
-  
+
   .editDetailHeader {
     flex-direction: column;
     align-items: stretch;
     gap: 0.5rem;
   }
-  
+
   .editDetailInput,
   .editDetailDate {
     width: 100%;
     max-width: 100%;
   }
-  
+
   .confirmDialog {
     margin: 1rem;
     padding: 1.5rem;
     width: calc(100% - 2rem);
   }
-  
+
   .dialogActions {
     flex-direction: column;
     gap: 0.75rem;
   }
-  
+
   .confirmBtn,
   .cancelDialogBtn {
     width: 100%;
   }
-  
+
   .tableContainer {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
   }
-  
+
   .paymentsTable {
     min-width: 1000px;
   }
@@ -2075,18 +2106,18 @@
     max-width: 70px;
     font-size: 0.65rem;
   }
-  
+
   .paymentsTable th,
   .paymentsTable td {
     padding: 0.5rem 0.25rem;
     font-size: 0.7rem;
   }
-  
+
   .detailBtn {
     font-size: 0.55rem;
     padding: 0.1rem 0.25rem;
   }
-  
+
   .expandedContent {
     padding: 0.75rem;
   }
@@ -2321,7 +2352,8 @@
   display: inline-flex;
   align-items: center;
   gap: var(--space-xs);
-  padding: var(--space-xs) var(--space-sm);  background: var(--color-bg-secondary);
+  padding: var(--space-xs) var(--space-sm);
+  background: var(--color-bg-secondary);
   border: 1px solid var(--color-border-medium);
   border-radius: var(--border-radius-md);
   color: var(--color-text-default);
@@ -2413,7 +2445,7 @@
   .debugContent {
     grid-template-columns: 1fr;
   }
-  
+
   .debugPanel {
     padding: var(--space-sm);
   }
@@ -2465,18 +2497,18 @@
     flex-direction: column;
     align-items: stretch;
   }
-  
+
   .leftControls,
   .rightControls {
     justify-content: center;
   }
-  
+
   .titleRow {
     flex-direction: column;
     align-items: stretch;
     gap: 0.5rem;
   }
-  
+
   .headerStats {
     justify-content: center;
   }
@@ -2522,5 +2554,55 @@
 .pdfDownloadButton.loading:hover {
   background: var(--color-accent-primary);
   color: white;
-  border-color: var(--color-accent-primary);
+}
+
+/* Download Buttons Container */
+.downloadButtons {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+/* Excel Download Button */
+.excelDownloadButton {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.25rem 0.6rem;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--border-radius-sm);
+  cursor: pointer;
+  font-size: 0.8rem;
+  color: var(--color-text-default);
+  white-space: nowrap;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  font-weight: var(--font-weight-medium);
+}
+
+.excelDownloadButton:hover:not(:disabled) {
+  background: var(--color-success);
+  color: white;
+  border-color: var(--color-success);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(16, 185, 129, 0.25);
+}
+
+.excelDownloadButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.excelDownloadButton.loading {
+  background: var(--color-success);
+  color: white;
+  border-color: var(--color-success);
+  cursor: wait;
+}
+
+.excelDownloadButton.loading:hover {
+  background: var(--color-success);
+  color: white;
 }

@@ -1,13 +1,9 @@
 const express = require("express");
-const path = require("path");
-const fs = require("fs");
 const { authenticateAndTrack } = require("../Middleware/usageTracker");
+const { generateFullPayrollReportWithRealData } = require("../Utils/generatePayrollWithRealData");
 
-// Router for Excel (future) report generation
-// NOTE: This is a placeholder implementation that currently returns a static PDF file
-// so the frontend can integrate an "Excel" download workflow now. When real Excel
-// generation is implemented, replace the placeholder logic inside generateAndSendExcel.
-// Existing code elsewhere is intentionally untouched per project instructions.
+// Router for Excel report generation
+// Generates actual Excel files with payroll data using ExcelJS
 const router = express.Router();
 
 /**
@@ -24,67 +20,81 @@ function validateRequest(body) {
 }
 
 /**
- * Placeholder for future Excel workbook creation.
- * When implementing, build a workbook (e.g. with exceljs) and return a Buffer.
- * For now, we simply read and return the existing sample PDF file as a stand‑in.
- * @param {object} params
- * @returns {Promise<{buffer: Buffer, filename: string, mimetype: string, isPlaceholder: boolean}>}
+ * Generate Excel payroll report with real data from database
+ * @param {object} params - Report parameters
+ * @param {string} params.siteID - Site identifier
+ * @param {number} params.month - Month (1-12)
+ * @param {number} params.year - Year
+ * @param {string} params.calculationType - Calculation type ('default' or 'special')
+ * @returns {Promise<{buffer: Buffer, filename: string, mimetype: string}>}
  */
 async function generateAndSendExcel(params) {
-  // FUTURE IMPLEMENTATION PLAN (summary):
-  // 1. Fetch employees & site info (reuse logic from pdfReports via refactor into shared util if permitted).
-  // 2. Build workbook with summary sheet + per-employee or pivot sheet.
-  // 3. Stream workbook to response to avoid large memory usage.
-  // 4. Apply consistent auth & usage tracking (already in place on the route).
-
-  // CURRENT PLACEHOLDER: return the static PDF file to unblock frontend integration.
-  const samplePdfPath = path.join(__dirname, "..", "Main_Office_20250823_183252.pdf");
-  if (!fs.existsSync(samplePdfPath)) {
-    throw new Error("Placeholder PDF file not found on server.");
-  }
-  const buffer = fs.readFileSync(samplePdfPath);
+  const { siteID, month, year, calculationType = 'default' } = params;
   
-  // Use consistent naming pattern: sitename_month_year_timestamp
+  // Generate the Excel buffer using real data from database
+  const buffer = await generateFullPayrollReportWithRealData({ 
+    siteID, 
+    month, 
+    year, 
+    calculationType 
+  });
+  
+  // Create filename with timestamp
   const now = new Date();
-  const timestamp = now.toISOString().replace(/[:.]/g, '-').replace('T', '_').slice(0, -5); // Format: YYYY-MM-DD_HH-MM-SS
-  const filename = `Excel_Report_Placeholder_${timestamp}.pdf`; // Keep pdf extension to avoid misleading clients
-  return { buffer, filename, mimetype: "application/pdf", isPlaceholder: true };
+  const timestamp = now.toISOString().replace(/[:.]/g, '-').replace('T', '_').slice(0, -5);
+  const monthName = getMonthName(month);
+  const filename = `Payroll_Report_${siteID}_${monthName}_${year}_${timestamp}.xlsx`;
+  
+  return { 
+    buffer, 
+    filename, 
+    mimetype: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+  };
+}
+
+/**
+ * Helper function to get month name
+ */
+function getMonthName(month) {
+  const months = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ];
+  return months[month - 1] || 'Unknown';
 }
 
 // POST /api/reports/generate-excel-report
-// Mirrors the PDF route signature so frontend can swap endpoints easily later.
+// Generates actual Excel payroll reports with mock data
 router.post("/generate-excel-report", authenticateAndTrack, async (req, res) => {
   try {
-    // Basic param validation (even though they are unused right now)
+    // Basic param validation
     const validationError = validateRequest(req.body || {});
     if (validationError) {
       return res.status(400).json({ success: false, error: validationError });
     }
 
-    // Role based access check (copied in simplified form for parity & future expansion)
+    // Role based access check
     const userRole = req.user?.role?.toLowerCase();
     if (!userRole || !["supervisor", "admin"].includes(userRole)) {
       return res.status(403).json({ success: false, error: "Forbidden. You do not have access to this resource." });
     }
 
-    // NOTE: For supervisors / admins we could replicate site access checks here.
-    // To keep this placeholder light and non-invasive, we *optionally* enforce the same
-    // check pattern later when real data access is added.
+    console.log(`📊 Generating Excel report for ${req.body.siteID} - ${req.body.month}/${req.body.year}`);
 
     const result = await generateAndSendExcel(req.body);
 
-    // Set headers (include a custom header so clients know it's a placeholder)
+    // Set headers for Excel file download
     res.setHeader("Content-Type", result.mimetype);
     res.setHeader("Content-Disposition", `attachment; filename="${result.filename}"`);
-    if (result.isPlaceholder) res.setHeader("X-Placeholder-Report", "true");
     res.setHeader("Cache-Control", "no-store");
 
+    console.log(`✅ Excel report generated successfully: ${result.filename}`);
     return res.send(result.buffer);
   } catch (err) {
-    console.error("❌ Error generating Excel (placeholder) report:", err);
+    console.error("❌ Error generating Excel report:", err);
     return res.status(500).json({
       success: false,
-      error: "Error generating Excel report (placeholder).",
+      error: "Error generating Excel report.",
       message: err.message
     });
   }

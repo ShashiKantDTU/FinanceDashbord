@@ -8,6 +8,7 @@ import { api } from '../utils/api';
 import { FaCalendarAlt } from 'react-icons/fa';
 import CustomSpinner from '../components/CustomSpinner';
 import { downloadPDFReport, getEstimatedPDFSize } from '../utils/pdfDownloader';
+import { downloadExcelReport, getEstimatedExcelSize } from '../utils/excelDownloader';
 
 const Payments = () => {
     const { user } = useAuth();
@@ -22,6 +23,7 @@ const Payments = () => {
     const [remarkText, setRemarkText] = useState(''); // Add remark state
     const [isUpdating, setIsUpdating] = useState(false); // Loading state for update operation
     const [isDownloadingPDF, setIsDownloadingPDF] = useState(false); // Loading state for PDF download
+    const [isDownloadingExcel, setIsDownloadingExcel] = useState(false); // Loading state for Excel download
 
 
     const { siteID } = useParams(); // Get siteID from URL parameters
@@ -680,7 +682,44 @@ const Payments = () => {
         } finally {
             setIsDownloadingPDF(false);
         }
-    }, [siteID, selectedMonth, selectedYear, employeeData, showError, showSuccess, isDownloadingPDF, setIsDownloadingPDF]);
+    }, [siteID, selectedMonth, selectedYear, employeeData, showError, showSuccess, isDownloadingPDF]);
+
+    // Excel download handler - Modern server-side Excel generation
+    const handleDownloadExcel = useCallback(async () => {
+        if (!employeeData || employeeData.length === 0) {
+            showError('No employee data available to generate Excel');
+            return;
+        }
+
+        if (isDownloadingExcel) {
+            return; // Prevent multiple downloads
+        }
+
+        setIsDownloadingExcel(true);
+
+        try {
+            await downloadExcelReport({
+                siteID,
+                month: selectedMonth,
+                year: selectedYear,
+                calculationType: 'default', // You can make this configurable
+                onProgress: (message) => {
+                    // Show progress message
+                    showSuccess(message);
+                },
+                onSuccess: (filename) => {
+                    showSuccess(`Excel report downloaded successfully: ${filename}`);
+                },
+                onError: (errorMessage) => {
+                    showError(errorMessage);
+                }
+            });
+        } finally {
+            setIsDownloadingExcel(false);
+        }
+    }, [siteID, selectedMonth, selectedYear, employeeData, showError, showSuccess, isDownloadingExcel]);
+
+
 
     if (loading) {
         return (
@@ -856,15 +895,27 @@ const Payments = () => {
                     </div>                    <div className={styles.resultCountMini}>
                         {sortedEmployees.length}/{employeeData.length}
                     </div>
-                    <button
-                        type="button"
-                        onClick={handleDownloadPDF}
-                        disabled={loading || employeeData.length === 0 || isDownloadingPDF}
-                        className={`${styles.pdfDownloadButton} ${isDownloadingPDF ? styles.loading : ''}`}
-                        title={isDownloadingPDF ? 'Generating PDF...' : `Download PDF Report - ${employeeData.length} employees (${getEstimatedPDFSize(employeeData.length)})`}
-                    >
-                        {isDownloadingPDF ? '⏳ Generating...' : '📄 PDF'}
-                    </button>
+                    <div className={styles.downloadButtons}>
+                        <button
+                            type="button"
+                            onClick={handleDownloadPDF}
+                            disabled={loading || employeeData.length === 0 || isDownloadingPDF || isDownloadingExcel}
+                            className={`${styles.pdfDownloadButton} ${isDownloadingPDF ? styles.loading : ''}`}
+                            title={isDownloadingPDF ? 'Generating PDF...' : `Download PDF Report - ${employeeData.length} employees (${getEstimatedPDFSize(employeeData.length)})`}
+                        >
+                            {isDownloadingPDF ? '⏳ PDF...' : '📄 PDF'}
+                        </button>
+                        
+                        <button
+                            type="button"
+                            onClick={handleDownloadExcel}
+                            disabled={loading || employeeData.length === 0 || isDownloadingExcel || isDownloadingPDF}
+                            className={`${styles.excelDownloadButton} ${isDownloadingExcel ? styles.loading : ''}`}
+                            title={isDownloadingExcel ? 'Generating Excel...' : `Download Excel Report - ${employeeData.length} employees (${getEstimatedExcelSize(employeeData.length)})`}
+                        >
+                            {isDownloadingExcel ? '⏳ Excel...' : '📊 Excel'}
+                        </button>
+                    </div>
                 </div>
 
                 <div className={styles.tableContainer}>
