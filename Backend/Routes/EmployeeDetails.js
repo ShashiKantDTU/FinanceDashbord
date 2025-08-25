@@ -746,9 +746,9 @@ router.post("/importemployees", authenticateAndTrack, async (req, res) => {
 
         // Calculate carry forward amount from source employee's closing balance
         // Only carry forward when importing to a future month (chronologically after source month)
-        const isTargetInFuture = (parseInt(targetYear) > parseInt(sourceYear)) || 
-                                 (parseInt(targetYear) === parseInt(sourceYear) && parseInt(targetMonth) > parseInt(sourceMonth));
-        
+        const isTargetInFuture = (parseInt(targetYear) > parseInt(sourceYear)) ||
+          (parseInt(targetYear) === parseInt(sourceYear) && parseInt(targetMonth) > parseInt(sourceMonth));
+
         const carryForwardAmount = preserveCarryForward && isTargetInFuture
           ? sourceEmployee.closing_balance || 0
           : 0;
@@ -774,8 +774,8 @@ router.post("/importemployees", authenticateAndTrack, async (req, res) => {
               carryForwardAmount > 0
                 ? `Carried forward from ${sourceMonth}/${sourceYear} - Previous balance: ${carryForwardAmount}`
                 : isTargetInFuture
-                ? `New month import from ${sourceMonth}/${sourceYear} - No carry forward (zero balance)`
-                : `Import from ${sourceMonth}/${sourceYear} to past month - No carry forward applied`,
+                  ? `New month import from ${sourceMonth}/${sourceYear} - No carry forward (zero balance)`
+                  : `Import from ${sourceMonth}/${sourceYear} to past month - No carry forward applied`,
             date: new Date(),
           },
           createdBy: importedBy,
@@ -793,7 +793,7 @@ router.post("/importemployees", authenticateAndTrack, async (req, res) => {
 
         // Track the import using Optimized Change Tracker
         try {
-          const changeTrackingResult = await trackOptimizedChanges(
+          const changeTrackingResult = trackOptimizedChanges(
             siteID.trim(),
             sourceEmployee.empid,
             parseInt(targetMonth),
