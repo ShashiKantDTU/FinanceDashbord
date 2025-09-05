@@ -284,6 +284,8 @@ router.post("/login", async (req, res) => {
               siteStatus: site.isActive ? "Active" : "Inactive"
             },
           });
+        }else{
+          return res.status(400).json({ message: "Invalid email or password" });
         }
       } else {
         return res.status(400).json({ message: "Invalid email or password" });
