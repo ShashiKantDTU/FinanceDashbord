@@ -115,10 +115,111 @@ router.post("/otplogin", async (req, res) => {
 })
 
 
+router.post("/truecallerlogin", async (req, res) => {
+  try {
+    const { authorizationCode, codeVerifier } = req.body;
+    console.log("authorization code " + authorizationCode)
+
+    if (!authorizationCode || !codeVerifier) {
+      return res.status(400).json({
+        success: false,
+        message: 'Authorization code and verifier are required.'
+      });
+    }
+
+    // Use the URL from the documentation you have
+    const tokenUrl = 'https://oauth-account-noneu.truecaller.com/v1/token';
+
+    const requestBody = new URLSearchParams({
+      grant_type: 'authorization_code',
+      client_id: process.env.TRUECALLER_CLIENT_ID,
+      code: authorizationCode,
+      code_verifier: codeVerifier,
+      // The redirect_uri is NOT needed for the native SDK flow
+    });
+
+    const tokenResponse = await axios.post(tokenUrl, requestBody, {
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+    });
+
+    const accessToken = tokenResponse.data.access_token;
+
+    // The rest of the logic remains the same...
+    const userProfileUrl = 'https://oauth-account-noneu.truecaller.com/v1/userinfo';
+    const userProfileResponse = await axios.get(userProfileUrl, {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+      },
+    });
+
+    const verifiedUserData = userProfileResponse.data;
+    const phoneNumber = '+'+verifiedUserData.phone_number;
+    console.log("verified user data", verifiedUserData)
+    console.log("Searching for phone number:", phoneNumber);
+    console.log("Phone number type:", typeof phoneNumber);
+
+    // --- YOUR DATABASE AND JWT LOGIC HERE ---
+    // check if user exist in db
+    let user = await User.findOne({ phoneNumber: phoneNumber });
+    console.log("Found existing user:", user ? "Yes" : "No");
+
+
+    if (!user) {
+      // Create user if doesn't exist (auto-registration)
+      // Grant 2-month pro trial to new users
+      const trialExpiryDate = new Date();
+      trialExpiryDate.setMonth(trialExpiryDate.getMonth() + 2);
+      const name = verifiedUserData.given_name + " " + verifiedUserData.family_name || phoneNumber;
+      user = new User({
+        name: name,
+        phoneNumber: phoneNumber,
+        plan: 'pro',
+        isTrial: true,
+        planExpiresAt: trialExpiryDate,
+        planSource: 'manual',
+        planActivatedAt: new Date()
+      });
+      await user.save();
+      // console.log(`New mobile user created: ${firebaseUid}`);
+    }
+
+    // Generate JWT token for your app
+    const jwtToken = generateToken({
+      id: user._id,
+      name: user.name,
+      role: "Admin",
+    });
+    // console.log(`JWT token generated for user in mobile otp route: ${user._id}`);
+    return res.status(200).json({
+      message: "OTP login successful",
+      token: jwtToken,
+      user: {
+        id: user._id,
+        name: user.name,
+        role: "Admin",
+      }
+    })
+
+  } catch (error) {
+    console.error("Truecaller login error:", error.response ? error.response.data : error.message);
+
+    return res.status(500).json({
+      success: false,
+      message: 'An error occurred during the Truecaller login process.',
+    });
+  }
+});
+
+
 // Login route
 router.post("/login", async (req, res) => {
   const { email, password } = req.body;
-
+  console.log("Login route called");
+  if (!email || !password) {
+    return res.status(400).json({ message: "Email and password are required" });
+  }
   try {
     // Find user by email
     const user = await User.findOne({ email });
@@ -394,7 +495,7 @@ router.get("/verify", authenticateToken, async (req, res) => {
         const dbUser = await User.findById(baseUser.id).select("email name").lean();
         if (dbUser) {
           baseUser.email = baseUser.email || dbUser.email;
-            // prefer token name if present
+          // prefer token name if present
           if (!baseUser.name) baseUser.name = dbUser.name;
         }
       } catch (_) {
@@ -431,10 +532,10 @@ router.get("/verify", authenticateToken, async (req, res) => {
           }
         } else {
           // Supervisor record missing (edge case — still return required fields)
-            baseUser.siteid = null;
-            baseUser.siteName = "Unknown Site";
-            baseUser.isActive = false;
-            baseUser.siteStatus = "Inactive";
+          baseUser.siteid = null;
+          baseUser.siteName = "Unknown Site";
+          baseUser.isActive = false;
+          baseUser.siteStatus = "Inactive";
         }
       } catch (e) {
         // On any lookup error, still respond successfully (token already validated)
@@ -460,82 +561,82 @@ router.get("/verify", authenticateToken, async (req, res) => {
 
 
 //  supervisor credentials route
-router.post("/supervisor-credentials/create",authenticateToken, async (req, res) => {
-    try {
-      // Check if user is authenticated
-      if (
-        !req.user ||
-        !req.user.id ||
-        !req.user.role ||
-        req.user.role !== "Admin"
-      ) {
-        return res.status(401).json({ message: "Unauthorized" });
-      }
-      // Check if supervisor name is provided
-      if (!req.body.name || req.body.name.trim() === "" || !req.body.siteId) {
-        return res
-          .status(400)
-          .json({ message: "Supervisor name and site ID are required" });
-      }
-
-      const supervisorName = req.body.name;
-      const siteId = req.body.siteId;
-
-      // Check if siteId is valid
-      const site = await Site.findById(siteId);
-      if (!site) {
-        return res.status(404).json({ message: "Site not found" });
-      }
-
-      // Find user by ID
-      const user = await User.findById(req.user.id);
-      if (!user) {
-        return res.status(404).json({ message: "User not found" });
-      }
-
-      // Generate supervisor credentials
-      const credentials = await generateSupervisorCredentials(supervisorName);
-
-      // add the supervisor to database
-      const newSupervisor = new Supervisor({
-        userId: credentials.username,
-        password: credentials.password,
-        profileName: supervisorName,
-        createdBy: user.name,
-        site: siteId,
-        owner: user
-      });
-
-      await newSupervisor.save();
-
-      // add this credentials to the user
-      user.supervisors.push(newSupervisor);
-      await user.save();
-
-      // Create a clean supervisor object without circular references for response
-      const supervisorResponse = {
-        _id: newSupervisor._id,
-        userId: newSupervisor.userId,
-        password: newSupervisor.password,
-        profileName: newSupervisor.profileName,
-        createdBy: newSupervisor.createdBy,
-        site: newSupervisor.site,
-        status: newSupervisor.status,
-        createdAt: newSupervisor.createdAt,
-        updatedAt: newSupervisor.updatedAt
-      };
-
-      res.status(201).json({
-        message: "Supervisor credentials created successfully",
-        supervisor: supervisorResponse,
-      });
-    } catch (error) {
-      console.error("Error fetching supervisor credentials:", error);
-      res
-        .status(500)
-        .json({ message: "Error fetching supervisor credentials", error });
+router.post("/supervisor-credentials/create", authenticateToken, async (req, res) => {
+  try {
+    // Check if user is authenticated
+    if (
+      !req.user ||
+      !req.user.id ||
+      !req.user.role ||
+      req.user.role !== "Admin"
+    ) {
+      return res.status(401).json({ message: "Unauthorized" });
     }
+    // Check if supervisor name is provided
+    if (!req.body.name || req.body.name.trim() === "" || !req.body.siteId) {
+      return res
+        .status(400)
+        .json({ message: "Supervisor name and site ID are required" });
+    }
+
+    const supervisorName = req.body.name;
+    const siteId = req.body.siteId;
+
+    // Check if siteId is valid
+    const site = await Site.findById(siteId);
+    if (!site) {
+      return res.status(404).json({ message: "Site not found" });
+    }
+
+    // Find user by ID
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // Generate supervisor credentials
+    const credentials = await generateSupervisorCredentials(supervisorName);
+
+    // add the supervisor to database
+    const newSupervisor = new Supervisor({
+      userId: credentials.username,
+      password: credentials.password,
+      profileName: supervisorName,
+      createdBy: user.name,
+      site: siteId,
+      owner: user
+    });
+
+    await newSupervisor.save();
+
+    // add this credentials to the user
+    user.supervisors.push(newSupervisor);
+    await user.save();
+
+    // Create a clean supervisor object without circular references for response
+    const supervisorResponse = {
+      _id: newSupervisor._id,
+      userId: newSupervisor.userId,
+      password: newSupervisor.password,
+      profileName: newSupervisor.profileName,
+      createdBy: newSupervisor.createdBy,
+      site: newSupervisor.site,
+      status: newSupervisor.status,
+      createdAt: newSupervisor.createdAt,
+      updatedAt: newSupervisor.updatedAt
+    };
+
+    res.status(201).json({
+      message: "Supervisor credentials created successfully",
+      supervisor: supervisorResponse,
+    });
+  } catch (error) {
+    console.error("Error fetching supervisor credentials:", error);
+    res
+      .status(500)
+      .json({ message: "Error fetching supervisor credentials", error });
   }
+}
 );
 
 // add a detailed comment to explain the delete route explaining how to use it in frontend

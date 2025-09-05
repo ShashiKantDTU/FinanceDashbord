@@ -28,14 +28,14 @@ async function fetchEmployeeData(siteID, month, year, calculationType = 'default
                     year: parseInt(year)
                 }
             },
-            
+
             // Stage 2: Perform Initial Calculations
             {
                 $addFields: {
                     totalPayouts: { $sum: "$payouts.value" },
                     totalAdditionalReqPays: { $sum: "$additional_req_pays.value" },
                     carryForward: { $ifNull: ["$carry_forwarded.value", 0] },
-                    
+
                     totalDays: {
                         $size: {
                             $filter: {
@@ -63,7 +63,7 @@ async function fetchEmployeeData(siteID, month, year, calculationType = 'default
                     }
                 }
             },
-            
+
             // Stage 3: Calculate overtime days
             {
                 $addFields: {
@@ -81,7 +81,7 @@ async function fetchEmployeeData(siteID, month, year, calculationType = 'default
                     }
                 }
             },
-            
+
             // Stage 4: Calculate final values
             {
                 $addFields: {
@@ -159,13 +159,13 @@ function generateHeader(doc, reportData) {
         .fontSize(22)
         .font('Helvetica-Bold')
         .text(reportData.siteName.toUpperCase(), 30, 25);
-    
+
     // Subtitle - Employee Payment Report
     doc.fillColor('#2d3748')
         .fontSize(16)
         .font('Helvetica-Bold')
         .text('EMPLOYEE PAYMENT REPORT', 30, 50);
-    
+
     // Report metadata in right column
     doc.fillColor('#4a5568')
         .fontSize(11)
@@ -180,8 +180,8 @@ function generateHeader(doc, reportData) {
 
     // Simplified single separator bar (replaces 3 gradient rectangles for size optimization)
     doc.fillColor('#2b6cb0')
-       .rect(30, 90, 810, 2)
-       .fill();
+        .rect(30, 90, 810, 2)
+        .fill();
 }
 
 /**
@@ -219,20 +219,20 @@ function generateEmployeeTable(doc, reportData) {
  */
 function generateTableHeader(doc, y) {
     doc.fillColor('#2c3e50')
-       .font('Helvetica-Bold')
-       .fontSize(9)
-       .text('S.No', 30, y, { width: 30, align: 'center' })
-       .text('EMP ID', 65, y, { width: 50 })
-       .text('Employee Name', 120, y, { width: 140 })
-       .text('P', 265, y, { width: 25, align: 'center' })
-       .text('OT', 295, y, { width: 25, align: 'center' })
-       .text('Rate', 325, y, { width: 45, align: 'right' })
-       .text('Gross Payment', 375, y, { width: 80, align: 'right' })
-       .text('Advances', 460, y, { width: 75, align: 'right' })
-       .text('Bonus', 540, y, { width: 60, align: 'right' })
-       .text('Prev Balance', 605, y, { width: 75, align: 'right' })
-       .text('Final Payment', 685, y, { width: 80, align: 'right' });
-    
+        .font('Helvetica-Bold')
+        .fontSize(9)
+        .text('S.No', 30, y, { width: 30, align: 'center' })
+        .text('EMP ID', 65, y, { width: 50 })
+        .text('Employee Name', 120, y, { width: 140 })
+        .text('P', 265, y, { width: 25, align: 'center' })
+        .text('OT', 295, y, { width: 25, align: 'center' })
+        .text('Rate', 325, y, { width: 45, align: 'right' })
+        .text('Gross Payment', 375, y, { width: 80, align: 'right' })
+        .text('Advances', 460, y, { width: 75, align: 'right' })
+        .text('Bonus', 540, y, { width: 60, align: 'right' })
+        .text('Prev Balance', 605, y, { width: 75, align: 'right' })
+        .text('Final Payment', 685, y, { width: 80, align: 'right' });
+
     generateHr(doc, y + 18);
 }
 
@@ -247,32 +247,32 @@ function generateTableRow(doc, y, emp, serialNumber) {
     const isEvenRow = Math.floor((y - 140) / 45) % 2 === 0;
     if (isEvenRow) {
         doc.fillColor('#f8f9fa')
-           .rect(25, y - 5, 745, 40)
-           .fill();
+            .rect(25, y - 5, 745, 40)
+            .fill();
     }
-    
+
     doc.fillColor('#34495e')
-       .font('Helvetica')
-       .fontSize(8)
-       .text(serialNumber.toString(), 30, y, { width: 30, align: 'center' })
-       .text(emp.id, 65, y, { width: 50 })
-       .text(emp.name, 120, y, { width: 140 })
-       .text(emp.present.toString(), 265, y, { width: 25, align: 'center' })
-       .text(emp.overtime.toString(), 295, y, { width: 25, align: 'center' })
-       .fillColor('#16a085')
-       .text(formatCurrency(emp.dailyRate), 325, y, { width: 45, align: 'right' })
-       .fillColor('#2980b9')
-       .text(formatCurrency(emp.grossPayment), 375, y, { width: 80, align: 'right' })
-       .fillColor('#e74c3c')
-       .text(formatCurrency(emp.advances), 460, y, { width: 75, align: 'right' })
-       .fillColor('#27ae60')
-       .text(formatCurrency(emp.bonus), 540, y, { width: 60, align: 'right' })
-       .fillColor(emp.prevBalance >= 0 ? '#27ae60' : '#e74c3c')
-       .text(formatCurrency(emp.prevBalance), 605, y, { width: 75, align: 'right' })
-       .fillColor('#2c3e50')
-       .font('Helvetica-Bold')
-       .fontSize(9)
-       .text(formatCurrency(emp.finalPayment), 685, y, { width: 80, align: 'right' });
+        .font('Helvetica')
+        .fontSize(8)
+        .text(serialNumber.toString(), 30, y, { width: 30, align: 'center' })
+        .text(emp.id, 65, y, { width: 50 })
+        .text(emp.name, 120, y, { width: 140 })
+        .text(emp.present.toString(), 265, y, { width: 25, align: 'center' })
+        .text(emp.overtime.toString(), 295, y, { width: 25, align: 'center' })
+        .fillColor('#16a085')
+        .text(formatCurrency(emp.dailyRate), 325, y, { width: 45, align: 'right' })
+        .fillColor('#2980b9')
+        .text(formatCurrency(emp.grossPayment), 375, y, { width: 80, align: 'right' })
+        .fillColor('#e74c3c')
+        .text(formatCurrency(emp.advances), 460, y, { width: 75, align: 'right' })
+        .fillColor('#27ae60')
+        .text(formatCurrency(emp.bonus), 540, y, { width: 60, align: 'right' })
+        .fillColor(emp.prevBalance >= 0 ? '#27ae60' : '#e74c3c')
+        .text(formatCurrency(emp.prevBalance), 605, y, { width: 75, align: 'right' })
+        .fillColor('#2c3e50')
+        .font('Helvetica-Bold')
+        .fontSize(9)
+        .text(formatCurrency(emp.finalPayment), 685, y, { width: 80, align: 'right' });
 
     generateHr(doc, y + 35);
 }
@@ -284,10 +284,10 @@ function generateTableRow(doc, y, emp, serialNumber) {
  */
 function generateHr(doc, y) {
     doc.strokeColor("#bdc3c7")
-       .lineWidth(0.5)
-       .moveTo(30, y)
-       .lineTo(790, y)
-       .stroke();
+        .lineWidth(0.5)
+        .moveTo(30, y)
+        .lineTo(790, y)
+        .stroke();
 }
 
 /**
@@ -298,29 +298,29 @@ function generateHr(doc, y) {
 function generateIndividualEmployeeDetails(doc, reportData) {
     doc.addPage({ layout: 'landscape', margin: 20 });
     generateHeader(doc, reportData); // Re-add header for the new section
-    
+
     let y = 105; // Starting Y position
     const pageBottom = doc.page.height - doc.page.margins.bottom;
 
     doc.fillColor('#2d3748')
-       .font('Helvetica-Bold')
-       .fontSize(16)
-       .text('INDIVIDUAL EMPLOYEE DETAILS', 30, y);
-    
+        .font('Helvetica-Bold')
+        .fontSize(16)
+        .text('INDIVIDUAL EMPLOYEE DETAILS', 30, y);
+
     y += 40; // Space after the section title
-    
+
     for (const employee of reportData.employees) {
         // --- Smart Page Break Logic ---
         // Calculate the height of the upcoming employee section
         const sectionHeight = calculateEmployeeDetailSectionHeight(employee, reportData.rawMonth, reportData.rawYear);
-        
+
         // If the section doesn't fit on the current page, create a new one
         if (y + sectionHeight > pageBottom) {
             doc.addPage({ layout: 'landscape', margin: 20 });
             generateHeader(doc, reportData);
             y = 105; // Reset Y position for the new page
         }
-        
+
         // Draw the section and update the Y position
         y = generateEmployeeDetailSection(doc, employee, y, reportData);
         y += 25; // Add consistent spacing between employee blocks
@@ -335,13 +335,13 @@ function generateIndividualEmployeeDetails(doc, reportData) {
  */
 function calculateEmployeeDetailSectionHeight(employee, monthNumber, yearNumber) {
     let height = 0;
-    
+
     // Header and Summary section heights (fixed)
     height += 35; // Employee Header
     height += 45; // Spacing
     height += 50; // Summary Box
     height += 65; // Spacing
-    
+
     // Calculate heights of the three columns
     let col1Height = 47; // Title height
     if (employee.payouts && employee.payouts.length > 0) {
@@ -360,7 +360,7 @@ function calculateEmployeeDetailSectionHeight(employee, monthNumber, yearNumber)
     } else {
         col2Height += 25; // "No bonus" text
     }
-    
+
     let col3Height = 47; // Title height
     col3Height += 3 * 14; // Attendance info lines
     col3Height += 10; // Spacing
@@ -370,7 +370,7 @@ function calculateEmployeeDetailSectionHeight(employee, monthNumber, yearNumber)
     } else {
         col3Height += 20; // "No previous balance" text
     }
-    
+
     // The total height is determined by the tallest of the three columns
     const columnsHeight = Math.max(col1Height, col2Height, col3Height);
     height += columnsHeight;
@@ -379,7 +379,7 @@ function calculateEmployeeDetailSectionHeight(employee, monthNumber, yearNumber)
     // --- Calendar Height Estimation ---
     // We always plan space for the calendar so page breaks account for it.
     height += estimateCalendarHeight(monthNumber, yearNumber);
-    
+
     return height;
 }
 
@@ -400,11 +400,11 @@ function generateEmployeeDetailSection(doc, employee, startY, reportData) {
     // --- Employee Header ---
     doc.fillColor('#1a365d').rect(sectionStartX, y, sectionWidth, 35).fill();
     doc.fillColor('#ffffff').font('Helvetica-Bold').fontSize(14)
-       // FIXED: Added a width to the employee name to prevent overflow.
-       .text(employee.name, sectionStartX + 10, y + 10, { width: 500 });
+        // FIXED: Added a width to the employee name to prevent overflow.
+        .text(employee.name, sectionStartX + 10, y + 10, { width: 500 });
     doc.fillColor('#e2e8f0').font('Helvetica').fontSize(11)
-       // Adjusted: shift Employee ID left so it doesn't hug page edge (adds an intentional right margin).
-       .text(`Employee ID: ${employee.id}`, sectionStartX + 260, y + 12, { width: sectionWidth - 320, align: 'right' });
+        // Adjusted: shift Employee ID left so it doesn't hug page edge (adds an intentional right margin).
+        .text(`Employee ID: ${employee.id}`, sectionStartX + 260, y + 12, { width: sectionWidth - 320, align: 'right' });
     y += 50;
 
     // --- Payment Summary Box (simplified: rect instead of roundedRect to reduce path complexity) ---
@@ -419,12 +419,12 @@ function generateEmployeeDetailSection(doc, employee, startY, reportData) {
     doc.text(`Gross Payment: ${formatCurrency(employee.grossPayment)}`, summaryCol1, summaryY, { width: summaryColumnWidth });
     doc.text(`Total Advances: ${formatCurrency(employee.advances)}`, summaryCol2, summaryY, { width: summaryColumnWidth });
     doc.text(`Bonus/Additional: ${formatCurrency(employee.bonus)}`, summaryCol3, summaryY, { width: summaryColumnWidth });
-    
+
     doc.fillColor(employee.prevBalance >= 0 ? '#2d3748' : '#c53030')
-       .text(`Previous Balance: ${formatCurrency(employee.prevBalance)}`, summaryCol1, summaryY + 25, { width: summaryColumnWidth });
-       
+        .text(`Previous Balance: ${formatCurrency(employee.prevBalance)}`, summaryCol1, summaryY + 25, { width: summaryColumnWidth });
+
     doc.fillColor(employee.finalPayment >= 0 ? '#22543d' : '#c53030').font('Helvetica-Bold').fontSize(12)
-       .text(`FINAL PAYMENT: ${formatCurrency(employee.finalPayment)}`, summaryCol4, summaryY + 12, { width: summaryFinalWidth, align: 'right' });
+        .text(`FINAL PAYMENT: ${formatCurrency(employee.finalPayment)}`, summaryCol4, summaryY + 12, { width: summaryFinalWidth, align: 'right' });
     y += 80;
 
     // --- Three-Column Layout ---
@@ -473,7 +473,7 @@ function generateEmployeeDetailSection(doc, employee, startY, reportData) {
     } else {
         doc.font('Helvetica-Oblique').fontSize(9).fillColor('#718096').text('No bonus payments recorded.', col2X, col2Y);
     }
-    
+
     // --- Column 3: Attendance & Balance ---
     let col3Y = contentY;
     doc.font('Helvetica').fontSize(9).fillColor('#4a5568');
@@ -489,7 +489,7 @@ function generateEmployeeDetailSection(doc, employee, startY, reportData) {
         if (carryValue.length > 24) {
             carryValue = carryValue.slice(0, 21) + '...';
         }
-        doc.font('Helvetica').fontSize(8).text(carryValue, col3X, col3Y, { width: colWidth, align: 'right'});
+        doc.font('Helvetica').fontSize(8).text(carryValue, col3X, col3Y, { width: colWidth, align: 'right' });
     } else {
         doc.font('Helvetica-Oblique').fontSize(9).text('No previous balance.', col3X, col3Y, { width: colWidth });
     }
@@ -558,7 +558,7 @@ function drawAttendanceCalendar(doc, attendanceEntries, monthNumber, yearNumber,
     const firstDay = new Date(yearNumber, monthNumber - 1, 1);
     let startIdx = firstDay.getDay();
     startIdx = (startIdx + 6) % 7; // Monday-first shift
-    const weekDayLabels = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+    const weekDayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
     // Weekday header row
     doc.font('Helvetica-Bold').fontSize(8).fillColor('#4a5568');
@@ -567,19 +567,19 @@ function drawAttendanceCalendar(doc, attendanceEntries, monthNumber, yearNumber,
     }
     y += 12;
 
-        // Grid drawing
-        // Draw full grid lines once (less vector objects than per-cell borders)
-        const weeks = computeWeeksInMonth(monthNumber, yearNumber);
-        doc.save().strokeColor('#e2e8f0').lineWidth(0.25);
-        for (let r = 0; r <= weeks; r++) {
-            const lineY = y + r * cellHeight;
-            doc.moveTo(x, lineY).lineTo(x + columns * cellWidth, lineY);
-        }
-        for (let c = 0; c <= columns; c++) {
-            const lineX = x + c * cellWidth;
-            doc.moveTo(lineX, y).lineTo(lineX, y + weeks * cellHeight);
-        }
-        doc.stroke().restore();
+    // Grid drawing
+    // Draw full grid lines once (less vector objects than per-cell borders)
+    const weeks = computeWeeksInMonth(monthNumber, yearNumber);
+    doc.save().strokeColor('#e2e8f0').lineWidth(0.25);
+    for (let r = 0; r <= weeks; r++) {
+        const lineY = y + r * cellHeight;
+        doc.moveTo(x, lineY).lineTo(x + columns * cellWidth, lineY);
+    }
+    for (let c = 0; c <= columns; c++) {
+        const lineX = x + c * cellWidth;
+        doc.moveTo(lineX, y).lineTo(lineX, y + weeks * cellHeight);
+    }
+    doc.stroke().restore();
     let dayCounter = 1;
     let presentCount = 0, absentCount = 0, weekoffCount = 0, overtimeHours = 0;
     while (dayCounter <= daysInMonth) {
@@ -600,17 +600,17 @@ function drawAttendanceCalendar(doc, attendanceEntries, monthNumber, yearNumber,
 
             // Day number (small, top-left)
             doc.fillColor('#2d3748').font('Helvetica').fontSize(7)
-               .text(dayCounter.toString(), colX + 2, cellY + 2, { width: cellWidth - 4, align: 'left' });
+                .text(dayCounter.toString(), colX + 2, cellY + 2, { width: cellWidth - 4, align: 'left' });
 
             // Status letter centered (green P, red A, blue W) larger for clarity
             let statusColor = '#718096';
             if (statusChar === 'P') statusColor = '#2f855a';
             else if (statusChar === 'A') statusColor = '#e53e3e';
             else if (statusChar === 'W') statusColor = '#3182ce';
-            const statusLetter = ['P','A','W'].includes(statusChar) ? statusChar : '';
+            const statusLetter = ['P', 'A', 'W'].includes(statusChar) ? statusChar : '';
             if (statusLetter) {
                 doc.fillColor(statusColor).font('Helvetica-Bold').fontSize(11)
-                   .text(statusLetter, colX, cellY + 8, { width: cellWidth, align: 'center' });
+                    .text(statusLetter, colX, cellY + 8, { width: cellWidth, align: 'center' });
             }
 
             // Overtime badge (orange rounded pill bottom-right) if OT > 0
@@ -621,7 +621,7 @@ function drawAttendanceCalendar(doc, attendanceEntries, monthNumber, yearNumber,
                 const badgeY = cellY + cellHeight - badgeH - 2;
                 doc.save().fillColor('#dd6b20').roundedRect(badgeX, badgeY, badgeW, badgeH, 2).fill();
                 doc.fillColor('#ffffff').font('Helvetica-Bold').fontSize(7)
-                   .text(overtime.toString(), badgeX, badgeY + 1.2, { width: badgeW, align: 'center' });
+                    .text(overtime.toString(), badgeX, badgeY + 1.2, { width: badgeW, align: 'center' });
                 doc.restore();
             }
 
@@ -647,91 +647,31 @@ function drawAttendanceCalendar(doc, attendanceEntries, monthNumber, yearNumber,
     });
 }
 
-// POST endpoint to generate employee payment report PDF
-router.post("/generate-payment-report", authenticateAndTrack, async (req, res) => {
+
+
+/**
+ * Generates a payment report PDF and returns the buffer
+ * @param {Object} user - User object from request
+ * @param {string} siteID - Site identifier
+ * @param {string} month - Month number (1-12)
+ * @param {string} year - Year number (2020-2030)
+ * @returns {Promise<Buffer>} - PDF buffer
+ */
+async function generatePaymentReportPdf(user, siteID, month, year) {
     try {
-        const { siteID, month, year } = req.body;
-        
-        // Validate required parameters
-        if (!siteID || !month || !year) {
-            return res.status(400).json({
-                success: false,
-                error: "siteID, month, and year are required.",
-            });
-        }
-        
-        // Validate month and year ranges
-        if (month < 1 || month > 12) {
-            return res.status(400).json({
-                success: false,
-                error: "Month must be between 1 and 12.",
-            });
-        }
-        
-        if (year < 2020 || year > 2030) {
-            return res.status(400).json({
-                success: false,
-                error: "Year must be between 2020 and 2030.",
-            });
-        }
-        
-        // Check if user has access to the site
-        const userRole = req.user?.role?.toLowerCase();
-        if (userRole === "supervisor") {
-            const supervisorSite = req.user.site[0]?.toString().trim();
-            if (supervisorSite !== siteID) {
-                return res.status(403).json({
-                    success: false,
-                    error: "Forbidden. You do not have access to this site.",
-                });
-            }
-        } else if (userRole === "admin") {
-            const mongoose = require("mongoose");
-            let siteObjectId;
-            try {
-                siteObjectId = new mongoose.Types.ObjectId(siteID);
-            } catch (e) {
-                return res.status(400).json({
-                    success: false,
-                    error: "Invalid siteID format.",
-                });
-            }
-            
-            const User = require("../models/Userschema");
-            const adminUser = await User.findOne({
-                _id: req.user.id,
-                site: siteObjectId,
-            });
-            
-            if (!adminUser) {
-                return res.status(403).json({
-                    success: false,
-                    error: "Forbidden. You do not have access to this site.",
-                });
-            }
-        } else {
-            return res.status(403).json({
-                success: false,
-                error: "Forbidden. You do not have access to this resource.",
-            });
-        }
-        
         console.log(`🔍 Generating PDF report for site ${siteID}, ${month}/${year}...`);
-        
+
         // Fetch data from database
-        const calculationType = req.user?.calculationType || 'default';
+        const calculationType = user?.calculationType || 'default';
         const employees = await fetchEmployeeData(siteID, month, year, calculationType);
         const siteInfo = await fetchSiteInfo(siteID);
-        
+
         if (!employees || employees.length === 0) {
-            return res.status(404).json({
-                success: false,
-                error: `No employees found for ${month}/${year} at site ${siteInfo.sitename}`,
-            });
+            throw new Error(`No employees found for ${month}/${year} at site ${siteInfo.sitename}`);
         }
-        
+
         console.log(`📊 Found ${employees.length} employees`);
-        
+
         // Create report data object
         const reportData = {
             month: getMonthName(month) + ' ' + year,
@@ -756,60 +696,156 @@ router.post("/generate-payment-report", authenticateAndTrack, async (req, res) =
                 carry_forwarded: emp.carry_forwarded || {}
             }))
         };
-        
+
         // Generate unique filename with sitename and full timestamp down to seconds
         const now = new Date();
-        const timestamp = now.toISOString().replace(/[:.]/g, '-').replace('T', '_').slice(0, -5); // Format: YYYY-MM-DD_HH-MM-SS
-        const sanitizedSiteName = siteInfo.sitename.replace(/[^a-zA-Z0-9]/g, '_'); // Replace any non-alphanumeric chars with underscore
+        const timestamp = now.toISOString().replace(/[:.]/g, '-').replace('T', '_').slice(0, -5);
+        const sanitizedSiteName = siteInfo.sitename.replace(/[^a-zA-Z0-9]/g, '_');
         const filename = `${sanitizedSiteName}_${month}_${year}_${timestamp}.pdf`;
         const filepath = path.join(__dirname, '../temp', filename);
-        
+
         // Ensure temp directory exists
         const tempDir = path.join(__dirname, '../temp');
         if (!fs.existsSync(tempDir)) {
             fs.mkdirSync(tempDir, { recursive: true });
         }
-        
+
         // Create PDF document
-        const doc = new PDFDocument({ 
+        const doc = new PDFDocument({
             size: 'A4',
             layout: 'landscape',
             margin: 20
         });
-        
+
         // Pipe to file
         const writeStream = fs.createWriteStream(filepath);
         doc.pipe(writeStream);
-        
+
         // Generate PDF content
         generateHeader(doc, reportData);
         generateEmployeeTable(doc, reportData);
         generateIndividualEmployeeDetails(doc, reportData);
-        
+
         // Finalize PDF
         doc.end();
-        
+
         // Wait for PDF to be written
         await new Promise((resolve, reject) => {
             writeStream.on('finish', resolve);
             writeStream.on('error', reject);
         });
-        
+
         console.log(`✅ PDF report generated successfully: ${filename}`);
-        
-        // Send PDF as response
-        res.setHeader('Content-Type', 'application/pdf');
-        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-        
+
+        // Read PDF buffer
         const pdfBuffer = fs.readFileSync(filepath);
-        
+
         // Clean up temp file
         fs.unlinkSync(filepath);
-        
-        return res.send(pdfBuffer);
-        
+
+        return {
+            buffer: pdfBuffer,
+            filename: filename,
+            siteName: siteInfo.sitename,
+            employeeCount: employees.length
+        };
+
     } catch (error) {
         console.error("❌ Error generating PDF report:", error);
+        throw error;
+    }
+}
+
+
+// POST endpoint to generate employee payment report PDF
+router.post("/generate-payment-report", authenticateAndTrack, async (req, res) => {
+    try {
+        const { siteID, month, year } = req.body;
+
+        // Validate required parameters
+        if (!siteID || !month || !year) {
+            return res.status(400).json({
+                success: false,
+                error: "siteID, month, and year are required.",
+            });
+        }
+
+        // Validate month and year ranges
+        if (month < 1 || month > 12) {
+            return res.status(400).json({
+                success: false,
+                error: "Month must be between 1 and 12.",
+            });
+        }
+
+        if (year < 2020 || year > 2030) {
+            return res.status(400).json({
+                success: false,
+                error: "Year must be between 2020 and 2030.",
+            });
+        }
+
+        // Check if user has access to the site
+        const userRole = req.user?.role?.toLowerCase();
+        if (userRole === "supervisor") {
+            const supervisorSite = req.user.site[0]?.toString().trim();
+            if (supervisorSite !== siteID) {
+                return res.status(403).json({
+                    success: false,
+                    error: "Forbidden. You do not have access to this site.",
+                });
+            }
+        } else if (userRole === "admin") {
+            const mongoose = require("mongoose");
+            let siteObjectId;
+            try {
+                siteObjectId = new mongoose.Types.ObjectId(siteID);
+            } catch (e) {
+                return res.status(400).json({
+                    success: false,
+                    error: "Invalid siteID format.",
+                });
+            }
+
+            const User = require("../models/Userschema");
+            const adminUser = await User.findOne({
+                _id: req.user.id,
+                site: siteObjectId,
+            });
+
+            if (!adminUser) {
+                return res.status(403).json({
+                    success: false,
+                    error: "Forbidden. You do not have access to this site.",
+                });
+            }
+        } else {
+            return res.status(403).json({
+                success: false,
+                error: "Forbidden. You do not have access to this resource.",
+            });
+        }
+
+        // Generate PDF using the reusable function
+        const pdfResult = await generatePaymentReportPdf(req.user, siteID, month, year);
+
+        // Send PDF as response
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `attachment; filename="${pdfResult.filename}"`);
+
+        return res.send(pdfResult.buffer);
+
+    } catch (error) {
+        console.error("❌ Error generating PDF report:", error);
+
+        // Handle specific error cases
+        if (error.message.includes('No employees found')) {
+            return res.status(404).json({
+                success: false,
+                error: error.message,
+            });
+        }
+
         return res.status(500).json({
             success: false,
             error: "Error generating PDF report.",
@@ -818,4 +854,7 @@ router.post("/generate-payment-report", authenticateAndTrack, async (req, res) =
     }
 });
 
-module.exports = router;
+module.exports = {
+    router,
+    generatePaymentReportPdf
+};

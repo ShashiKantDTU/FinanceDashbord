@@ -85,7 +85,7 @@ const playPurchaseRoutes = require('./Routes/playPurchase');
 const siteFinancialRoutes = require('./Routes/SiteFinancials');
 const usageRoutes = require('./Routes/usage');
 const cronRoutes = require('./Routes/cronRoutes');
-const pdfReportRoutes = require('./Routes/pdfReports');
+const { router: pdfReportRoutes } = require('./Routes/pdfReports');
 const excelReportRoutes = require('./Routes/excelReports');
 // const optimizedEmployeeRoutes = require('./Routes/optimizedEmployeeRoutes');
 

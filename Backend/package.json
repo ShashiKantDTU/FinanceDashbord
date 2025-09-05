@@ -18,6 +18,8 @@
   "license": "ISC",
   "description": "Backend API server for Finance Dashboard",
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.878.0",
+    "@aws-sdk/s3-request-presigner": "^3.878.0",
     "axios": "^1.10.0",
     "bcrypt": "^6.0.0",
     "cors": "^2.8.5",
