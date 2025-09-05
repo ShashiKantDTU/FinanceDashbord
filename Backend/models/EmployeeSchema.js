@@ -113,7 +113,7 @@ const employeeSchema = new mongoose.Schema({
     timestamps: true
 });
 
-// Create compound unique index: empid + month + year combination must be unique
-employeeSchema.index({ empid: 1, month: 1, year: 1 }, { unique: true });
+// Add this line to create the compound index
+employeeSchema.index({ siteID: 1, empid: 1, month: 1, year: 1 });
 
 module.exports = mongoose.model('Employee', employeeSchema);
