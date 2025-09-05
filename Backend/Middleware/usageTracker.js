@@ -13,6 +13,7 @@ const { authenticateToken } = require('./auth');
  */
 const usageTracker = async (req, res, next) => {
   // Skip tracking for certain endpoints to avoid noise
+
   const skipEndpoints = [
     '/api/usage/dashboard',
     '/api/usage/stats',
@@ -21,6 +22,7 @@ const usageTracker = async (req, res, next) => {
     '/robots.txt'
   ];
 
+  console.time("Usage Tracking");
   // Skip if endpoint should not be tracked
   if (skipEndpoints.some(endpoint => req.path.includes(endpoint))) {
     return next();
@@ -62,7 +64,7 @@ const usageTracker = async (req, res, next) => {
       // Don't throw error to avoid affecting the main request
     }
   });
-
+  console.timeEnd("Usage Tracking");
   // Continue to the next middleware/route
   next();
 };
@@ -282,10 +284,12 @@ const checkUsageLimits = async (userId, userPlan) => {
  */
 const authenticateAndTrack = async (req, res, next) => {
   // First, authenticate the user
+  console.time("Authentication");
   authenticateToken(req, res, (authError) => {
     if (authError) {
       return next(authError);
     }
+    console.timeEnd("Authentication");
     
     // If authentication succeeds, apply usage tracking
     usageTracker(req, res, next);

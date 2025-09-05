@@ -1726,6 +1726,7 @@ router.get("/allemployeelist", authenticateAndTrack, async (req, res) => {
 router.get("/employee/:siteID/:empid/:month/:year",
   authenticateAndTrack,
   async (req, res) => {
+    console.time("Input Validation");
     const { empid, month, year, siteID } = req.params;
     // console.log(
     //   `🔍 Fetching employee details for ${empid} - ${month}/${year} at site ${siteID}`
@@ -1767,7 +1768,8 @@ router.get("/employee/:siteID/:empid/:month/:year",
         });
       }
     }
-
+    console.timeEnd("Input Validation");
+    console.time("Fetching latest data");
     try {
       // Use FetchlatestData to get updated employee data
       const latestEmployeeData = await FetchlatestData(
@@ -1785,11 +1787,13 @@ router.get("/employee/:siteID/:empid/:month/:year",
           message: `No data found for employee ${empid} - ${month}/${year} at site ${siteID}`,
         });
       }
-
-      console.log(
-        "Step 1 out of 2: Fetched latest employee data:",
-        latestEmployeeData
-      );
+      console.timeEnd("Fetching latest data");
+      console.time("Calculating employee data");
+      // console.log(
+      //   "Step 1 out of 2: Fetched latest employee data:",
+      //   latestEmployeeData
+      // );
+      
       // Calculate additional data using Jobs utility
       const calculationResult = calculateEmployeeData(latestEmployeeData, req.user);
 
@@ -1814,8 +1818,9 @@ router.get("/employee/:siteID/:empid/:month/:year",
         ) || 0;
       const carryForward = latestEmployeeData.carry_forwarded?.value || 0;
 
+      console.timeEnd("Calculating employee data");
       // Return all employees (including zero balance)
-
+      
       return res.status(200).json({
         ...latestEmployeeData.toObject(),
         totalWage: calculationResult.totalWage,
