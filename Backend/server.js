@@ -92,13 +92,6 @@ const excelReportRoutes = require('./Routes/excelReports');
 // Import cron job service
 const cronJobService = require('./services/cronJobs');
 
-
-// if (process.env.NODE_ENV === 'development') {
-//   app.use((req, res, next) => {
-//     setTimeout(next, 500);
-//   });
-// }
-
 if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
   // Log backend ip address
   const os = require('os');
