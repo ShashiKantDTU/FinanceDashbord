@@ -30,58 +30,65 @@ const calculateEmployeeData = (employee, userdata) => {
         throw new Error('Invalid employee data structure - missing required fields');
     }
 
-    // Calculate total additional required payments
-    const totalAdditionalReqPays = employee.additional_req_pays.reduce((sum, pay) => {
-        return sum + (pay.value || 0);
+    // --- Precision Fix: Use integers for all currency calculations ---
+    const PRECISION = 100; // Use 100 for paise
+
+    // Calculate total additional required payments as integers
+    const totalAdditionalReqPaysInpaise = employee.additional_req_pays.reduce((sum, pay) => {
+        return sum + Math.round((pay.value || 0) * PRECISION);
     }, 0);
 
-    // Calculate total advances paid to employee in the month
-    const totalAdvances = employee.payouts.reduce((sum, payout) => {
-        return sum + (payout.value || 0);
-    }, 0);    // Process attendance data and calculate working days and overtime
+    // Calculate total advances paid as integers
+    const totalAdvancesInpaise = employee.payouts.reduce((sum, payout) => {
+        return sum + Math.round((payout.value || 0) * PRECISION);
+    }, 0);
+
+    // Process attendance data (no change to this logic)
     const { totalDays, totalOvertime } = processAttendanceData(employee.attendance);
-    // Calculate overtime days - different methods for different users
     let totalAttendance;
 
     if (userdata && userdata.calculationType === 'special') {
-        // Special calculation for specific user
-        // Convert overtime hours to days with floor + remainder/10 method
         const overtimeDays = Math.floor(totalOvertime / 8) + ((totalOvertime % 8) / 10);
         totalAttendance = totalDays + overtimeDays;
     } else {
-        // Default calculation - simple division
         totalAttendance = totalDays + (totalOvertime / 8);
     }
 
-    // Calculate total wage to be paid to employee
-    const totalWage = employee.rate * totalAttendance;
+    // --- Precision Fix: Perform wage and balance calculations as integers ---
 
-    // Get carry forward amount
-    const carryForward = employee.carry_forwarded ? employee.carry_forwarded.value : 0;
+    // Convert rate and carry-forward amount to integers
+    const rateInpaise = Math.round((employee.rate || 0) * PRECISION);
+    const carryForwardInpaise = employee.carry_forwarded ? Math.round((employee.carry_forwarded.value || 0) * PRECISION) : 0;
 
-    // Calculate final closing balance
-    const closing_balance = totalWage - totalAdvances + totalAdditionalReqPays + carryForward;
+    // Calculate total wage using the integer rate. Round the result to maintain integer precision.
+    const totalWageInpaise = Math.round(rateInpaise * totalAttendance);
 
-    // Update all calculated fields in the employee object
-    employee.wage = totalWage;
-    employee.closing_balance = closing_balance;
+    // Calculate final closing balance using only integers
+    const closingBalanceInpaise = totalWageInpaise - totalAdvancesInpaise + totalAdditionalReqPaysInpaise + carryForwardInpaise;
 
-    // Convert to plain object if it's a Mongoose document, otherwise keep as is
+    // Convert the final integer results back to decimals for storage
+    const finalTotalWage = totalWageInpaise / PRECISION;
+    const finalClosingBalance = closingBalanceInpaise / PRECISION;
+
+    // --- End of Precision Fix ---
+
+    // Update employee object with the precise final values
+    employee.wage = finalTotalWage;
+    employee.closing_balance = finalClosingBalance;
+
     const updatedEmployee = employee.toObject ? employee.toObject() : { ...employee };
+    updatedEmployee.wage = finalTotalWage;
+    updatedEmployee.closing_balance = finalClosingBalance;
 
-    // Ensure all calculated fields are included in the returned object
-    updatedEmployee.wage = totalWage;
-    updatedEmployee.closing_balance = closing_balance;
-
-    // Calculate overtime days for metadata
+    // Calculate overtime days for metadata (no change to this logic)
     const overtimeDays = userdata && userdata.calculationType === 'special'
         ? Math.floor(totalOvertime / 8) + ((totalOvertime % 8) / 10)
         : totalOvertime / 8;
 
     // Add calculation metadata for reference
     updatedEmployee._calculationData = {
-        totalAdvances,
-        totalAdditionalReqPays,
+        totalAdvances: totalAdvancesInpaise / PRECISION, // Convert back for logging
+        totalAdditionalReqPays: totalAdditionalReqPaysInpaise / PRECISION, // Convert back for logging
         totalAttendance,
         totalDays,
         totalOvertime,
