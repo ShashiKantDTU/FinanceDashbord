@@ -2,41 +2,17 @@ const mongoose = require("mongoose");
 
 const userSchema = new mongoose.Schema(
   {
-    name: {
-      type: String,
-      required: false, // Optional field
-      trim: true,
-    },
-    email: {
-      type: String,
-      required: false, // Optional field
-      lowercase: true,
-      trim: true,
-      sparse: true, // This allows multiple null values
-    },
-    phoneNumber: {
-      type: String,
-      //   required: true,
-      unique: true,
-      match: /^\+?[1-9]\d{1,14}$/, // ✅ E.164 format validation
-    },
-    uid: {
-      type: String,
-      //   required: true,
-      unique: true,
-    },
-    password: {
-      type: String,
-      // required: true,
-    },
-    resetPasswordToken: {
-      type: String,
-      default: null,
-    },
-    resetPasswordExpires: {
-      type: Date,
-      default: null,
-    },
+  name: { type: String, required: false, trim: true },
+  email: { type: String, required: false, lowercase: true, trim: true, sparse: true },
+  phoneNumber: { type: String, unique: true, match: /^\+?[1-9]\d{1,14}$/ }, // E.164
+  // uid comes from providers (e.g. Firebase / Truecaller). Not unique on purpose so
+  // flows that don't supply it can store null or duplicates safely.
+  uid: { type: String },
+  whatsAppReportsEnabled: { type: Boolean, default: false },
+  whatsAppReportPhone: { type: String, match: /^\+?[1-9]\d{1,14}$/  }, // E.164
+  password: { type: String },
+  resetPasswordToken: { type: String, default: null },
+  resetPasswordExpires: { type: Date, default: null },
     site: [
       {
         type: mongoose.Schema.Types.ObjectId,
@@ -51,57 +27,21 @@ const userSchema = new mongoose.Schema(
     ],
 
     // 👇 Plan info
-    plan: {
-      type: String,
-      enum: ['free', 'pro', 'premium'],
-      default: 'free',
-    },
-    planActivatedAt: {
-      type: Date,
-    },
-    billing_cycle : {
-      type: String,
-      enum: ['monthly', 'yearly']
-    },
-    planExpiresAt: {
-      type: Date,
-    },
-    isTrial: {
-      type: Boolean,
-      default: false,
-    },
-    isCancelled: {
-      type: Boolean,
-      default: false,
-    },
-    isGrace: {
-      type: Boolean,
-      default: false,
-    },
-    graceExpiresAt: {
-      type: Date,
-      default: null,
-    },
+  plan: { type: String, enum: ['free', 'pro', 'premium'], default: 'free' },
+  planActivatedAt: { type: Date },
+  billing_cycle: { type: String, enum: ['monthly', 'yearly'] },
+  planExpiresAt: { type: Date },
+  isTrial: { type: Boolean, default: false },
+  isCancelled: { type: Boolean, default: false },
+  isGrace: { type: Boolean, default: false },
+  graceExpiresAt: { type: Date, default: null },
 
     // For safety
-    isPaymentVerified: {
-      type: Boolean,
-      default: false
-    },
-    planSource: {
-      type: String,
-      enum: ['google_play', 'app_store', 'web', 'manual'],
-      default: null
-    },
-    purchaseToken: {
-      type: String,
-      default: null
-    },
+  isPaymentVerified: { type: Boolean, default: false },
+  planSource: { type: String, enum: ['google_play', 'app_store', 'web', 'manual'], default: null },
+  purchaseToken: { type: String, default: null },
     // Store the last purchase token for renewal verification
-    lastPurchaseToken: {
-      type: String,
-      default: null
-    },
+  lastPurchaseToken: { type: String, default: null },
     planHistory: {
       type: [{
         plan: {
@@ -150,10 +90,7 @@ const userSchema = new mongoose.Schema(
       default: [] // Ensure every user has an empty array by default
     },
     // Tracks the last time user updated active site selection via API
-    lastSiteUpdated: {
-      type: Date,
-      default: null
-    }
+  lastSiteUpdated: { type: Date, default: null }
   },
   {
     timestamps: true,
@@ -161,3 +98,4 @@ const userSchema = new mongoose.Schema(
 );
 
 module.exports = mongoose.model("User", userSchema);
+

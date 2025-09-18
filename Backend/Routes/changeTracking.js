@@ -1,3 +1,4 @@
+
 const express = require('express');
 const router = express.Router();
 const { authenticateAndTrack } = require('../Middleware/usageTracker');
@@ -15,6 +16,7 @@ const { markEmployeesForRecalculation } = require('../Utils/Jobs');
 // Import the optimized change tracking model
 const OptimizedChangeTracking = require('../models/OptimizedChangeTrackingSchema');
 const EmployeeSchema = require('../models/EmployeeSchema');
+
 
 // New optimized patch attendance function
 async function patchEmployeeAttendance(siteID, month, updates, user) {
@@ -115,12 +117,6 @@ async function patchEmployeeAttendance(siteID, month, updates, user) {
 
 // Add logging middleware to track all requests
 router.use((req, res, next) => {
-    // console.log(`🌐 CHANGE-TRACKING ROUTE HIT: ${req.method} ${req.originalUrl}`);
-    // console.log(`📅 Timestamp: ${new Date().toISOString()}`);
-    // console.log(`📋 Request Body Keys: ${Object.keys(req.body || {})}`);
-    // if (req.params.employeeID) {
-    //     console.log(`👤 Employee ID: ${req.params.employeeID}`);
-    // }
     next();
 });
 

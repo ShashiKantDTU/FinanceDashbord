@@ -13,8 +13,274 @@ const {
   generateSupervisorCredentials,
 } = require("../Middleware/auth");
 const { sendPasswordResetEmail } = require("../Utils/emailService");
-
+// Centralized Redis client (do not create a new one here)
+const { redisClient } = require('../config/redisClient');
+// WhatsApp OTP helper
+const { sendWhatsAppOtp } = require('../Utils/whatsappOtp');
 const router = express.Router();
+// Redis connection is initialized centrally in server.js. This file just uses the shared client.
+
+// --- OTP Helper Function ---
+// This function generates the OTP and its expiration time
+const generateOtp = () => {
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const ttl = 600; // Time-to-live in seconds (10 minutes)
+    return { otp, ttl };
+};
+
+// --- OTP Rate Limiting Config ---
+const OTP_TTL_SECONDS = 600; // align with generateOtp
+const OTP_COOLDOWN_SECONDS = 60; // minimum gap between sends for same number
+const OTP_MAX_SENDS_PER_WINDOW = 5; // max sends per window
+const OTP_SEND_WINDOW_SECONDS = 3600; // 1 hour window
+
+// OTP send route
+
+router.post("/otp/send", async (req, res) => {
+  console.log("OTP send route hit");
+    const { phoneNumber } = req.body;
+    if (!phoneNumber) {
+        return res.status(400).json({ message: "Phone number is required" });
+    }
+
+    // Handle test phone number - always set OTP as 123456 and skip WhatsApp
+    if (phoneNumber === '+919876543210') {
+        const testOtp = '123456';
+        const testTtl = OTP_TTL_SECONDS;
+        const otpKey = phoneNumber;
+        
+        // Store test OTP in Redis
+        await redisClient.setEx(otpKey, testTtl, testOtp);
+        console.log(`Test OTP for ${phoneNumber}: ${testOtp} (WhatsApp skipped)`);
+        
+        return res.status(200).json({
+            message: `Test OTP generated successfully. It will expire in ${Math.floor(testTtl/60)} minutes.`,
+            whatsAppStatus: 'skipped',
+            expiresInSeconds: testTtl
+        });
+    }
+
+  try {
+    // Keys
+    const otpKey = phoneNumber; // existing usage
+    const cooldownKey = `otp:cd:${phoneNumber}`;
+    const sendCountKey = `otp:sc:${phoneNumber}`;
+
+    // Cooldown check
+    const cooldownTTL = await redisClient.ttl(cooldownKey);
+    if (cooldownTTL && cooldownTTL > 0) {
+      return res.status(429).json({ message: `Please wait ${cooldownTTL} seconds before requesting another OTP.` });
+    }
+
+    // Rate limiting (simple counter per hour)
+    let sendCount = await redisClient.get(sendCountKey);
+    if (sendCount === null) {
+      // initialize counter with window TTL
+      await redisClient.setEx(sendCountKey, OTP_SEND_WINDOW_SECONDS, '0');
+      sendCount = '0';
+    }
+    sendCount = await redisClient.incr(sendCountKey);
+    if (parseInt(sendCount, 10) > OTP_MAX_SENDS_PER_WINDOW) {
+      return res.status(429).json({ message: 'Too many OTP requests. Please try again later.' });
+    }
+
+    // Existing OTP reuse logic
+    const existingOtp = await redisClient.get(otpKey);
+    if (existingOtp) {
+      // Fetch remaining TTL
+      let remaining = await redisClient.ttl(otpKey);
+      if (remaining < 0) remaining = OTP_TTL_SECONDS; // fallback
+
+      // Set cooldown so user cannot spam every second
+      await redisClient.setEx(cooldownKey, OTP_COOLDOWN_SECONDS, '1');
+
+      
+
+      // Resend existing OTP (do not extend main TTL here — /otp/resend handles extension)
+      const whatsAppResult = await sendWhatsAppOtp(phoneNumber, existingOtp, remaining);
+      
+      // Handle WhatsApp send errors for existing OTP
+      if (!whatsAppResult.sent && !whatsAppResult.skipped && whatsAppResult.error) {
+        if (!whatsAppResult.error.retryable) {
+          return res.status(400).json({
+            message: whatsAppResult.error.message,
+            errorCode: whatsAppResult.error.category,
+            retryable: false
+          });
+        }
+        console.warn('WhatsApp OTP resend (implicit) failed for', phoneNumber, whatsAppResult.error);
+      }
+
+      return res.status(200).json({
+        message: whatsAppResult.sent 
+          ? `OTP sent successfully. It will expire in ${Math.floor(remaining/60)} minutes.`
+          : `OTP resent (delivery status unknown). It will expire in ${Math.floor(remaining/60)} minutes.`,
+        expiresInSeconds: remaining,
+        resend: true,
+        whatsAppStatus: whatsAppResult.sent ? 'sent' : whatsAppResult.skipped ? 'skipped' : 'failed'
+      });
+    }
+
+    // Generate new OTP
+    const { otp, ttl } = generateOtp();
+    await redisClient.setEx(otpKey, ttl, otp);
+    await redisClient.setEx(cooldownKey, OTP_COOLDOWN_SECONDS, '1');
+    console.log(`OTP for ${phoneNumber}: ${otp}`);
+
+    // Send OTP via WhatsApp (blocking to handle errors properly)
+    const whatsAppResult = await sendWhatsAppOtp(phoneNumber, otp, ttl);
+    
+    // Handle critical WhatsApp errors that should stop the flow
+    if (!whatsAppResult.sent && !whatsAppResult.skipped && whatsAppResult.error) {
+      if (!whatsAppResult.error.retryable) {
+        // Remove OTP and cooldown for non-retryable errors
+        await redisClient.del(otpKey);
+        await redisClient.del(cooldownKey);
+        return res.status(400).json({
+          message: whatsAppResult.error.message,
+          errorCode: whatsAppResult.error.category,
+          retryable: false
+        });
+      }
+      console.warn('WhatsApp OTP failed for', phoneNumber, whatsAppResult.error);
+    }
+
+    res.status(200).json({ 
+      message: whatsAppResult.sent 
+        ? `OTP sent successfully. It will expire in ${Math.floor(OTP_TTL_SECONDS/60)} minutes.`
+        : `OTP generated (delivery status unknown). It will expire in ${Math.floor(OTP_TTL_SECONDS/60)} minutes.`,
+      whatsAppStatus: whatsAppResult.sent ? 'sent' : whatsAppResult.skipped ? 'skipped' : 'failed',
+      expiresInSeconds: OTP_TTL_SECONDS
+    });
+
+    } catch (error) {
+        console.error("Error sending OTP:", error);
+        res.status(500).json({ message: "Error sending OTP", error: error.message });
+    }
+});
+
+router.post("/otp/verify", async (req, res) => {
+    const { phoneNumber, otp } = req.body;
+    console.log("OTP verify route hit");
+    if (!phoneNumber || !otp) {
+        return res.status(400).json({ message: "Phone number and OTP are required" });
+    }
+
+    try {
+        const storedOtp = await redisClient.get(phoneNumber);
+
+        if (!storedOtp) {
+            return res.status(400).json({ message: "Invalid or expired OTP. Please request a new one." });
+        }
+
+        if (storedOtp !== otp) {
+            return res.status(400).json({ message: "Incorrect OTP." });
+        }
+
+        // --- OTP is correct, clean up Redis ---
+        await redisClient.del(phoneNumber);
+
+        // --- YOUR DATABASE AND JWT LOGIC HERE ---
+    // check if user exist in db
+    let user = await User.findOne({ phoneNumber: phoneNumber });
+    console.log("Found existing user:", user ? "Yes" : "No");
+
+
+    if (!user) {
+      // Create user if doesn't exist (auto-registration)
+      // Grant 2-month pro trial to new users
+      const trialExpiryDate = new Date();
+      trialExpiryDate.setMonth(trialExpiryDate.getMonth() + 2);
+      const name = phoneNumber;
+      user = new User({
+        name: name,
+        phoneNumber: phoneNumber,
+        plan: 'pro',
+        isTrial: true,
+        whatsAppReportsEnabled: true,
+        whatsAppReportPhone: phoneNumber,
+        planExpiresAt: trialExpiryDate,
+        planSource: 'manual',
+        planActivatedAt: new Date()
+      });
+      await user.save();
+      // console.log(`New mobile user created: ${firebaseUid}`);
+    }
+
+    // Generate JWT token for your app
+    const jwtToken = generateToken({
+      id: user._id,
+      name: user.name,
+      role: "Admin",
+    });
+    // console.log(`JWT token generated for user in mobile otp route: ${user._id}`);
+    return res.status(200).json({
+      message: "OTP login successful",
+      token: jwtToken,
+      user: {
+        id: user._id,
+        name: user.name,
+        phoneNumber: user.phoneNumber,
+        whatsAppReportsEnabled: user.whatsAppReportsEnabled,
+        whatsAppReportPhone: user.whatsAppReportPhone,
+        role: "Admin",
+      }
+    })
+
+    } catch (error) {
+        console.error("Error verifying OTP:", error);
+        res.status(500).json({ message: "Error verifying OTP", error: error.message });
+    }
+});
+
+// OTP resend route
+
+router.post("/otp/resend", async (req, res) => {
+  console.log("OTP resend route hit");
+    const { phoneNumber } = req.body;
+    if (!phoneNumber) {
+        return res.status(400).json({ message: "Phone number is required" });
+    }
+
+    try {
+        const existingOtp = await redisClient.get(phoneNumber);
+
+        if (!existingOtp) {
+            return res.status(400).json({ message: "No active OTP found. Please request a new one." });
+        }
+
+        // Reset / extend TTL back to full window (same as generateOtp currently 600s)
+        const EXTENDED_TTL = 600; // 10 minutes
+        await redisClient.setEx(phoneNumber, EXTENDED_TTL, existingOtp);
+
+        // Resend existing OTP and inform user (blocking to handle errors)
+        const whatsAppResult = await sendWhatsAppOtp(phoneNumber, existingOtp, EXTENDED_TTL);
+        
+        // Handle WhatsApp send errors for resend
+        if (!whatsAppResult.sent && !whatsAppResult.skipped && whatsAppResult.error) {
+          if (!whatsAppResult.error.retryable) {
+            return res.status(400).json({
+              message: whatsAppResult.error.message,
+              errorCode: whatsAppResult.error.category,
+              retryable: false
+            });
+          }
+          console.warn('WhatsApp OTP resend failed for', phoneNumber, whatsAppResult.error);
+        }
+
+        res.status(200).json({ 
+          message: whatsAppResult.sent 
+            ? "OTP has been resent and validity extended."
+            : "OTP validity extended (delivery status unknown).",
+          whatsAppStatus: whatsAppResult.sent ? 'sent' : whatsAppResult.skipped ? 'skipped' : 'failed',
+          expiresInSeconds: EXTENDED_TTL
+        });
+
+    } catch (error) {
+        console.error("Error resending OTP:", error);
+        res.status(500).json({ message: "Error resending OTP", error: error.message });
+    }
+});
 
 // Register route
 
@@ -82,6 +348,8 @@ router.post("/otplogin", async (req, res) => {
         name: phoneNumber,
         uid: firebaseUid,
         phoneNumber: phoneNumber,
+        whatsAppReportsEnabled: true,
+        whatsAppReportPhone: phoneNumber,
         plan: 'pro',
         isTrial: true,
         planExpiresAt: trialExpiryDate,
@@ -106,6 +374,9 @@ router.post("/otplogin", async (req, res) => {
         id: user._id,
         name: user.name,
         role: "Admin",
+        phoneNumber: user.phoneNumber,
+        whatsAppReportsEnabled: user.whatsAppReportsEnabled,
+        whatsAppReportPhone: user.whatsAppReportPhone,
       },
     });
   } catch (error) {
@@ -177,6 +448,8 @@ router.post("/truecallerlogin", async (req, res) => {
         phoneNumber: phoneNumber,
         plan: 'pro',
         isTrial: true,
+        whatsAppReportsEnabled: true,
+        whatsAppReportPhone: phoneNumber,
         planExpiresAt: trialExpiryDate,
         planSource: 'manual',
         planActivatedAt: new Date()
@@ -199,6 +472,9 @@ router.post("/truecallerlogin", async (req, res) => {
         id: user._id,
         name: user.name,
         role: "Admin",
+        phoneNumber: user.phoneNumber,
+        whatsAppReportsEnabled: user.whatsAppReportsEnabled,
+        whatsAppReportPhone: user.whatsAppReportPhone
       }
     })
 
@@ -234,6 +510,9 @@ router.post("/login", async (req, res) => {
       const token = generateToken({
         id: user._id,
         email: user.email,
+        phoneNumber: user.phoneNumber,
+        whatsAppReportsEnabled: user.whatsAppReportsEnabled,
+        whatsAppReportPhone: user.whatsAppReportPhone,
         name: user.name,
         role: "Admin",
       });
@@ -245,6 +524,9 @@ router.post("/login", async (req, res) => {
           id: user._id,
           name: user.name,
           role: "Admin",
+          phoneNumber: user.phoneNumber,
+          whatsAppReportsEnabled: user.whatsAppReportsEnabled,
+          whatsAppReportPhone: user.whatsAppReportPhone
         },
       });
     } else {
@@ -489,6 +771,9 @@ router.get("/verify", authenticateToken, async (req, res) => {
       email: req.user?.email,
       name: req.user?.name,
       role: req.user?.role,
+      phoneNumber: req.user?.phoneNumber,
+      whatsAppReportsEnabled: req.user?.whatsAppReportsEnabled,
+      whatsAppReportPhone: req.user?.whatsAppReportPhone
     };
 
     // Fallback: ensure email/name for Admin if missing (older tokens)

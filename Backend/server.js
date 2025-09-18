@@ -9,16 +9,24 @@ const { usageTracker } = require('./Middleware/usageTracker');
 // Connect to MongoDB
 const mongoURI = process.env.MONGO_URI || 'mongodb://localhost:27017/finance-dashboard';
 
-// Graceful shutdown handler
-process.on('SIGTERM', () => {
-  console.log('SIGTERM received, shutting down gracefully');
-  process.exit(0);
-});
+// Redis centralized client helpers
+const { initRedis, shutdownRedis } = require('./config/redisClient');
 
-process.on('SIGINT', () => {
-  console.log('SIGINT received, shutting down gracefully');
-  process.exit(0);
-});
+// Graceful shutdown
+const handleShutdown = (signal) => {
+  console.log(`${signal} received. Shutting down...`);
+  (async () => {
+    try { await shutdownRedis(); } catch (e) { console.error('Redis shutdown:', e.message); }
+    try {
+      if (mongoose.connection.readyState === 1) {
+        await mongoose.connection.close();
+        console.log('MongoDB connection closed');
+      }
+    } catch (e) { console.error('Mongo shutdown:', e.message); }
+    process.exit(0);
+  })();
+};
+['SIGTERM','SIGINT'].forEach(sig => process.on(sig, () => handleShutdown(sig)));
 
 
 const app = express();
@@ -69,12 +77,7 @@ app.use('/api/play-purchase/notifications', express.raw({ type: 'application/jso
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Import usage tracking middleware
-
-
-
-
-
+// (usageTracker middleware can be added here if enabled later)
 // Import routes
 const authRoutes = require('./Routes/auth');
 const dashboardRoutes = require('./Routes/dashboard');
@@ -163,6 +166,22 @@ app.use((err, req, res, next) => {
 
 mongoose.connect(mongoURI).then(async () => {
   console.log('Connected to MongoDB successfully');
+  // One-time cleanup: ensure legacy uid unique index is removed (allows null/duplicate uid)
+  try {
+    const User = require('./models/Userschema');
+    if (await User.collection.indexExists('uid_1')) {
+      await User.collection.dropIndex('uid_1');
+      console.log('Removed legacy uid_1 index.');
+    }
+  } catch (e) { console.warn('UID index cleanup:', e.message); }
+
+  // Initialize Redis before starting the server
+  try {
+    await initRedis();
+    console.log('Redis initialized successfully');
+  } catch (err) {
+    console.error('⚠️  Redis initialization failed. OTP features may not work:', err.message);
+  }
 
   // Test email configuration if credentials are provided
   if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {

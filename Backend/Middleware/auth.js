@@ -81,6 +81,8 @@ const authenticateToken = async (req, res, next) => {
                     req.user.isCancelled = user.isCancelled || false;
                     req.user.isGrace = user.isGrace || false;
                     req.user.purchaseToken = user.purchaseToken || null;
+                    req.user.whatsAppReportsEnabled = user.whatsAppReportsEnabled || false;
+                    req.user.whatsAppReportPhone = user.whatsAppReportPhone || null;
                 } else {
                     // Fallback to free plan if user not found
                     req.user.plan = 'free';
@@ -90,6 +92,8 @@ const authenticateToken = async (req, res, next) => {
                     req.user.isCancelled = false;
                     req.user.isGrace = false;
                     req.user.purchaseToken = null;
+                    req.user.whatsAppReportsEnabled = true;
+                    req.user.whatsAppReportPhone = user.phoneNumber || null;
                 }
             } catch (dbError) {
                 console.warn('Failed to fetch user plan information:', dbError.message);
@@ -101,6 +105,8 @@ const authenticateToken = async (req, res, next) => {
                 req.user.isCancelled = false;
                 req.user.isGrace = false;
                 req.user.purchaseToken = null;
+                req.user.whatsAppReportsEnabled = true;
+                req.user.whatsAppReportPhone = user.phoneNumber || null;
             }
         }
 

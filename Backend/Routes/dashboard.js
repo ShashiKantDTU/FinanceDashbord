@@ -3,6 +3,7 @@ const User = require("../models/Userschema");
 const Site = require("../models/Siteschema");
 const Employee = require("../models/EmployeeSchema");
 const { authenticateAndTrack } = require("../Middleware/usageTracker");
+// const { sendWeeklyReport } = require("../scripts/whatsappReport");
 
 const router = express.Router();
 
@@ -441,5 +442,79 @@ router.post("/sites/activate", authenticateAndTrack, async (req, res) => {
     return res.status(500).json({ error: "Error toggling sites", details: error.message });
   }
 });
+
+
+router.put("/toggle-whatsapp-reports" , authenticateAndTrack, async (req, res) => {
+  const user = req.user;
+  if (!user || !req.body || typeof req.body.enabled !== 'boolean') {
+    return res.status(401).json({
+      error: "Access denied. Authentication required.",
+    });
+  }
+
+  // Fetch user settings information
+  const UpdateData = req.body.enabled;
+
+  const update = await User.findByIdAndUpdate(
+    user.id,
+    { whatsAppReportsEnabled: UpdateData },
+    { new: true }
+  );
+
+  return res.status(200).json({
+    success: true,
+  });
+});
+
+
+
+router.put("/update-whatsapp-phone" , authenticateAndTrack, async (req, res) => {
+  const user = req.user;
+  if (!user) {
+    return res.status(401).json({
+      error: "Access denied. Authentication required.",
+    });
+  }
+
+  const { phone } = req.body;
+  if (!phone || typeof phone !== 'string' || phone.trim() === '') {
+    return res.status(400).json({
+      error: "Valid phone number is required.",
+    });
+  }
+
+  // Update user's WhatsApp report phone number
+  const update = await User.findByIdAndUpdate(
+    user.id,
+    { whatsAppReportPhone: phone.trim() },
+    { new: true }
+  );
+
+  return res.status(200).json({
+    success: true,
+  });
+});
+
+// router.post('/demoreport' , async (req, rest) => {
+//   try {
+//     const testUser = {
+//       "name": "Sunny Poddar",
+//       "phoneNumber": "+919354739451",
+//       "calculationType": "default"
+//       };
+//     const testSiteId = "6870f208c36ebbb9064d6649";
+//     const testMonth = 8; // August
+//     const testYear = 2025;
+//     const testWeek = 2; // Week 2
+
+//     const result = await sendWeeklyReport(testUser, testSiteId, testMonth, testYear, testWeek);
+//     console.log("Demo report result:", result);
+//     return rest.status(200).json({ success: true, result });
+//   } catch (error) {
+//     console.error("Error sending demo report:", error);
+//     return rest.status(500).json({ success: false, message: "Failed to send demo report", error: error.message });
+//   }
+// })
+
 
 module.exports = router;
