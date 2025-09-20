@@ -73,6 +73,7 @@ const authenticateToken = async (req, res, next) => {
             try {
                 const user = await User.findById(decoded.id);
                 if (user) {
+                    req.user.name = user.name;
                     req.user.plan = user.plan || 'free';
                     req.user.planExpiresAt = user.planExpiresAt;
                     req.user.planActivatedAt = user.planActivatedAt;

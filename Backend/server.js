@@ -90,6 +90,7 @@ const usageRoutes = require('./Routes/usage');
 const cronRoutes = require('./Routes/cronRoutes');
 const { router: pdfReportRoutes } = require('./Routes/pdfReports');
 const excelReportRoutes = require('./Routes/excelReports');
+const servicesRoutes = require('./Routes/services');
 // const optimizedEmployeeRoutes = require('./Routes/optimizedEmployeeRoutes');
 
 // Import cron job service
@@ -125,6 +126,7 @@ app.use('/api/cron', cronRoutes);
 app.use('/api/reports', pdfReportRoutes);
 app.use('/api/reports', excelReportRoutes); // New Excel (placeholder) report endpoint
 // app.use('/api/employee-optimized', optimizedEmployeeRoutes);
+app.use('/api/services', servicesRoutes);
 
 // Basic route
 app.get('/', (req, res) => {
@@ -166,15 +168,7 @@ app.use((err, req, res, next) => {
 
 mongoose.connect(mongoURI).then(async () => {
   console.log('Connected to MongoDB successfully');
-  // One-time cleanup: ensure legacy uid unique index is removed (allows null/duplicate uid)
-  try {
-    const User = require('./models/Userschema');
-    if (await User.collection.indexExists('uid_1')) {
-      await User.collection.dropIndex('uid_1');
-      console.log('Removed legacy uid_1 index.');
-    }
-  } catch (e) { console.warn('UID index cleanup:', e.message); }
-
+  
   // Initialize Redis before starting the server
   try {
     await initRedis();
