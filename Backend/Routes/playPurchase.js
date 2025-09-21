@@ -368,7 +368,8 @@ async function updateUserSubscription(user, notification, notificationType, requ
                         lastPurchaseToken: user.purchaseToken,
                         purchaseToken: notification.purchaseToken,
                         planActivatedAt: new Date(),
-                        planSource: 'google_play'
+                        planSource: 'google_play',
+                        lastSiteUpdated: null // Reset last site update to allow immediate site updates
                     };
                     message = `Subscription active. Type: ${getNotificationTypeName(notificationType)}.`;
                     shouldActivateAllSites = true;
