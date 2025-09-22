@@ -177,20 +177,20 @@ mongoose.connect(mongoURI).then(async () => {
     console.error('⚠️  Redis initialization failed. OTP features may not work:', err.message);
   }
 
-  // Test email configuration if credentials are provided
-  if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
-    console.log('Testing email configuration...');
-    const emailWorking = await testEmailConnection();
-    if (emailWorking) {
-      console.log('✅ Email service is configured and ready');
-    } else {
-      console.log('⚠️  Email service configuration failed - password reset emails will not work');
-      console.log('Please check your EMAIL_USER and EMAIL_PASS in .env file');
-    }
-  } else {
-    console.log('⚠️  Email credentials not configured - password reset emails will not work');
-    console.log('Please set EMAIL_USER and EMAIL_PASS in .env file');
-  }
+  // // Test email configuration if credentials are provided
+  // if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
+  //   console.log('Testing email configuration...');
+  //   const emailWorking = await testEmailConnection();
+  //   if (emailWorking) {
+  //     console.log('✅ Email service is configured and ready');
+  //   } else {
+  //     console.log('⚠️  Email service configuration failed - password reset emails will not work');
+  //     console.log('Please check your EMAIL_USER and EMAIL_PASS in .env file');
+  //   }
+  // } else {
+  //   console.log('⚠️  Email credentials not configured - password reset emails will not work');
+  //   console.log('Please set EMAIL_USER and EMAIL_PASS in .env file');
+  // }
 
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Server is running on port ${PORT}`);
