@@ -42,58 +42,7 @@ const Payments = () => {
 
     const [selectedMonth, setSelectedMonth] = useState(currentDate.getMonth() + 1); const [selectedYear, setSelectedYear] = useState(currentDate.getFullYear());
 
-    // Default site ID - you can modify this or get from user context
-    const processAttendanceData = (attendance) => {
-
-        const attendanceArray = attendance || [];
-
-        // This section calculates summary figures based on the employee's attendance array.
-
-        // Calculate Total Present Days:
-        // Counts entries that include "P" (e.g., "P", "P1", "P8").
-        const totalPresentCount = attendanceArray.reduce((acc, status) => {
-            return acc + (status && status.toUpperCase().includes('P') ? 1 : 0);
-        }, 0);
-
-        // Calculate Total Overtime Hours:
-        // Sums the numeric part of entries like "P2" (2 hours), "A3" (3 hours).
-        // Assumes overtime is indicated by a number following "P" or "A".
-        const totalOvertimeHours = attendanceArray.reduce((acc, status) => {
-            if (status && status.length > 1) {
-                const overtimePart = status.substring(1); // Get character(s) after the first one.
-                const hours = parseInt(overtimePart, 10);
-                return acc + (isNaN(hours) ? 0 : hours);
-            }
-            return acc;
-        }, 0);
-
-        // Calculate Total Absent Days:
-        // Counts entries that include "A" (e.g., "A", "A1").
-        
-
-        // Calculate Final Attendance Days (including overtime):
-        // Overtime hours are converted to days (assuming 8 hours = 1 day).
-        // Remaining overtime hours are represented as a decimal fraction of a day.
-        const overtimeDaysEquivalent = Math.floor(totalOvertimeHours / 8);
-        const remainingOvertimeHoursPart = totalOvertimeHours % 8;
-        // Convert remaining hours to a decimal (e.g., 4 hours = 0.4, not 0.5 of a day based on current logic)
-        // Note: The original logic `remainingOvertimeHours / 10` might be a specific business rule
-        // or a simplification. If 4 hours should be 0.5 days, this should be `remainingOvertimeHours / 8`.
-        // Sticking to original logic:
-        const remainingOvertimeDecimalContribution = remainingOvertimeHoursPart / 10;
-        const finalAttendanceDays = totalPresentCount + overtimeDaysEquivalent + remainingOvertimeDecimalContribution;
-        return finalAttendanceDays;    };    // Function to calculate payment details
-    const calculatePaymentDetails = useCallback((dailyRate, attendanceData, advances, additionalWages, previousBalance) => {
-        const attendance = processAttendanceData(attendanceData);
-        const grossPayment = dailyRate * attendance;
-        const netBalance = grossPayment - advances + additionalWages + previousBalance;
-
-        return {
-            attendance,
-            grossPayment,
-            netBalance
-        };
-    }, []);
+   
 
     // Calendar utility functions
     const formatSelectedMonthDisplay = () => {
@@ -144,42 +93,27 @@ const Payments = () => {
                 setLoading(true);
 
                 const response = await api.get(
-                    `/api/employee/allemployees?month=${selectedMonth}&year=${selectedYear}&siteID=${siteID}`
+                    `/api/employee/allemployees-optimized?month=${selectedMonth}&year=${selectedYear}&siteID=${siteID}`
                 ); if (response.success) {
-                    // console.log('🔄 Processing API response data:', response.data.length, 'employees');
+                    console.log('🔄 Processing API response data:', response.data.length, 'employees');
                     // Transform API data to match the component's expected format
                     const transformedData = response.data.map((emp) => {
                         // console.log(`\n🔄 Processing employee ${index + 1}/${response.data.length}: ${emp.name} (${emp.empid})`);
 
-                        // Calculate payment details using the new logic
-                        const paymentDetails = calculatePaymentDetails(
-                            emp.rate || 0,
-                            emp.attendance,
-                            emp.totalPayouts || 0,
-                            emp.totalAdditionalReqPays || 0,
-                            emp.carryForward || emp.carry_forwarded?.value || 0
-                        );
-                        //   // Debug payment calculations
-                        // console.log(`💰 Payment calculation for ${emp.name}:`, {
-                        //     dailyRate: emp.rate,
-                        //     totalAttendance: paymentDetails.attendance,
-                        //     grossPayment: paymentDetails.grossPayment,
-                        //     totalAdvances: emp.totalPayouts,
-                        //     additionalWages: emp.totalAdditionalReqPays,
-                        //     previousBalance: emp.carryForward || emp.carry_forwarded?.value,
-                        //     netBalance: paymentDetails.netBalance
-                        // });
+                     
+                        
+                    
 
                         const transformedEmployee = {
                             id: emp.empid,
                             name: emp.name,
                             dailyRate: emp.rate,
-                            attendance: paymentDetails.attendance, // Calculated total attendance
+                            attendance: emp.totalAttendance, // Calculated total attendance
                             totalAdvances: emp.totalPayouts || 0,
                             previousBalance: emp.carryForward || emp.carry_forwarded?.value || 0,
                             totalAdditionalPayments: emp.totalAdditionalReqPays || 0,
-                            grossPayment: paymentDetails.grossPayment, // Calculated gross payment
-                            netBalance: paymentDetails.netBalance, // Calculated net balance
+                            grossPayment: emp.totalWage, // Calculated gross payment
+                            netBalance: emp.closing_balance, // Calculated net balance
                             advances: emp.payouts?.map(payout => ({
                                 value: payout.value,
                                 remark: payout.remark,
@@ -215,7 +149,7 @@ const Payments = () => {
             }        };
 
         fetchEmployeeData();
-    }, [selectedMonth, selectedYear, siteID, calculatePaymentDetails, showError]);
+    }, [selectedMonth, selectedYear, siteID,  showError]);
 
     const filteredEmployees = employeeData.filter(emp =>
         emp.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -724,7 +658,7 @@ const Payments = () => {
     if (loading) {
         return (
             <div className={styles.PaymentsContainer}>
-                <Sidebar />
+                <Sidebar activeSection="Payments" />
                 <div className={styles.container}>
                     <div className={styles.headerUltraCompact}>
                         <div className={styles.titleSection}>
@@ -759,7 +693,7 @@ const Payments = () => {
 
     return (
         <div className={styles.PaymentsContainer}>
-            <Sidebar />
+            <Sidebar activeSection="Payments" />
             <div className={styles.container}>            <div className={styles.headerUltraCompact}>
                 <div className={styles.titleSection}>
                     <h1 className={styles.titleCompact}>

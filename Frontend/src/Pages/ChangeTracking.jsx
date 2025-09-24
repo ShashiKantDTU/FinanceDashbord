@@ -676,7 +676,7 @@ const ChangeTracking = () => {
 
   return (
     <div className={styles.changeTrackingContainer}>
-      <Sidebar />
+      <Sidebar activeSection="Change Tracking" />
 
       <div className={styles.changeTrackingContent}>
         {/* Ultra-Compact Header */}

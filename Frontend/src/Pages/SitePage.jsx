@@ -498,7 +498,7 @@ const SitePage = () => {
 
     return (
         <div className={styles.sitePageContainer}>
-            <Sidebar />
+            <Sidebar activeSection="Site Management" />
             <div className={styles.sitePageContent}>
                 {/* Page Header Section */}
                 <div className={styles.header}>

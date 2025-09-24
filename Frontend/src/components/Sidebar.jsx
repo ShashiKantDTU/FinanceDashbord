@@ -16,7 +16,7 @@ import { useParams } from "react-router";
 const Sidebar = ({ activeSection, onSectionChange }) => {
   // Check if screen is small (mobile/tablet)
   const isSmallScreen = () => window.innerWidth <= 768;
-  
+
   const [sidebarstatus, setSidebarStatus] = useState(() => {
     // For small screens, always start closed
     if (isSmallScreen()) {
@@ -42,7 +42,7 @@ const Sidebar = ({ activeSection, onSectionChange }) => {
     };
 
     window.addEventListener("resize", handleResize);
-    
+
     // Check on mount
     handleResize();
 
@@ -63,22 +63,31 @@ const Sidebar = ({ activeSection, onSectionChange }) => {
       path: `/attendance/${siteID}`,
     },
     { title: "Payments", icon: <FaWallet />, path: `/payments/${siteID}` },
-    { 
-      title: "Change Tracking", 
-      icon: <FaHistory />, 
-      path: `/change-tracking/${siteID}` 
+    {
+      title: "Site Expenses",
+      icon: <FaChartLine />,
+      path: `/site-expenses/${siteID}`,
     },
-    { title: "Manage Supervisors", icon: <FaCog />, path: `/settings/${siteID}` },
+    {
+      title: "Change Tracking",
+      icon: <FaHistory />,
+      path: `/change-tracking/${siteID}`,
+    },
+    {
+      title: "Manage Supervisors",
+      icon: <FaUser />,
+      path: `/settings/${siteID}`,
+    },
   ];
 
   // Store event handler references so they can be properly removed
   const handleMouseEnter = useCallback(() => {
     // Don't open sidebar on small screens
     if (isSmallScreen()) return;
-    
+
     if (sidebarstatus === "close") {
       setSidebarStatus("open");
-      
+
       // Set a timeout to auto-close if mouse leaves too quickly
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
@@ -88,8 +97,17 @@ const Sidebar = ({ activeSection, onSectionChange }) => {
         if (sidebar && sidebarstatus === "open") {
           // Check if mouse is still over the sidebar
           const rect = sidebar.getBoundingClientRect();
-          const isMouseOver = document.elementFromPoint(rect.left + rect.width/2, rect.top + rect.height/2) === sidebar ||
-                             sidebar.contains(document.elementFromPoint(rect.left + rect.width/2, rect.top + rect.height/2));
+          const isMouseOver =
+            document.elementFromPoint(
+              rect.left + rect.width / 2,
+              rect.top + rect.height / 2
+            ) === sidebar ||
+            sidebar.contains(
+              document.elementFromPoint(
+                rect.left + rect.width / 2,
+                rect.top + rect.height / 2
+              )
+            );
           if (!isMouseOver) {
             setSidebarStatus("close");
           }
@@ -108,22 +126,24 @@ const Sidebar = ({ activeSection, onSectionChange }) => {
   }, [sidebarstatus]);
 
   // Add a more robust mouse tracking system
-  const handleMouseMove = useCallback((e) => {
-    const sidebar = sidebarRef.current;
-    if (!sidebar || sidebarstatus === "Force-open") return;
+  const handleMouseMove = useCallback(
+    (e) => {
+      const sidebar = sidebarRef.current;
+      if (!sidebar || sidebarstatus === "Force-open") return;
 
-    const rect = sidebar.getBoundingClientRect();
-    const isMouseInside = (
-      e.clientX >= rect.left &&
-      e.clientX <= rect.right &&
-      e.clientY >= rect.top &&
-      e.clientY <= rect.bottom
-    );
+      const rect = sidebar.getBoundingClientRect();
+      const isMouseInside =
+        e.clientX >= rect.left &&
+        e.clientX <= rect.right &&
+        e.clientY >= rect.top &&
+        e.clientY <= rect.bottom;
 
-    if (!isMouseInside && sidebarstatus === "open") {
-      setSidebarStatus("close");
-    }
-  }, [sidebarstatus]);
+      if (!isMouseInside && sidebarstatus === "open") {
+        setSidebarStatus("close");
+      }
+    },
+    [sidebarstatus]
+  );
 
   useEffect(() => {
     const sidebar = sidebarRef.current;
@@ -202,8 +222,8 @@ const Sidebar = ({ activeSection, onSectionChange }) => {
   const hamburgerIcon = <FaBars className={styles.hamburgerIcon} />;
   return (
     <>
-      <div 
-        ref={sidebarRef} 
+      <div
+        ref={sidebarRef}
         className={styles.sidebar}
         aria-label="Navigation sidebar"
         role="navigation"
@@ -214,7 +234,7 @@ const Sidebar = ({ activeSection, onSectionChange }) => {
               <span className={styles.logoText}>Finance</span>
             )}
           </div>
-          <button 
+          <button
             onClick={handleHamburgerClick}
             aria-label="Toggle sidebar navigation"
             aria-expanded={sidebarstatus !== "close"}

@@ -5,7 +5,6 @@ import { FaCalendarAlt } from 'react-icons/fa';
 import { api } from '../utils/api';
 import { useParams } from 'react-router';
 import { useToast } from '../components/ToastProvider';
-import { useAuth } from '../context/AuthContext';
 import CustomSpinner from '../components/CustomSpinner';
 import VirtualizedAttendanceTable from '../components/VirtualizedAttendanceTable';
 import SubscriptionModal from '../components/SubscriptionModal';
@@ -18,7 +17,7 @@ const Attendance = () => {
     const { showSuccess, showError, showWarning } = useToast();
     
     // Get user context for plan information
-    const { user } = useAuth();
+    
 
     // --- UTILITY FUNCTIONS ---
 
@@ -859,7 +858,7 @@ const Attendance = () => {
     
     return (
         <div className={`${styles.attendanceContainer} ${isEditMode ? styles.editMode : ''}`}>
-            <Sidebar />
+            <Sidebar activeSection="Attendance" />
             <div className={styles.attendanceContent}>
                 <div className={styles.pageHeader}>
                     <div className={styles.titleSection}>
