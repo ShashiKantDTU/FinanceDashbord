@@ -7,6 +7,7 @@ import SitePage from './Pages/SitePage';
 import Attendance from "./Pages/Attendance";
 import Payments from "./Pages/Payments";
 import ChangeTracking from "./Pages/ChangeTracking";
+import SiteExpenses from "./Pages/SiteExpenses";
 import Login from "./Pages/Login";
 import SignUp from "./Pages/SignUp";
 import ForgotPassword from "./Pages/ForgotPassword";
@@ -55,6 +56,11 @@ function App() {
             <Route path="/payments/:siteID" element={
               <ProtectedRoute>
                 <Payments />
+              </ProtectedRoute>
+            } />
+            <Route path="/site-expenses/:siteID" element={
+              <ProtectedRoute>
+                <SiteExpenses />
               </ProtectedRoute>
             } />
             <Route path="/change-tracking/:siteID" element={

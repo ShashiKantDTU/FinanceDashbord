@@ -365,7 +365,7 @@ const Settings = () => {
 
     return (
         <div className={styles.settingsContainer}>
-            <Sidebar />
+            <Sidebar activeSection="Manage Supervisors" />
             <main className={styles.settingsContent}>
                 <header className={styles.pageHeader}>
                     <div className={styles.titleSection}>

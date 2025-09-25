@@ -490,51 +490,47 @@ const Payments = () => {
         try {
             setLoading(true);
 
-            const response = await api.get(
-                `/api/employee/allemployees?month=${selectedMonth}&year=${selectedYear}&siteID=${siteID}`
-            );
-
-            if (response.success) {
-                // console.log('🔄 Refreshing employee data after update...');
-
-                // Transform API data to match the component's expected format
-                const transformedData = response.data.map((emp) => {
-                    const paymentDetails = calculatePaymentDetails(
-                        emp.rate || 0,
-                        emp.attendance,
-                        emp.totalPayouts || 0,
-                        emp.totalAdditionalReqPays || 0,
-                        emp.carryForward || emp.carry_forwarded?.value || 0
-                    );
-
-                    return {
-                        id: emp.empid,
-                        name: emp.name,
-                        dailyRate: emp.rate,
-                        attendance: paymentDetails.attendance,
-                        totalAdvances: emp.totalPayouts || 0,
-                        previousBalance: emp.carryForward || emp.carry_forwarded?.value || 0,
-                        totalAdditionalPayments: emp.totalAdditionalReqPays || 0,
-                        grossPayment: paymentDetails.grossPayment,
-                        netBalance: paymentDetails.netBalance,
-                        advances: emp.payouts?.map(payout => ({
-                            value: payout.value,
-                            remark: payout.remark,
-                            date: new Date(payout.date).toISOString().split('T')[0]
-                        })) || [],
-                        additionalPayments: emp.additional_req_pays?.map(payment => ({
-                            value: payment.value,
-                            remark: payment.remark,
-                            date: new Date(payment.date).toISOString().split('T')[0]
-                        })) || [],
-                        hasPendingPayouts: emp.hasPendingPayouts,
-                        needsRecalculation: emp.needsRecalculation,
-                        siteID: emp.siteID,
-                        month: emp.month,
-                        year: emp.year,
-                        rawAttendance: emp.attendance
-                    };
-                }); setEmployeeData(transformedData);
+             const response = await api.get(
+                                `/api/employee/allemployees-optimized?month=${selectedMonth}&year=${selectedYear}&siteID=${siteID}`
+                            ); if (response.success) {
+                                console.log('🔄 Processing API response data:', response.data.length, 'employees');
+                                // Transform API data to match the component's expected format
+                                const transformedData = response.data.map((emp) => {
+                                    // console.log(`\n🔄 Processing employee ${index + 1}/${response.data.length}: ${emp.name} (${emp.empid})`);
+                                    const transformedEmployee = {
+                                        id: emp.empid,
+                                        name: emp.name,
+                                        dailyRate: emp.rate,
+                                        attendance: emp.totalAttendance, // Calculated total attendance
+                                        totalAdvances: emp.totalPayouts || 0,
+                                        previousBalance: emp.carryForward || emp.carry_forwarded?.value || 0,
+                                        totalAdditionalPayments: emp.totalAdditionalReqPays || 0,
+                                        grossPayment: emp.totalWage, // Calculated gross payment
+                                        netBalance: emp.closing_balance, // Calculated net balance
+                                        advances: emp.payouts?.map(payout => ({
+                                            value: payout.value,
+                                            remark: payout.remark,
+                                            date: new Date(payout.date).toISOString().split('T')[0]
+                                        })) || [],
+                                        additionalPayments: emp.additional_req_pays?.map(payment => ({
+                                            value: payment.value,
+                                            remark: payment.remark,
+                                            date: new Date(payment.date).toISOString().split('T')[0]
+                                        })) || [],
+                                        // Additional fields from API
+                                        hasPendingPayouts: emp.hasPendingPayouts,
+                                        needsRecalculation: emp.needsRecalculation,
+                                        siteID: emp.siteID,
+                                        month: emp.month,
+                                        year: emp.year,
+                                        // Raw attendance for debugging
+                                        rawAttendance: emp.attendance
+                                    };
+            
+                                    // console.log(`✅ Transformed employee ${emp.name}:`, transformedEmployee);
+                                    return transformedEmployee;
+                                });                    //  console.log('🎉 All employees processed successfully:', transformedData.length);
+                                setEmployeeData(transformedData);
                 // console.log('✅ Employee data refreshed successfully');
             } else {
                 throw new Error('Failed to refresh employee data');
