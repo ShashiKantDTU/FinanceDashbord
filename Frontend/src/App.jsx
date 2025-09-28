@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { Analytics } from "@vercel/analytics/react"
+import { SpeedInsights } from "@vercel/speed-insights/react"
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import Home from './Pages/Home';
 import Settings from './Pages/Settings';
@@ -77,6 +78,7 @@ function App() {
           </Routes>
         </BrowserRouter>
         <Analytics />
+        <SpeedInsights />
       </ToastProvider>
     </AuthProvider>
   )
