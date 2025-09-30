@@ -14,8 +14,6 @@ const { pendingAttendance } = require("../Utils/EmployeeUtils");
 const { markEmployeesForRecalculation } = require("../Utils/Jobs");
 const router = express.Router();
 
-
-
 /**
  * Helper function to mark future months for recalculation after employee deletion
  * @param {String} siteID - Site identifier
@@ -25,7 +23,14 @@ const router = express.Router();
  * @param {String} deletedBy - User who performed the deletion
  * @returns {Object} Recalculation result with success/error info
  */
-const handleRecalculationMarking = async (siteID, empid, month, year, deletedBy, userdata = null) => {
+const handleRecalculationMarking = async (
+  siteID,
+  empid,
+  month,
+  year,
+  deletedBy,
+  userdata = null
+) => {
   try {
     // Calculate the next month after the deleted month
     let nextMonth = parseInt(month) + 1;
@@ -42,7 +47,10 @@ const handleRecalculationMarking = async (siteID, empid, month, year, deletedBy,
     const currentYear = currentDate.getFullYear();
 
     // Check if there are any future months to mark
-    if (nextYear > currentYear || (nextYear === currentYear && nextMonth > currentMonth)) {
+    if (
+      nextYear > currentYear ||
+      (nextYear === currentYear && nextMonth > currentMonth)
+    ) {
       // console.log(`📅 No future months to mark for recalculation - deleted month ${month}/${year} is current or future`);
       return {
         success: true,
@@ -50,8 +58,8 @@ const handleRecalculationMarking = async (siteID, empid, month, year, deletedBy,
           futureRecordsMarked: 0,
           reason: "No future months exist after the deleted month",
           markedBy: deletedBy,
-          markedAt: new Date()
-        }
+          markedAt: new Date(),
+        },
       };
     }
 
@@ -72,22 +80,28 @@ const handleRecalculationMarking = async (siteID, empid, month, year, deletedBy,
       recalculationMarked: {
         futureRecordsMarked: recalculationResult.modifiedCount,
         startingFromMonth: `${nextMonth}/${nextYear}`,
-        reason: "Employee deletion affects carry-forward calculations for future months",
+        reason:
+          "Employee deletion affects carry-forward calculations for future months",
         markedBy: deletedBy,
-        markedAt: new Date()
-      }
+        markedAt: new Date(),
+      },
     };
   } catch (recalculationError) {
-    console.warn("⚠️ Failed to mark future months for recalculation:", recalculationError.message);
+    console.warn(
+      "⚠️ Failed to mark future months for recalculation:",
+      recalculationError.message
+    );
 
     return {
       success: false,
       recalculationWarning: {
         error: "Failed to mark future months for recalculation",
         details: recalculationError.message,
-        impact: "Future months may have incorrect carry-forward balances until manually recalculated",
-        recommendation: "Manually trigger recalculation for this employee's future months"
-      }
+        impact:
+          "Future months may have incorrect carry-forward balances until manually recalculated",
+        recommendation:
+          "Manually trigger recalculation for this employee's future months",
+      },
     };
   }
 };
@@ -143,17 +157,34 @@ router.post("/addemployee", authenticateAndTrack, async (req, res) => {
     // console.log(`👤 Created by: ${createdBy}`);
 
     let plan = req.user.plan || "free";
-    if (plan === 'free') {
-      // get already total employees in the month
-      const totalEmployees = await employeeSchema.countDocuments({
-        siteID: siteID.trim(),
-        month: month,
-        year: year,
-      });
+    // get already total employees in the month
+    const totalEmployees = await employeeSchema.countDocuments({
+      siteID: siteID.trim(),
+      month: month,
+      year: year,
+    });
+    if (plan === "free") {
       if (totalEmployees >= 20) {
         return res.status(403).json({
           success: false,
-          message: "You have reached the maximum limit of 20 employees for this month. Please upgrade to contractor pro or Haazri Automate to add more employees.",
+          message:
+            "You have reached the maximum limit of 20 employees for this month per site. Please upgrade to contractor pro or Haazri Automate to add more employees.",
+        });
+      }
+    } else if (plan === "pro") {
+      if (totalEmployees >= 100) {
+        return res.status(403).json({
+          success: false,
+          message:
+            "You have reached the maximum limit of 100 employees for this month per site. Please upgrade to Haazri Automate to add more employees.",
+        });
+      }
+    } else if (plan === "premium") {
+      if (totalEmployees >= 200) {
+        return res.status(403).json({
+          success: false,
+          message:
+            "You have reached the maximum limit of 200 employees for this month per site. Please upgrade to Business Plan to add more employees for more info on Business Plan contact support.",
         });
       }
     }
@@ -508,9 +539,11 @@ router.delete("/deleteemployee", authenticateAndTrack, async (req, res) => {
       const lastChangeTrackingIndex = changeTrackingResults.length - 1;
       if (lastChangeTrackingIndex >= 0) {
         if (recalculationResult.success) {
-          changeTrackingResults[lastChangeTrackingIndex].recalculationMarked = recalculationResult.recalculationMarked;
+          changeTrackingResults[lastChangeTrackingIndex].recalculationMarked =
+            recalculationResult.recalculationMarked;
         } else {
-          changeTrackingResults[lastChangeTrackingIndex].recalculationWarning = recalculationResult.recalculationWarning;
+          changeTrackingResults[lastChangeTrackingIndex].recalculationWarning =
+            recalculationResult.recalculationWarning;
         }
       }
     }
@@ -557,9 +590,11 @@ router.delete("/deleteemployee", authenticateAndTrack, async (req, res) => {
       if (recalculationWarnings.length > 0) {
         deletionSummary.warnings = deletionSummary.warnings || {};
         deletionSummary.warnings.recalculationIssues = {
-          message: "Employee deleted but future month recalculation marking failed",
-          details: recalculationWarnings.map(w => w.recalculationWarning),
-          recommendation: "Manually trigger recalculation for this employee's future months"
+          message:
+            "Employee deleted but future month recalculation marking failed",
+          details: recalculationWarnings.map((w) => w.recalculationWarning),
+          recommendation:
+            "Manually trigger recalculation for this employee's future months",
         };
       }
 
@@ -569,9 +604,10 @@ router.delete("/deleteemployee", authenticateAndTrack, async (req, res) => {
       );
       if (recalculationSuccess.length > 0) {
         deletionSummary.data.recalculationInfo = {
-          futureMonthsMarked: recalculationSuccess[0].recalculationMarked.futureRecordsMarked,
+          futureMonthsMarked:
+            recalculationSuccess[0].recalculationMarked.futureRecordsMarked,
           reason: recalculationSuccess[0].recalculationMarked.reason,
-          note: "Future months will be automatically recalculated when accessed to ensure correct carry-forward balances"
+          note: "Future months will be automatically recalculated when accessed to ensure correct carry-forward balances",
         };
       }
     }
@@ -662,22 +698,37 @@ router.post("/importemployees", authenticateAndTrack, async (req, res) => {
     const importedBy = req.user.name || req.user?.email || "unknown-user";
 
     let plan = req.user.plan || "free";
-    if (plan === 'free') {
-      // get already total employees in the month
-      const totalEmployees = await employeeSchema.countDocuments({
-        siteID: siteID.trim(),
-        month: targetMonth,
-        year: targetYear,
-      });
+    // get already total employees in the month
+    const totalEmployees = await employeeSchema.countDocuments({
+      siteID: siteID.trim(),
+      month: targetMonth,
+      year: targetYear,
+    });
+    if (plan === "free") {
       if (totalEmployees >= 20 || employeeIds.length + totalEmployees > 20) {
         return res.status(403).json({
           success: false,
-          message: "You have the maximum limit of 20 employees for this month. Please upgrade to contractor pro or Haazri Automate to add more employees.",
+          message:
+            "You have the maximum limit of 20 employees for this month per site. Please upgrade to contractor pro or Haazri Automate to add more employees.",
+        });
+      }
+    } else if (plan === "pro") {
+      if (totalEmployees >= 100 || employeeIds.length + totalEmployees > 100) {
+        return res.status(403).json({
+          success: false,
+          message:
+            "You have the maximum limit of 100 employees for this month per site. Please upgrade to Haazri Automate to add more employees.",
+        });
+      }
+    } else if (plan === "premium") {
+      if (totalEmployees >= 200 || employeeIds.length + totalEmployees > 200) {
+        return res.status(403).json({
+          success: false,
+          message:
+            "You have reached the maximum limit of 200 employees for this month per site. Please upgrade to Business Plan to add more employees for more info on Business Plan contact support.",
         });
       }
     }
-
-
 
     // console.log(
     //   `🔍 Importing employees from ${sourceMonth}/${sourceYear} to ${targetMonth}/${targetYear} for site ${siteID}`
@@ -702,8 +753,9 @@ router.post("/importemployees", authenticateAndTrack, async (req, res) => {
     if (!sourceEmployees || sourceEmployees.length === 0) {
       return res.status(404).json({
         success: false,
-        error: `No employees found for ${sourceMonth}/${sourceYear} at site ${siteID}${employeeIds.length > 0 ? ` with specified IDs` : ""
-          }.`,
+        error: `No employees found for ${sourceMonth}/${sourceYear} at site ${siteID}${
+          employeeIds.length > 0 ? ` with specified IDs` : ""
+        }.`,
       });
     }
 
@@ -746,12 +798,15 @@ router.post("/importemployees", authenticateAndTrack, async (req, res) => {
 
         // Calculate carry forward amount from source employee's closing balance
         // Only carry forward when importing to a future month (chronologically after source month)
-        const isTargetInFuture = (parseInt(targetYear) > parseInt(sourceYear)) ||
-          (parseInt(targetYear) === parseInt(sourceYear) && parseInt(targetMonth) > parseInt(sourceMonth));
+        const isTargetInFuture =
+          parseInt(targetYear) > parseInt(sourceYear) ||
+          (parseInt(targetYear) === parseInt(sourceYear) &&
+            parseInt(targetMonth) > parseInt(sourceMonth));
 
-        const carryForwardAmount = preserveCarryForward && isTargetInFuture
-          ? sourceEmployee.closing_balance || 0
-          : 0;
+        const carryForwardAmount =
+          preserveCarryForward && isTargetInFuture
+            ? sourceEmployee.closing_balance || 0
+            : 0;
 
         // Prepare new employee data for target month/year
         const newEmployeeData = {
@@ -774,8 +829,8 @@ router.post("/importemployees", authenticateAndTrack, async (req, res) => {
               carryForwardAmount > 0
                 ? `Carried forward from ${sourceMonth}/${sourceYear} - Previous balance: ${carryForwardAmount}`
                 : isTargetInFuture
-                  ? `New month import from ${sourceMonth}/${sourceYear} - No carry forward (zero balance)`
-                  : `Import from ${sourceMonth}/${sourceYear} to past month - No carry forward applied`,
+                ? `New month import from ${sourceMonth}/${sourceYear} - No carry forward (zero balance)`
+                : `Import from ${sourceMonth}/${sourceYear} to past month - No carry forward applied`,
             date: new Date(),
           },
           createdBy: importedBy,
@@ -799,7 +854,13 @@ router.post("/importemployees", authenticateAndTrack, async (req, res) => {
             parseInt(targetMonth),
             parseInt(targetYear),
             importedBy,
-            `Employee "${sourceEmployee.name}" imported from ${sourceMonth}/${sourceYear} to ${targetMonth}/${targetYear} by ${importedBy}. ${isTargetInFuture ? `Carry forward: ${carryForwardAmount}` : `Past month import - No carry forward applied`}`,
+            `Employee "${
+              sourceEmployee.name
+            }" imported from ${sourceMonth}/${sourceYear} to ${targetMonth}/${targetYear} by ${importedBy}. ${
+              isTargetInFuture
+                ? `Carry forward: ${carryForwardAmount}`
+                : `Past month import - No carry forward applied`
+            }`,
             {}, // oldEmployeeData (empty for import)
             savedEmployee.toObject() // newEmployeeData
           );
@@ -887,11 +948,13 @@ router.post("/importemployees", authenticateAndTrack, async (req, res) => {
           preserveAdditionalPays: preserveAdditionalPays,
         },
       },
-      message: `Successfully imported ${successfulImports.length
-        } employees from ${sourceMonth}/${sourceYear} to ${targetMonth}/${targetYear}${failedImports.length > 0
+      message: `Successfully imported ${
+        successfulImports.length
+      } employees from ${sourceMonth}/${sourceYear} to ${targetMonth}/${targetYear}${
+        failedImports.length > 0
           ? `. ${failedImports.length} imports failed.`
           : ""
-        }`,
+      }`,
     };
 
     // Add warnings if any imports failed
@@ -934,7 +997,8 @@ router.post("/importemployees", authenticateAndTrack, async (req, res) => {
 });
 
 // Get employee details with pending payoutes in month
-router.get("/employeewithpendingpayouts",
+router.get(
+  "/employeewithpendingpayouts",
   authenticateAndTrack,
   async (req, res) => {
     // Required query parameters: month, year, and siteID
@@ -988,7 +1052,10 @@ router.get("/employeewithpendingpayouts",
             );
 
             // Calculate additional data using Jobs utility
-            const calculationResult = calculateEmployeeData(latestEmployeeData, req.user);
+            const calculationResult = calculateEmployeeData(
+              latestEmployeeData,
+              req.user
+            );
             // console.log(
             //   `🔢 Calculated data for employee ${employee.empid}:`,
             //   calculationResult
@@ -1116,7 +1183,10 @@ router.get("/allemployees", authenticateAndTrack, async (req, res) => {
             req.user
           );
           // Calculate additional data using Jobs utility
-          const calculationResult = calculateEmployeeData(latestEmployeeData, req.user);
+          const calculationResult = calculateEmployeeData(
+            latestEmployeeData,
+            req.user
+          );
 
           // Get additional fields for frontend compatibility
           const totalAdditionalReqPays =
@@ -1199,182 +1269,210 @@ router.get("/allemployees", authenticateAndTrack, async (req, res) => {
 
 // This new route replaces the old "/allemployees" logic.
 // It uses a single aggregation pipeline for maximum efficiency.
-router.get("/allemployees-optimized", authenticateAndTrack, async (req, res) => {
-  const { month, year, siteID } = req.query;
+router.get(
+  "/allemployees-optimized",
+  authenticateAndTrack,
+  async (req, res) => {
+    const { month, year, siteID } = req.query;
 
-  // 1. Validate Input Parameters
-  if (!month || !year || !siteID) {
-    return res.status(400).json({ success: false, error: "Month, year, and siteID are required." });
-  }
-
-  try {
-    // Get the user's specific calculation type from the authenticated token
-    const calculationType = req.user?.calculationType || 'default';
-
-    // 2. Define the Aggregation Pipeline
-    // This pipeline will perform all calculations in the database.
-    const pipeline = [
-      // ====== Stage 1: Filter Documents ======
-      // Find only the employees for the requested site, month, and year.
-      // This is the most important step for performance. Use an index here.
-      {
-        $match: {
-          siteID: new mongoose.Types.ObjectId(siteID), // Assuming siteID is stored as a String. If it's an ObjectId, use: mongoose.Types.ObjectId(siteID),
-          month: parseInt(month),
-          year: parseInt(year)
-        }
-      },
-
-      // ====== Stage 2: Perform Initial Calculations ======
-      // Calculate sums and totals from arrays, similar to your .reduce() calls.
-      {
-        $addFields: {
-          totalPayouts: { $sum: "$payouts.value" },
-          totalAdditionalReqPays: { $sum: "$additional_req_pays.value" },
-          carryForward: { $ifNull: ["$carry_forwarded.value", 0] },
-
-          // Process attendance data to find total present days and overtime hours
-          totalDays: {
-            $size: {
-              $filter: {
-                input: "$attendance",
-                as: "att",
-                cond: { $regexMatch: { input: "$$att", regex: /^P/ } } // Count if string starts with 'P'
-              }
-            }
-          },
-          totalovertime: {
-            $sum: {
-              $map: {
-                input: "$attendance",
-                as: "att",
-                in: { // For each attendance string...
-                  $let: {
-                    vars: {
-                      // Find the numeric part of the string (e.g., '8' from 'P8')
-                      overtimeStr: { $arrayElemAt: [{ $regexFindAll: { input: "$$att", regex: /\d+/ } }, 0] }
-                    },
-                    // Convert to integer, or default to 0 if no number found
-                    in: { $ifNull: [{ $toInt: "$$overtimeStr.match" }, 0] }
-                  }
-                }
-              }
-            }
-          }
-        }
-      },
-
-      // ====== Stage 3: Perform Final Calculations ======
-      // Use the results from Stage 2 to calculate wages and balances.
-      {
-        $addFields: {
-          // This part handles the conditional overtime logic from your original code
-          overtimeDays: {
-            $cond: {
-              if: { $eq: [calculationType, 'special'] },
-              then: { // special calculation: Math.floor(totalOvertime / 8) + ((totalOvertime % 8) / 10)
-                $add: [
-                  { $floor: { $divide: ["$totalovertime", 8] } },
-                  { $divide: [{ $mod: ["$totalovertime", 8] }, 10] }
-                ]
-              },
-              else: { // default calculation: totalOvertime / 8
-                $divide: ["$totalovertime", 8]
-              }
-            }
-          }
-        }
-      },
-
-      // ====== Stage 4: Calculate Final Values ======
-      // Now calculate totalAttendance, totalWage, and closing_balance
-      {
-        $addFields: {
-          totalAttendance: { $add: ["$totalDays", "$overtimeDays"] },
-          totalWage: { $multiply: ["$rate", { $add: ["$totalDays", "$overtimeDays"] }] },
-          closing_balance: {
-            $subtract: [
-              {
-                $add: [
-                  { $multiply: ["$rate", { $add: ["$totalDays", "$overtimeDays"] }] }, // totalWage
-                  "$totalAdditionalReqPays",
-                  "$carryForward"
-                ]
-              },
-              "$totalPayouts"
-            ]
-          }
-        }
-      },
-
-      // ====== Stage 5: Final Projection ======
-      // Shape the output to match your original API response.
-      {
-        $project: {
-          // Include original fields
-          _id: 1,
-          name: 1,
-          empid: 1,
-          rate: 1,
-          month: 1,
-          year: 1,
-          siteID: 1,
-          payouts: 1,
-          additional_req_pays: 1,
-          attendance: 1,
-          carry_forwarded: 1,
-          recalculationneeded: 1,
-          // Include all our newly calculated fields
-          totalWage: 1,
-          totalPayouts: 1,
-          carryForward: 1,
-          closing_balance: 1,
-          totalAttendance: 1,
-          totalDays: 1,
-          totalovertime: 1,
-          overtimeDays: 1,
-          totalAdditionalReqPays: 1,
-          // Add extra status fields for convenience
-          hasPendingPayouts: { $ne: ["$closing_balance", 0] },
-        }
-      }
-    ];
-
-    // 3. Execute the Aggregation
-    const employeeDetails = await employeeSchema.aggregate(pipeline);
-
-    if (!employeeDetails) {
-      return res.status(404).json({ success: false, message: "Could not retrieve employee data." });
+    // 1. Validate Input Parameters
+    if (!month || !year || !siteID) {
+      return res.status(400).json({
+        success: false,
+        error: "Month, year, and siteID are required.",
+      });
     }
 
-    // 4. Send the Response
-    const withPendingPayouts = employeeDetails.filter(emp => emp.hasPendingPayouts);
-    const withZeroBalance = employeeDetails.filter(emp => !emp.hasPendingPayouts);
+    try {
+      // Get the user's specific calculation type from the authenticated token
+      const calculationType = req.user?.calculationType || "default";
 
-    return res.status(200).json({
-      success: true,
-      data: employeeDetails,
-      summary: {
-        total: employeeDetails.length,
-        withPendingPayouts: withPendingPayouts.length,
-        withZeroBalance: withZeroBalance.length,
-      },
-      message: `Found ${employeeDetails.length} employees for ${month}/${year}`,
-    });
+      // 2. Define the Aggregation Pipeline
+      // This pipeline will perform all calculations in the database.
+      const pipeline = [
+        // ====== Stage 1: Filter Documents ======
+        // Find only the employees for the requested site, month, and year.
+        // This is the most important step for performance. Use an index here.
+        {
+          $match: {
+            siteID: new mongoose.Types.ObjectId(siteID), // Assuming siteID is stored as a String. If it's an ObjectId, use: mongoose.Types.ObjectId(siteID),
+            month: parseInt(month),
+            year: parseInt(year),
+          },
+        },
 
-  } catch (error) {
-    console.error("❌ Error in optimized /allemployees route:", error);
-    return res.status(500).json({
-      success: false,
-      error: "Error fetching employee details.",
-      message: error.message,
-    });
+        // ====== Stage 2: Perform Initial Calculations ======
+        // Calculate sums and totals from arrays, similar to your .reduce() calls.
+        {
+          $addFields: {
+            totalPayouts: { $sum: "$payouts.value" },
+            totalAdditionalReqPays: { $sum: "$additional_req_pays.value" },
+            carryForward: { $ifNull: ["$carry_forwarded.value", 0] },
+
+            // Process attendance data to find total present days and overtime hours
+            totalDays: {
+              $size: {
+                $filter: {
+                  input: "$attendance",
+                  as: "att",
+                  cond: { $regexMatch: { input: "$$att", regex: /^P/ } }, // Count if string starts with 'P'
+                },
+              },
+            },
+            totalovertime: {
+              $sum: {
+                $map: {
+                  input: "$attendance",
+                  as: "att",
+                  in: {
+                    // For each attendance string...
+                    $let: {
+                      vars: {
+                        // Find the numeric part of the string (e.g., '8' from 'P8')
+                        overtimeStr: {
+                          $arrayElemAt: [
+                            { $regexFindAll: { input: "$$att", regex: /\d+/ } },
+                            0,
+                          ],
+                        },
+                      },
+                      // Convert to integer, or default to 0 if no number found
+                      in: { $ifNull: [{ $toInt: "$$overtimeStr.match" }, 0] },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+
+        // ====== Stage 3: Perform Final Calculations ======
+        // Use the results from Stage 2 to calculate wages and balances.
+        {
+          $addFields: {
+            // This part handles the conditional overtime logic from your original code
+            overtimeDays: {
+              $cond: {
+                if: { $eq: [calculationType, "special"] },
+                then: {
+                  // special calculation: Math.floor(totalOvertime / 8) + ((totalOvertime % 8) / 10)
+                  $add: [
+                    { $floor: { $divide: ["$totalovertime", 8] } },
+                    { $divide: [{ $mod: ["$totalovertime", 8] }, 10] },
+                  ],
+                },
+                else: {
+                  // default calculation: totalOvertime / 8
+                  $divide: ["$totalovertime", 8],
+                },
+              },
+            },
+          },
+        },
+
+        // ====== Stage 4: Calculate Final Values ======
+        // Now calculate totalAttendance, totalWage, and closing_balance
+        {
+          $addFields: {
+            totalAttendance: { $add: ["$totalDays", "$overtimeDays"] },
+            totalWage: {
+              $multiply: ["$rate", { $add: ["$totalDays", "$overtimeDays"] }],
+            },
+            closing_balance: {
+              $subtract: [
+                {
+                  $add: [
+                    {
+                      $multiply: [
+                        "$rate",
+                        { $add: ["$totalDays", "$overtimeDays"] },
+                      ],
+                    }, // totalWage
+                    "$totalAdditionalReqPays",
+                    "$carryForward",
+                  ],
+                },
+                "$totalPayouts",
+              ],
+            },
+          },
+        },
+
+        // ====== Stage 5: Final Projection ======
+        // Shape the output to match your original API response.
+        {
+          $project: {
+            // Include original fields
+            _id: 1,
+            name: 1,
+            empid: 1,
+            rate: 1,
+            month: 1,
+            year: 1,
+            siteID: 1,
+            payouts: 1,
+            additional_req_pays: 1,
+            attendance: 1,
+            carry_forwarded: 1,
+            recalculationneeded: 1,
+            // Include all our newly calculated fields
+            totalWage: 1,
+            totalPayouts: 1,
+            carryForward: 1,
+            closing_balance: 1,
+            totalAttendance: 1,
+            totalDays: 1,
+            totalovertime: 1,
+            overtimeDays: 1,
+            totalAdditionalReqPays: 1,
+            // Add extra status fields for convenience
+            hasPendingPayouts: { $ne: ["$closing_balance", 0] },
+          },
+        },
+      ];
+
+      // 3. Execute the Aggregation
+      const employeeDetails = await employeeSchema.aggregate(pipeline);
+
+      if (!employeeDetails) {
+        return res.status(404).json({
+          success: false,
+          message: "Could not retrieve employee data.",
+        });
+      }
+
+      // 4. Send the Response
+      const withPendingPayouts = employeeDetails.filter(
+        (emp) => emp.hasPendingPayouts
+      );
+      const withZeroBalance = employeeDetails.filter(
+        (emp) => !emp.hasPendingPayouts
+      );
+
+      return res.status(200).json({
+        success: true,
+        data: employeeDetails,
+        summary: {
+          total: employeeDetails.length,
+          withPendingPayouts: withPendingPayouts.length,
+          withZeroBalance: withZeroBalance.length,
+        },
+        message: `Found ${employeeDetails.length} employees for ${month}/${year}`,
+      });
+    } catch (error) {
+      console.error("❌ Error in optimized /allemployees route:", error);
+      return res.status(500).json({
+        success: false,
+        error: "Error fetching employee details.",
+        message: error.message,
+      });
+    }
   }
-});
-
+);
 
 // Route to get employee with pending attendance on a specific date
-router.get("/employeewithpendingattendance",
+router.get(
+  "/employeewithpendingattendance",
   authenticateAndTrack,
   async (req, res) => {
     // check for required query parameters
@@ -1419,7 +1517,9 @@ router.get("/employeewithpendingattendance",
 
     // Get current date in IST
     const now = new Date();
-    const nowIST = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
+    const nowIST = new Date(
+      now.toLocaleString("en-US", { timeZone: "Asia/Kolkata" })
+    );
     const currentDay = nowIST.getDate().toString().trim();
     const currentMonth = (nowIST.getMonth() + 1).toString().trim();
     const currentYear = nowIST.getFullYear().toString().trim();
@@ -1438,19 +1538,20 @@ router.get("/employeewithpendingattendance",
       validDates.push({
         date: d.getDate().toString(),
         month: (d.getMonth() + 1).toString(),
-        year: d.getFullYear().toString()
+        year: d.getFullYear().toString(),
       });
     }
 
     // Check if the provided date matches any of the valid dates
-    const isValidDate = validDates.some(vd =>
-      dateStr === vd.date &&
-      monthStr === vd.month &&
-      yearStr === vd.year
+    const isValidDate = validDates.some(
+      (vd) =>
+        dateStr === vd.date && monthStr === vd.month && yearStr === vd.year
     );
 
     if (!isValidDate) {
-      const validDatesStr = validDates.map(vd => `${vd.date}/${vd.month}/${vd.year}`).join(', ');
+      const validDatesStr = validDates
+        .map((vd) => `${vd.date}/${vd.month}/${vd.year}`)
+        .join(", ");
       return res.status(400).json({
         success: false,
         error: `Requested date must be within the last three days (including today) in IST. Valid dates: ${validDatesStr}`,
@@ -1666,11 +1767,13 @@ router.get("/availableforimport", authenticateAndTrack, async (req, res) => {
         targetYear: targetYear ? parseInt(targetYear) : null,
         siteID: siteID.trim(),
       },
-      message: `Found ${availableEmployees.length
-        } employees from ${sourceMonth}/${sourceYear}${targetMonth && targetYear
+      message: `Found ${
+        availableEmployees.length
+      } employees from ${sourceMonth}/${sourceYear}${
+        targetMonth && targetYear
           ? `. ${availableCount} available for import to ${targetMonth}/${targetYear}`
           : ""
-        }`,
+      }`,
     });
   } catch (error) {
     console.error("❌ Error fetching available employees for import:", error);
@@ -1681,7 +1784,6 @@ router.get("/availableforimport", authenticateAndTrack, async (req, res) => {
     });
   }
 });
-
 
 // Fetch all employee list for a specific month and year
 router.get("/allemployeelist", authenticateAndTrack, async (req, res) => {
@@ -1723,7 +1825,8 @@ router.get("/allemployeelist", authenticateAndTrack, async (req, res) => {
 
 // Fetch employee details by ID, month, and year
 
-router.get("/employee/:siteID/:empid/:month/:year",
+router.get(
+  "/employee/:siteID/:empid/:month/:year",
   authenticateAndTrack,
   async (req, res) => {
     console.time("Input Validation");
@@ -1734,8 +1837,8 @@ router.get("/employee/:siteID/:empid/:month/:year",
     validateBasicParams(siteID, empid, month, year);
 
     // Check subscription-based time restrictions for free plan users
-    const userPlan = req.user.plan || 'free';
-    if (userPlan === 'free') {
+    const userPlan = req.user.plan || "free";
+    if (userPlan === "free") {
       const currentDate = new Date();
       const currentMonth = currentDate.getMonth() + 1; // Convert to 1-12
       const currentYear = currentDate.getFullYear();
@@ -1752,19 +1855,22 @@ router.get("/employee/:siteID/:empid/:month/:year",
       }
 
       // Allow only current month and previous month
-      const isCurrentMonth = (requestedMonth === currentMonth && requestedYear === currentYear);
-      const isPreviousMonth = (requestedMonth === previousMonth && requestedYear === previousYear);
+      const isCurrentMonth =
+        requestedMonth === currentMonth && requestedYear === currentYear;
+      const isPreviousMonth =
+        requestedMonth === previousMonth && requestedYear === previousYear;
 
       if (!isCurrentMonth && !isPreviousMonth) {
         return res.status(403).json({
           success: false,
-          message: "Free plan users can only access data from the current and previous month. Please upgrade to Contractor Pro or Haazri Automate to view unlimited historical data.",
+          message:
+            "Free plan users can only access data from the current and previous month. Please upgrade to Contractor Pro or Haazri Automate to view unlimited historical data.",
           error: "Historical data access restricted",
           details: {
             requestedMonth: `${month}/${year}`,
             allowedRange: "Current and previous month only",
-            upgradeRequired: true
-          }
+            upgradeRequired: true,
+          },
         });
       }
     }
@@ -1793,17 +1899,16 @@ router.get("/employee/:siteID/:empid/:month/:year",
       //   "Step 1 out of 2: Fetched latest employee data:",
       //   latestEmployeeData
       // );
-      
+
       // Calculate additional data using Jobs utility
-      const calculationResult = calculateEmployeeData(latestEmployeeData, req.user);
+      const calculationResult = calculateEmployeeData(
+        latestEmployeeData,
+        req.user
+      );
 
       // Extract calculation fields from _calculationData
-      const {
-        totalAttendance,
-        totalDays,
-        totalOvertime,
-        overtimeDays
-      } = calculationResult._calculationData || {};
+      const { totalAttendance, totalDays, totalOvertime, overtimeDays } =
+        calculationResult._calculationData || {};
 
       // Get additional fields for frontend compatibility
       const totalAdditionalReqPays =
@@ -1820,7 +1925,7 @@ router.get("/employee/:siteID/:empid/:month/:year",
 
       console.timeEnd("Calculating employee data");
       // Return all employees (including zero balance)
-      
+
       return res.status(200).json({
         ...latestEmployeeData.toObject(),
         totalWage: calculationResult.totalWage,
@@ -1836,7 +1941,6 @@ router.get("/employee/:siteID/:empid/:month/:year",
         hasPendingPayouts: calculationResult.closing_balance !== 0,
         needsRecalculation: latestEmployeeData.recalculationneeded || false,
       });
-
     } catch (employeeError) {
       console.warn(
         `⚠️  Error processing employee ${empid}: ${employeeError.message}`

@@ -3,6 +3,7 @@ const User = require("../models/Userschema");
 const Site = require("../models/Siteschema");
 const Employee = require("../models/EmployeeSchema");
 const { authenticateAndTrack } = require("../Middleware/usageTracker");
+const { Supervisor } = require("../models/supervisorSchema");
 // const { sendWeeklyReport } = require("../scripts/whatsappReport");
 
 const router = express.Router();
@@ -243,10 +244,17 @@ router.delete("/delete-site", authenticateAndTrack, async (req, res) => {
     userdata.site = userdata.site.filter((id) => id.toString() !== siteId);
     await userdata.save();
 
+    // remove all employees associated with this site
+    await Employee.deleteMany({ siteID: siteId });
+
+    // remove all supervisors associated with this site
+    await Supervisor.deleteMany({ site: siteId });
+
     res.status(200).json({
       message: "Site deleted successfully",
     });
   } catch (error) {
+    console.error("Error deleting site:", error);
     res.status(500).json({
       error: "Error deleting site",
       details: error.message,
