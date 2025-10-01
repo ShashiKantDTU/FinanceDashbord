@@ -35,6 +35,9 @@ const sendWebhook = async (userPhone, subscriptionAmount, planExpiryDate, isUpgr
       payload.transactionId = purchaseToken;
     }
 
+    // Log webhook send
+    console.log('📤 Sending payment-success webhook:', JSON.stringify(payload, null, 2));
+
     const response = await axios.post(
       `${process.env.MERCHANT_WEBHOOK_API}/payment-success`,
       payload,
@@ -84,6 +87,9 @@ const sendCancellationWebhook = async (userPhone, subscriptionAmount, reason = '
       payload.transactionId = purchaseToken;
     }
 
+    // Log webhook send
+    console.log('📤 Sending subscription-cancelled webhook:', JSON.stringify(payload, null, 2));
+
     const response = await axios.post(
       `${process.env.MERCHANT_WEBHOOK_API}/subscription-cancelled`,
       payload,
@@ -124,15 +130,20 @@ const sendPlanStatusChangeWebhook = async (userPhone, currentPlan, isOnTrial = f
       throw new Error(`Invalid plan status. Must be one of: ${validPlans.join(', ')}`);
     }
 
+    const payload = {
+      userPhone,
+      currentPlan,
+      isOnTrial,
+      planExpiryDate,
+      reason
+    };
+
+    // Log webhook send
+    console.log('📤 Sending plan-status-changed webhook:', JSON.stringify(payload, null, 2));
+
     const response = await axios.post(
       `${process.env.MERCHANT_WEBHOOK_API}/plan-status-changed`,
-      {
-        userPhone,
-        currentPlan,
-        isOnTrial,
-        planExpiryDate,
-        reason
-      },
+      payload,
       {
         headers: {
           "x-internal-secret": process.env.INTERNAL_API_SECRET
