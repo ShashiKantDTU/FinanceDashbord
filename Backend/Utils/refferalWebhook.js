@@ -36,7 +36,7 @@ const sendWebhook = async (userPhone, subscriptionAmount, planExpiryDate, isUpgr
     }
 
     const response = await axios.post(
-      `${process.env.MERCHANT_WEBHOOK_API}`,
+      `${process.env.MERCHANT_WEBHOOK_API}/payment-success`,
       payload,
       {
         headers: {
