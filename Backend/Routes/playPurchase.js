@@ -199,6 +199,7 @@ router.post('/verify-android-purchase', authenticateToken, async (req, res) => {
                         purchaseToken: purchaseToken,
                         lastPurchaseToken: user.purchaseToken || null,
                         isPaymentVerified: false,
+                        isTrial: false,
                         isCancelled: false,
                         isGrace: false,
                         graceExpiresAt: null,
@@ -393,6 +394,7 @@ async function updateUserSubscription(user, notification, notificationType, requ
                         isPaymentVerified: true,
                         isCancelled: false,
                         isGrace: false,
+                        isTrial: false,  // User is now on paid plan, not trial
                         graceExpiresAt: null,
                         lastPurchaseToken: user.purchaseToken,
                         purchaseToken: notification.purchaseToken,
