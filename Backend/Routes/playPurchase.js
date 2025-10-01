@@ -368,6 +368,7 @@ async function updateUserSubscription(user, notification, notificationType, requ
                                             (new Date() - new Date(user.planActivatedAt)) < (7 * 24 * 60 * 60 * 1000);
                             
                             // Validate phone number before sending webhook
+                            isUpgrade = false; // Disable upgrade detection for now
                             if (!user.phoneNumber) {
                                 console.error(`[${requestId}] ❌ User ${user._id} has no phone number, cannot send webhook`);
                             } else {
