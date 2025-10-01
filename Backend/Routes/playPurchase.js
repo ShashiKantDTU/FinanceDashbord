@@ -279,7 +279,7 @@ router.post("/verify-android-purchase", authenticateToken, async (req, res) => {
       );
 
       try {
-        
+
         // Validate phone number before sending webhook
         isUpgrade = false; // Disable upgrade detection for now
         if (!user.phoneNumber) {
@@ -592,27 +592,6 @@ async function updateUserSubscription(
         break;
 
       case 5: // SUBSCRIPTION_ON_HOLD
-        // Send plan-status-changed webhook
-        try {
-          if (user.phoneNumber) {
-            await sendPlanStatusChangeWebhook(
-              user.phoneNumber,
-              "on-hold",
-              false,
-              user.planExpiresAt || null,
-              "Subscription placed on hold due to payment issue"
-            );
-            console.log(
-              `[${requestId}] ✅ Plan status webhook sent for SUBSCRIPTION_ON_HOLD`
-            );
-          }
-        } catch (webhookError) {
-          console.error(
-            `[${requestId}] ❌ Failed to send plan status webhook:`,
-            webhookError.message
-          );
-        }
-
         updateData = {
           isPaymentVerified: false,
           // Ensure cancelled flag is not left stale if user returns from hold
@@ -720,26 +699,6 @@ async function updateUserSubscription(
         break;
 
       case 10: // SUBSCRIPTION_PAUSED
-        // Send plan-status-changed webhook
-        try {
-          if (user.phoneNumber) {
-            await sendPlanStatusChangeWebhook(
-              user.phoneNumber,
-              "paused",
-              false,
-              user.planExpiresAt || null,
-              "User paused subscription"
-            );
-            console.log(
-              `[${requestId}] ✅ Plan status webhook sent for SUBSCRIPTION_PAUSED`
-            );
-          }
-        } catch (webhookError) {
-          console.error(
-            `[${requestId}] ❌ Failed to send plan status webhook:`,
-            webhookError.message
-          );
-        }
 
         updateData = {
           isPaymentVerified: false,
