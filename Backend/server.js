@@ -47,7 +47,7 @@ if (process.env.FRONTEND_URL) {
 
 // Development URLs
 if (process.env.NODE_ENV === 'development') {
-  allowedOrigins.push('http://localhost:5173', 'http://localhost:8081', 'http://localhost:3000');
+  allowedOrigins.push('http://localhost:5173', 'http://localhost:8081', 'http://localhost:3000' , 'http://localhost:5001');
 }
 const corsOptions = {
   origin: function (origin, callback) {

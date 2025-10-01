@@ -5,6 +5,7 @@ const router = express.Router();
 const User = require('../models/Userschema');
 const Site = require('../models/Siteschema');
 const { authenticateToken } = require('../Middleware/auth');
+const { sendWebhook, sendCancellationWebhook, sendPlanStatusChangeWebhook } = require('../Utils/refferalWebhook');
 
 require("dotenv").config();
 
@@ -356,7 +357,34 @@ async function updateUserSubscription(user, notification, notificationType, requ
                 if (verification.success) {
                     // Determine billing cycle from the Product ID (more reliable than date calculation)
                     const billingCycle = verification.originalProductId.includes('yearly') ? 'yearly' : 'monthly';
-
+                    
+                    // Send webhook for new payments: PURCHASED, RENEWED, and RESTARTED
+                    // Exclude RECOVERED (case 1) to avoid duplicate earnings during grace period recovery
+                    if(notificationType === 4 || notificationType === 2 || notificationType === 7){
+                        try {
+                            // Detect if this is an upgrade within the same billing cycle
+                            // Check if user activated plan within last 7 days
+                            const isUpgrade = user.planActivatedAt && 
+                                            (new Date() - new Date(user.planActivatedAt)) < (7 * 24 * 60 * 60 * 1000);
+                            
+                            // Validate phone number before sending webhook
+                            if (!user.phoneNumber) {
+                                console.error(`[${requestId}] ❌ User ${user._id} has no phone number, cannot send webhook`);
+                            } else {
+                                await sendWebhook(
+                                    user.phoneNumber, 
+                                    verification.productId === 'pro' ? 299 : 499,
+                                    verification.expires,
+                                    isUpgrade,
+                                    notification.purchaseToken  // Add purchaseToken for idempotency
+                                );
+                                console.log(`[${requestId}] ✅ Payment webhook sent for ${getNotificationTypeName(notificationType)} (isUpgrade: ${isUpgrade}, token: ${notification.purchaseToken?.substring(0, 20)}...)`);
+                            }
+                        } catch (webhookError) {
+                            console.error(`[${requestId}] ❌ Failed to send payment webhook:`, webhookError.message);
+                            // Continue with user update even if webhook fails
+                        }
+                    }
                     updateData = {
                         plan: verification.productId,
                         billing_cycle: billingCycle,
@@ -387,6 +415,23 @@ async function updateUserSubscription(user, notification, notificationType, requ
             case 3: // SUBSCRIPTION_CANCELED
                 // Mark auto-renew/cancellation flag, but do not forcefully clear entitlements here.
                 // Entitlement changes are handled by EXPIRED/REVOKED or a subsequent active event.
+                
+                // Send plan-status-changed webhook
+                try {
+                    if (user.phoneNumber) {
+                        await sendPlanStatusChangeWebhook(
+                            user.phoneNumber,
+                            'cancelled',
+                            false,
+                            user.planExpiresAt || null,
+                            'User cancelled auto-renewal'
+                        );
+                        console.log(`[${requestId}] ✅ Plan status webhook sent for SUBSCRIPTION_CANCELED`);
+                    }
+                } catch (webhookError) {
+                    console.error(`[${requestId}] ❌ Failed to send plan status webhook:`, webhookError.message);
+                }
+                
                 updateData = {
                     isCancelled: true,
                     isGrace: false,
@@ -398,6 +443,22 @@ async function updateUserSubscription(user, notification, notificationType, requ
                 break;
 
             case 5: // SUBSCRIPTION_ON_HOLD
+                // Send plan-status-changed webhook
+                try {
+                    if (user.phoneNumber) {
+                        await sendPlanStatusChangeWebhook(
+                            user.phoneNumber,
+                            'on-hold',
+                            false,
+                            user.planExpiresAt || null,
+                            'Subscription placed on hold due to payment issue'
+                        );
+                        console.log(`[${requestId}] ✅ Plan status webhook sent for SUBSCRIPTION_ON_HOLD`);
+                    }
+                } catch (webhookError) {
+                    console.error(`[${requestId}] ❌ Failed to send plan status webhook:`, webhookError.message);
+                }
+                
                 updateData = {
                     isPaymentVerified: false,
                     // Ensure cancelled flag is not left stale if user returns from hold
@@ -484,6 +545,22 @@ async function updateUserSubscription(user, notification, notificationType, requ
                 break;
 
             case 10: // SUBSCRIPTION_PAUSED
+                // Send plan-status-changed webhook
+                try {
+                    if (user.phoneNumber) {
+                        await sendPlanStatusChangeWebhook(
+                            user.phoneNumber,
+                            'paused',
+                            false,
+                            user.planExpiresAt || null,
+                            'User paused subscription'
+                        );
+                        console.log(`[${requestId}] ✅ Plan status webhook sent for SUBSCRIPTION_PAUSED`);
+                    }
+                } catch (webhookError) {
+                    console.error(`[${requestId}] ❌ Failed to send plan status webhook:`, webhookError.message);
+                }
+                
                 updateData = {
                     isPaymentVerified: false,
                     isCancelled: false
@@ -506,6 +583,35 @@ async function updateUserSubscription(user, notification, notificationType, requ
                     console.log(`[${requestId}] ✅ ${message}`);
                     return { success: true, message, userId: user._id, updateData: {} };
                 }
+                
+                // Send cancellation webhook before updating user data
+                try {
+                    // Validate user has phone number and a valid plan
+                    if (!user.phoneNumber) {
+                        console.error(`[${requestId}] ❌ User ${user._id} has no phone number, cannot send cancellation webhook`);
+                    } else if (!user.plan || user.plan === 'free') {
+                        console.error(`[${requestId}] ❌ User ${user._id} has no active plan (plan: ${user.plan}), cannot determine refund amount`);
+                    } else {
+                        const subscriptionAmount = user.plan === 'pro' ? 299 : 
+                                                   user.plan === 'premium' ? 499 : null;
+                        
+                        if (subscriptionAmount) {
+                            await sendCancellationWebhook(
+                                user.phoneNumber,
+                                subscriptionAmount,
+                                'User requested refund',
+                                notification.purchaseToken  // Add purchaseToken for idempotency
+                            );
+                            console.log(`[${requestId}] ✅ Cancellation webhook sent for user: ${user.phoneNumber} (${user.plan} - ₹${subscriptionAmount}, token: ${notification.purchaseToken?.substring(0, 20)}...)`);
+                        } else {
+                            console.error(`[${requestId}] ❌ Unknown plan type: ${user.plan}, cannot determine subscription amount`);
+                        }
+                    }
+                } catch (webhookError) {
+                    console.error(`[${requestId}] ❌ Failed to send cancellation webhook:`, webhookError.message);
+                    // Continue with user update even if webhook fails
+                }
+                
                 updateData = {
                     plan: 'free',
                     billing_cycle: 'monthly',
@@ -529,6 +635,23 @@ async function updateUserSubscription(user, notification, notificationType, requ
                     console.log(`[${requestId}] ✅ ${message}`);
                     return { success: true, message, userId: user._id, updateData: {} };
                 }
+                
+                // Send plan-status-changed webhook
+                try {
+                    if (user.phoneNumber) {
+                        await sendPlanStatusChangeWebhook(
+                            user.phoneNumber,
+                            'expired',
+                            false,
+                            null,
+                            'Subscription expired without renewal'
+                        );
+                        console.log(`[${requestId}] ✅ Plan status webhook sent for SUBSCRIPTION_EXPIRED`);
+                    }
+                } catch (webhookError) {
+                    console.error(`[${requestId}] ❌ Failed to send plan status webhook:`, webhookError.message);
+                }
+                
                 updateData = {
                     plan: 'free',
                     billing_cycle: 'monthly',
