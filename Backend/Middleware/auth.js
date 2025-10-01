@@ -74,6 +74,7 @@ const authenticateToken = async (req, res, next) => {
                 const user = await User.findById(decoded.id);
                 if (user) {
                     req.user.name = user.name;
+                    req.user.phoneNumber = user.phoneNumber;  // Add phone number for webhooks
                     req.user.plan = user.plan || 'free';
                     req.user.planExpiresAt = user.planExpiresAt;
                     req.user.planActivatedAt = user.planActivatedAt;
@@ -86,6 +87,7 @@ const authenticateToken = async (req, res, next) => {
                     req.user.whatsAppReportPhone = user.whatsAppReportPhone || null;
                 } else {
                     // Fallback to free plan if user not found
+                    req.user.phoneNumber = null;
                     req.user.plan = 'free';
                     req.user.planExpiresAt = null;
                     req.user.planActivatedAt = null;
