@@ -488,10 +488,10 @@ async function updateUserSubscription(
             try {
               // Detect if this is an upgrade within the same billing cycle
               // Check if user activated plan within last 7 days
-              const isUpgrade =
-                user.planActivatedAt &&
-                new Date() - new Date(user.planActivatedAt) <
-                  7 * 24 * 60 * 60 * 1000;
+              // const isUpgrade =
+              //   user.planActivatedAt &&
+              //   new Date() - new Date(user.planActivatedAt) <
+              //     7 * 24 * 60 * 60 * 1000;
 
               // Validate phone number before sending webhook
               isUpgrade = false; // Disable upgrade detection for now
