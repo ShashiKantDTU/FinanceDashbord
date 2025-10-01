@@ -284,28 +284,26 @@ router.post("/verify-android-purchase", authenticateToken, async (req, res) => {
         isUpgrade = false; // Disable upgrade detection for now
         if (!user.phoneNumber) {
           console.error(
-            `[${requestId}] ❌ User ${user._id} has no phone number, cannot send webhook`
+        `User ${user._id} has no phone number, cannot send webhook`
           );
         } else {
           await sendWebhook(
-            user.phoneNumber,
-            verification.productId === "pro" ? 299 : 499,
-            verification.expires,
-            isUpgrade,
-            notification.purchaseToken // Add purchaseToken for idempotency
+        user.phoneNumber,
+        verificationResult.productId === "pro" ? 299 : 499,
+        verificationResult.expires,
+        isUpgrade,
+        purchaseToken // Add purchaseToken for idempotency
           );
           console.log(
-            `[${requestId}] ✅ Payment webhook sent for ${getNotificationTypeName(
-              notificationType
-            )} (isUpgrade: ${isUpgrade}, token: ${notification.purchaseToken?.substring(
-              0,
-              20
-            )}...)`
+        `✅ Payment webhook sent (isUpgrade: ${isUpgrade}, token: ${purchaseToken?.substring(
+          0,
+          20
+        )}...)`
           );
         }
       } catch (webhookError) {
         console.error(
-          `[${requestId}] ❌ Failed to send payment webhook:`,
+          `❌ Failed to send payment webhook:`,
           webhookError.message
         );
         // Continue with user update even if webhook fails
