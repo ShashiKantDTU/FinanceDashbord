@@ -39,6 +39,7 @@ const allowedOrigins = [];
 allowedOrigins.push('https://app.sitehaazri.in');
 allowedOrigins.push('https://sitehaazri.in'); // In case you need the marketing site to make API calls
 allowedOrigins.push('https://sitehaazri-admin-dashboard.vercel.app'); // In case you need the admin dashboard to make API calls
+allowedOrigins.push('https://partners.sitehaazri.in'); // In case you need the partners site to make API calls
 
 // Add environment-specific URL if provided
 if (process.env.FRONTEND_URL) {
