@@ -188,9 +188,9 @@ router.post("/otp/verify", async (req, res) => {
 
     if (!user) {
       // Create user if doesn't exist (auto-registration)
-      // Grant 2-month pro trial to new users
+      // Grant 1-month pro trial to new users
       const trialExpiryDate = new Date();
-      trialExpiryDate.setMonth(trialExpiryDate.getMonth() + 2);
+      trialExpiryDate.setMonth(trialExpiryDate.getMonth() + 1);
       const name = phoneNumber;
       user = new User({
         name: name,
@@ -340,9 +340,9 @@ router.post("/otplogin", async (req, res) => {
 
     if (!user) {
       // Create user if doesn't exist (auto-registration)
-      // Grant 2-month pro trial to new users
+      // Grant 1-month pro trial to new users
       const trialExpiryDate = new Date();
-      trialExpiryDate.setMonth(trialExpiryDate.getMonth() + 2);
+      trialExpiryDate.setMonth(trialExpiryDate.getMonth() + 1);
 
       user = new User({
         name: phoneNumber,
@@ -439,9 +439,9 @@ router.post("/truecallerlogin", async (req, res) => {
 
     if (!user) {
       // Create user if doesn't exist (auto-registration)
-      // Grant 2-month pro trial to new users
+      // Grant 1-month pro trial to new users
       const trialExpiryDate = new Date();
-      trialExpiryDate.setMonth(trialExpiryDate.getMonth() + 2);
+      trialExpiryDate.setMonth(trialExpiryDate.getMonth() + 1);
       const name = verifiedUserData.given_name + " " + verifiedUserData.family_name || phoneNumber;
       user = new User({
         name: name,

@@ -128,12 +128,13 @@ class CronJobService {
     }
 
 
-    // Run both cleanup tasks sequentially
+    // Run all cleanup tasks sequentially
     async runDailyCleanup() {
         console.log('🧹 Starting daily subscription cleanup...');
         const startTime = Date.now();
 
         try {
+            await this.handleExpiredTrials();
             await this.handleExpiredUsers();
             await this.handleGraceExpiredUsers();
             
@@ -209,6 +210,72 @@ class CronJobService {
             console.log('🧯 Provisional finalizer run complete');
         } catch (error) {
             console.error('❌ Provisional finalizer failed:', error.message);
+        }
+    }
+
+    // Handle users with isTrial: true and planExpiresAt < current date
+    async handleExpiredTrials() {
+        try {
+            const currentDate = new Date();
+            const BATCH_SIZE = EXPIRED_BATCH_SIZE; // Same batch size as expired users
+
+            const expiredTrials = await User.find({
+                isTrial: true,
+                planExpiresAt: { $lt: currentDate }
+            });
+
+            console.log(`🔍 Found ${expiredTrials.length} expired trial users`);
+
+            if (expiredTrials.length === 0) {
+                return;
+            }
+
+            // Process users in batches to avoid server overload
+            for (let i = 0; i < expiredTrials.length; i += BATCH_SIZE) {
+                const batch = expiredTrials.slice(i, i + BATCH_SIZE);
+                console.log(`📦 Processing trial batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(expiredTrials.length / BATCH_SIZE)} (${batch.length} users)`);
+
+                // Process batch concurrently with per-user error isolation
+                await Promise.all(
+                    batch.map(user => this.processExpiredTrial(user)
+                        .catch(err => console.error(`❌ Error processing expired trial ${user._id}:`, err.message)))
+                );
+
+                // Add delay between batches if there are more users to process
+                if (i + BATCH_SIZE < expiredTrials.length) {
+                    console.log(`⏳ Waiting ${EXPIRED_DELAY_BETWEEN_BATCHES_MS}ms before next batch...`);
+                    await new Promise(resolve => setTimeout(resolve, EXPIRED_DELAY_BETWEEN_BATCHES_MS));
+                }
+            }
+
+        } catch (error) {
+            console.error('Error handling expired trials:', error);
+            throw error;
+        }
+    }
+
+    // Process individual expired trial user
+    async processExpiredTrial(user) {
+        try {
+            console.log(`📋 Processing expired trial: ${user.email || user.phoneNumber} (ID: ${user._id})`);
+
+            // Downgrade trial user to free plan and clear all payment-related flags
+            await User.findByIdAndUpdate(user._id, {
+                $set: {
+                    plan: 'free',
+                    billing_cycle: 'monthly',
+                    isTrial: false,
+                    planExpiresAt: null,
+                    planSource: null,
+                    isPaymentVerified: false,  // CRITICAL FIX: Clear payment verification
+                    purchaseToken: null,        // Clear current purchase token
+                }
+            });
+
+            console.log(`✅ Processed expired trial: ${user.email || user.phoneNumber} - downgraded to free plan`);
+
+        } catch (error) {
+            console.error(`❌ Error processing expired trial ${user._id}:`, error);
         }
     }
 
@@ -427,6 +494,11 @@ class CronJobService {
     async manualTriggerGraceExpired() {
         console.log('🔧 Manual trigger: Grace expired users check');
         await this.handleGraceExpiredUsers();
+    }
+
+    async manualTriggerExpiredTrials() {
+        console.log('🔧 Manual trigger: Expired trials check');
+        await this.handleExpiredTrials();
     }
 
     

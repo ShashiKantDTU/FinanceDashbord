@@ -88,6 +88,7 @@ const detailedChangeTrackingRoutes = require('./Routes/detailedChangeTracking');
 const playPurchaseRoutes = require('./Routes/playPurchase');
 const siteFinancialRoutes = require('./Routes/SiteFinancials');
 const usageRoutes = require('./Routes/usage');
+const superAdminAuthRoutes = require('./Routes/superAdminAuth');
 const cronRoutes = require('./Routes/cronRoutes');
 const { router: pdfReportRoutes } = require('./Routes/pdfReports');
 const excelReportRoutes = require('./Routes/excelReports');
@@ -124,6 +125,7 @@ app.use('/api/detailed-change-tracking', detailedChangeTrackingRoutes);
 app.use('/api/play-purchase', playPurchaseRoutes);
 app.use('/api/financials', siteFinancialRoutes);
 app.use('/api/usage', usageRoutes);
+app.use('/api/super-admin', superAdminAuthRoutes);
 app.use('/api/cron', cronRoutes);
 app.use('/api/reports', pdfReportRoutes);
 app.use('/api/reports', excelReportRoutes); // New Excel (placeholder) report endpoint

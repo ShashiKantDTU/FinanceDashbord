@@ -3,9 +3,9 @@ const router = express.Router();
 const ApiUsageLog = require('../models/ApiUsageLog');
 const User = require('../models/Userschema');
 const { authenticateAndTrack } = require('../Middleware/usageTracker');
-const { authorizeRole } = require('../Middleware/auth');
 const { getUserUsageStats, checkUsageLimits } = require('../Middleware/usageTracker');
 const { logConnection } = require('../config/logDatabase');
+const { authenticateSuperAdmin } = require('../Middleware/superAdminAuth');
 
 /**
  * Helper function to calculate date range based on period or custom dates
@@ -69,7 +69,7 @@ const getDateRange = (period, customStartDate = null, customEndDate = null) => {
 // GET /api/usage/dashboard
 // NEW: Performance-focused dashboard with time period filtering
 // Query params: period (today, yesterday, week, month, 3months)
-router.get('/dashboard', authenticateAndTrack, authorizeRole(['Admin']), async (req, res) => {
+router.get('/dashboard', authenticateSuperAdmin, async (req, res) => {
     try {
         // Check if logging database is configured
         if (!ApiUsageLog) {
@@ -241,7 +241,7 @@ router.get('/dashboard', authenticateAndTrack, authorizeRole(['Admin']), async (
 // Query params: 
 //   - period (today, yesterday, week, month, 3months) OR
 //   - startDate (YYYY-MM-DD) + endDate (YYYY-MM-DD) for custom range
-router.get('/user-endpoint-analytics', authenticateAndTrack, authorizeRole(['Admin']), async (req, res) => {
+router.get('/user-endpoint-analytics', authenticateSuperAdmin, async (req, res) => {
     try {
         // Check if logging database is configured
         if (!ApiUsageLog) {
@@ -398,7 +398,7 @@ router.get('/user-endpoint-analytics', authenticateAndTrack, authorizeRole(['Adm
 // Query params: 
 //   - period (today, yesterday, week, month, 3months) OR
 //   - startDate (YYYY-MM-DD) + endDate (YYYY-MM-DD) for custom range
-router.get('/new-users', authenticateAndTrack, authorizeRole(['Admin']), async (req, res) => {
+router.get('/new-users', authenticateSuperAdmin, async (req, res) => {
     try {
         // Check if logging database is configured
         if (!ApiUsageLog) {
@@ -562,7 +562,7 @@ router.get('/new-users', authenticateAndTrack, authorizeRole(['Admin']), async (
 // GET /api/usage/user-activity/:phone
 // NEW: Detailed activity tracker for a specific user
 // Shows all requests made by a user and breakdown by endpoint
-router.get('/user-activity/:phone', authenticateAndTrack, authorizeRole(['Admin']), async (req, res) => {
+router.get('/user-activity/:phone', authenticateSuperAdmin, async (req, res) => {
     try {
         // Check if logging database is configured
         if (!ApiUsageLog) {
@@ -760,7 +760,7 @@ router.get('/user-activity/:phone', authenticateAndTrack, authorizeRole(['Admin'
 // GET /api/usage/system-performance
 // NEW: Overall system performance metrics
 // Query params: period (today, yesterday, week, month, 3months)
-router.get('/system-performance', authenticateAndTrack, authorizeRole(['Admin']), async (req, res) => {
+router.get('/system-performance', authenticateSuperAdmin, async (req, res) => {
     try {
         // Check if logging database is configured
         if (!ApiUsageLog) {
@@ -966,7 +966,7 @@ router.get('/my-stats', authenticateAndTrack, async (req, res) => {
 
 // POST /api/usage/cleanup
 // Clean up old usage logs (admin only)
-router.post('/cleanup', authenticateAndTrack, authorizeRole(['Admin']), async (req, res) => {
+router.post('/cleanup', authenticateSuperAdmin, async (req, res) => {
     try {
         // Check if logging database is configured
         if (!ApiUsageLog) {
@@ -1001,7 +1001,7 @@ router.post('/cleanup', authenticateAndTrack, authorizeRole(['Admin']), async (r
 
 // GET /api/usage/health
 // Check logging database connection health
-router.get('/health', authenticateAndTrack, authorizeRole(['Admin']), async (req, res) => {
+router.get('/health', authenticateSuperAdmin, async (req, res) => {
     try {
         const health = {
             loggingDatabase: {

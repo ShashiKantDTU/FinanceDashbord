@@ -557,6 +557,13 @@ async function updateUserSubscription(
 
       // Simple status change cases - trust the authenticated webhook
       case 3: // SUBSCRIPTION_CANCELED
+        // CRITICAL FIX: Protect against stale webhook tokens
+        if (notification.purchaseToken !== user.purchaseToken) {
+          message = `Ignoring stale CANCELED notification for an old token. User is on a newer plan.`;
+          console.log(`[${requestId}] ✅ ${message}`);
+          return { success: true, message, userId: user._id, updateData: {} };
+        }
+
         // Mark auto-renew/cancellation flag, but do not forcefully clear entitlements here.
         // Entitlement changes are handled by EXPIRED/REVOKED or a subsequent active event.
 
@@ -592,6 +599,13 @@ async function updateUserSubscription(
         break;
 
       case 5: // SUBSCRIPTION_ON_HOLD
+        // CRITICAL FIX: Protect against stale webhook tokens
+        if (notification.purchaseToken !== user.purchaseToken) {
+          message = `Ignoring stale ON_HOLD notification for an old token. User is on a newer plan.`;
+          console.log(`[${requestId}] ✅ ${message}`);
+          return { success: true, message, userId: user._id, updateData: {} };
+        }
+
         updateData = {
           isPaymentVerified: false,
           // Ensure cancelled flag is not left stale if user returns from hold
@@ -601,6 +615,13 @@ async function updateUserSubscription(
         break;
 
       case 6: // SUBSCRIPTION_IN_GRACE_PERIOD
+        // CRITICAL FIX: Protect against stale webhook tokens
+        if (notification.purchaseToken !== user.purchaseToken) {
+          message = `Ignoring stale GRACE_PERIOD notification for an old token. User is on a newer plan.`;
+          console.log(`[${requestId}] ✅ ${message}`);
+          return { success: true, message, userId: user._id, updateData: {} };
+        }
+
         // Verify to get the gracePeriodEndTime for accurate tracking
         const graceVerification = await verifyAndroidPurchase(
           "com.sitehaazri.app",
@@ -699,6 +720,12 @@ async function updateUserSubscription(
         break;
 
       case 10: // SUBSCRIPTION_PAUSED
+        // CRITICAL FIX: Protect against stale webhook tokens
+        if (notification.purchaseToken !== user.purchaseToken) {
+          message = `Ignoring stale PAUSED notification for an old token. User is on a newer plan.`;
+          console.log(`[${requestId}] ✅ ${message}`);
+          return { success: true, message, userId: user._id, updateData: {} };
+        }
 
         updateData = {
           isPaymentVerified: false,
