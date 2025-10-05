@@ -313,6 +313,23 @@ Open in Excel or Google Sheets.`
         };
 
     } catch (error) {
+        // Handle "no employees found" error gracefully
+        if (error.message && error.message.includes('No employees found')) {
+            const skipMessage = `⏭️  Skipping report for ${userObject?.name || 'Unknown'}: ${error.message}`;
+            console.log(skipMessage);
+            return {
+                success: false,
+                skipped: true,
+                message: skipMessage,
+                reason: 'no_employees',
+                reportType: 'monthly',
+                user: userObject?.name || 'Unknown',
+                phone: phoneNumber,
+                period: `${month}/${year}`,
+                siteId: siteId
+            };
+        }
+
         const errorMessage = `❌ Error sending monthly report to ${userObject?.name || 'Unknown'}: ${error.message}`;
         console.error(errorMessage);
 
@@ -436,6 +453,24 @@ Open in Excel or Google Sheets.`
         };
 
     } catch (error) {
+        // Handle "no employees found" error gracefully
+        if (error.message && error.message.includes('No employees found')) {
+            const skipMessage = `⏭️  Skipping weekly report for ${userObject?.name || 'Unknown'}: ${error.message}`;
+            console.log(skipMessage);
+            return {
+                success: false,
+                skipped: true,
+                message: skipMessage,
+                reason: 'no_employees',
+                reportType: 'weekly',
+                user: userObject?.name || 'Unknown',
+                phone: phoneNumber,
+                period: `Week ${week} of ${month}/${year}`,
+                siteId: siteId,
+                week: week
+            };
+        }
+
         const errorMessage = `❌ Error sending weekly report to ${userObject?.name || 'Unknown'}: ${error.message}`;
         console.error(errorMessage);
 
