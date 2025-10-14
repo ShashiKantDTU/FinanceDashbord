@@ -741,35 +741,145 @@ class CronJobService {
      */
     async sendWeeklyReportWeek2() {
         console.log('📊 Starting Weekly Report Week 2 (Days 8-14)...');
+        const startTime = Date.now();
+        
+        // Create log entry
+        const logId = await this.createCronJobLog('weekly-week2', { weekNumber: 2 });
         
         try {
             const userSitePairs = await this.getEligibleUsersForReports();
 
             if (userSitePairs.length === 0) {
                 console.log('⏭️  No eligible users found for weekly reports');
+                await this.updateCronJobLog(logId, {
+                    status: 'completed',
+                    totalUsers: 0,
+                    totalSites: 0,
+                    successCount: 0,
+                    failureCount: 0,
+                    skippedCount: 0,
+                    executionTime: Date.now() - startTime
+                });
                 return;
             }
             
             let successCount = 0;
             let failureCount = 0;
+            let skippedCount = 0;
+
+            // Arrays to track detailed reports
+            const successfulReports = [];
+            const skippedReports = [];
+            const failures = [];
+
+            // Map to track per-user summary
+            const userSummaryMap = new Map();
 
             for (const pair of userSitePairs) {
+                const userName = pair.user.name;
+                const phoneNumber = pair.user.phoneNumber;
+
+                // Initialize user summary
+                if (!userSummaryMap.has(phoneNumber)) {
+                    userSummaryMap.set(phoneNumber, {
+                        userName,
+                        phoneNumber,
+                        totalSites: 0,
+                        successfulSites: 0,
+                        failedSites: 0,
+                        skippedSites: 0
+                    });
+                }
+
                 for (const siteId of pair.sites) {
+                    userSummaryMap.get(phoneNumber).totalSites++;
+
                     try {
-                        await sendWeeklyReport(pair.user, siteId);
-                        successCount++;
+                        // Get site name for logging
+                        const site = await siteSchema.findById(siteId).select('sitename');
+                        const siteName = site?.sitename || 'Unknown Site';
+
+                        const result = await sendWeeklyReport(pair.user, siteId);
+                        
+                        if (result.skipped) {
+                            // Report was skipped (e.g., no employees found)
+                            skippedCount++;
+                            userSummaryMap.get(phoneNumber).skippedSites++;
+                            skippedReports.push({
+                                userName,
+                                phoneNumber,
+                                siteId: siteId.toString(),
+                                siteName,
+                                reason: result.reason || 'No employees found',
+                                timestamp: new Date()
+                            });
+                            console.log(`⏭️  Skipped report for ${userName} - ${siteName}: ${result.reason}`);
+                        } else {
+                            // Report sent successfully
+                            successCount++;
+                            userSummaryMap.get(phoneNumber).successfulSites++;
+                            successfulReports.push({
+                                userName,
+                                phoneNumber,
+                                siteId: siteId.toString(),
+                                siteName,
+                                timestamp: new Date()
+                            });
+                        }
                         
                         await new Promise(resolve => setTimeout(resolve, 1000));
                     } catch (error) {
                         console.error(`❌ Failed to send weekly report to ${pair.user.name} for site ${siteId}:`, error.message);
                         failureCount++;
+                        userSummaryMap.get(phoneNumber).failedSites++;
+
+                        // Get site name even for failures
+                        let siteName = 'Unknown Site';
+                        try {
+                            const site = await siteSchema.findById(siteId).select('sitename');
+                            siteName = site?.sitename || 'Unknown Site';
+                        } catch (e) {
+                            console.error('Could not fetch site name for failure log');
+                        }
+
+                        failures.push({
+                            userName,
+                            phoneNumber,
+                            siteId: siteId.toString(),
+                            siteName,
+                            error: error.message,
+                            timestamp: new Date()
+                        });
                     }
                 }
             }
 
-            console.log(`✅ Weekly Report Week 2 completed: ${successCount} sent, ${failureCount} failed`);
+            // Convert user summary map to array
+            const userSummary = Array.from(userSummaryMap.values());
+
+            // Update log with results
+            await this.updateCronJobLog(logId, {
+                status: 'completed',
+                totalUsers: userSitePairs.length,
+                totalSites: userSitePairs.reduce((sum, pair) => sum + pair.sites.length, 0),
+                successCount,
+                failureCount,
+                skippedCount,
+                successfulReports,
+                skippedReports,
+                failures,
+                userSummary,
+                executionTime: Date.now() - startTime
+            });
+
+            console.log(`✅ Weekly Report Week 2 completed: ${successCount} sent, ${failureCount} failed, ${skippedCount} skipped`);
         } catch (error) {
             console.error('❌ Error in sendWeeklyReportWeek2:', error);
+            await this.updateCronJobLog(logId, {
+                status: 'failed',
+                error: error.message,
+                executionTime: Date.now() - startTime
+            });
             throw error;
         }
     }
@@ -780,35 +890,145 @@ class CronJobService {
      */
     async sendWeeklyReportWeek3() {
         console.log('📊 Starting Weekly Report Week 3 (Days 15-21)...');
+        const startTime = Date.now();
+        
+        // Create log entry
+        const logId = await this.createCronJobLog('weekly-week3', { weekNumber: 3 });
         
         try {
             const userSitePairs = await this.getEligibleUsersForReports();
 
             if (userSitePairs.length === 0) {
                 console.log('⏭️  No eligible users found for weekly reports');
+                await this.updateCronJobLog(logId, {
+                    status: 'completed',
+                    totalUsers: 0,
+                    totalSites: 0,
+                    successCount: 0,
+                    failureCount: 0,
+                    skippedCount: 0,
+                    executionTime: Date.now() - startTime
+                });
                 return;
             }
             
             let successCount = 0;
             let failureCount = 0;
+            let skippedCount = 0;
+
+            // Arrays to track detailed reports
+            const successfulReports = [];
+            const skippedReports = [];
+            const failures = [];
+
+            // Map to track per-user summary
+            const userSummaryMap = new Map();
 
             for (const pair of userSitePairs) {
+                const userName = pair.user.name;
+                const phoneNumber = pair.user.phoneNumber;
+
+                // Initialize user summary
+                if (!userSummaryMap.has(phoneNumber)) {
+                    userSummaryMap.set(phoneNumber, {
+                        userName,
+                        phoneNumber,
+                        totalSites: 0,
+                        successfulSites: 0,
+                        failedSites: 0,
+                        skippedSites: 0
+                    });
+                }
+
                 for (const siteId of pair.sites) {
+                    userSummaryMap.get(phoneNumber).totalSites++;
+
                     try {
-                        await sendWeeklyReport(pair.user, siteId);
-                        successCount++;
+                        // Get site name for logging
+                        const site = await siteSchema.findById(siteId).select('sitename');
+                        const siteName = site?.sitename || 'Unknown Site';
+
+                        const result = await sendWeeklyReport(pair.user, siteId);
+                        
+                        if (result.skipped) {
+                            // Report was skipped (e.g., no employees found)
+                            skippedCount++;
+                            userSummaryMap.get(phoneNumber).skippedSites++;
+                            skippedReports.push({
+                                userName,
+                                phoneNumber,
+                                siteId: siteId.toString(),
+                                siteName,
+                                reason: result.reason || 'No employees found',
+                                timestamp: new Date()
+                            });
+                            console.log(`⏭️  Skipped report for ${userName} - ${siteName}: ${result.reason}`);
+                        } else {
+                            // Report sent successfully
+                            successCount++;
+                            userSummaryMap.get(phoneNumber).successfulSites++;
+                            successfulReports.push({
+                                userName,
+                                phoneNumber,
+                                siteId: siteId.toString(),
+                                siteName,
+                                timestamp: new Date()
+                            });
+                        }
                         
                         await new Promise(resolve => setTimeout(resolve, 1000));
                     } catch (error) {
                         console.error(`❌ Failed to send weekly report to ${pair.user.name} for site ${siteId}:`, error.message);
                         failureCount++;
+                        userSummaryMap.get(phoneNumber).failedSites++;
+
+                        // Get site name even for failures
+                        let siteName = 'Unknown Site';
+                        try {
+                            const site = await siteSchema.findById(siteId).select('sitename');
+                            siteName = site?.sitename || 'Unknown Site';
+                        } catch (e) {
+                            console.error('Could not fetch site name for failure log');
+                        }
+
+                        failures.push({
+                            userName,
+                            phoneNumber,
+                            siteId: siteId.toString(),
+                            siteName,
+                            error: error.message,
+                            timestamp: new Date()
+                        });
                     }
                 }
             }
 
-            console.log(`✅ Weekly Report Week 3 completed: ${successCount} sent, ${failureCount} failed`);
+            // Convert user summary map to array
+            const userSummary = Array.from(userSummaryMap.values());
+
+            // Update log with results
+            await this.updateCronJobLog(logId, {
+                status: 'completed',
+                totalUsers: userSitePairs.length,
+                totalSites: userSitePairs.reduce((sum, pair) => sum + pair.sites.length, 0),
+                successCount,
+                failureCount,
+                skippedCount,
+                successfulReports,
+                skippedReports,
+                failures,
+                userSummary,
+                executionTime: Date.now() - startTime
+            });
+
+            console.log(`✅ Weekly Report Week 3 completed: ${successCount} sent, ${failureCount} failed, ${skippedCount} skipped`);
         } catch (error) {
             console.error('❌ Error in sendWeeklyReportWeek3:', error);
+            await this.updateCronJobLog(logId, {
+                status: 'failed',
+                error: error.message,
+                executionTime: Date.now() - startTime
+            });
             throw error;
         }
     }
@@ -820,6 +1040,7 @@ class CronJobService {
      */
     async sendWeeklyReportWeek4() {
         console.log('📊 Starting Weekly Report Week 4 (Days 22-28+)...');
+        const startTime = Date.now();
         
         try {
             // Check if this is February and handle accordingly
@@ -833,33 +1054,143 @@ class CronJobService {
                 console.log('⚠️  February detected - Week 4 report for days 22-28');
             }
 
+            // Create log entry
+            const logId = await this.createCronJobLog('weekly-week4', { weekNumber: 4, month, year });
+
             const userSitePairs = await this.getEligibleUsersForReports();
 
             if (userSitePairs.length === 0) {
                 console.log('⏭️  No eligible users found for weekly reports');
+                await this.updateCronJobLog(logId, {
+                    status: 'completed',
+                    totalUsers: 0,
+                    totalSites: 0,
+                    successCount: 0,
+                    failureCount: 0,
+                    skippedCount: 0,
+                    executionTime: Date.now() - startTime
+                });
                 return;
             }
             
             let successCount = 0;
             let failureCount = 0;
+            let skippedCount = 0;
+
+            // Arrays to track detailed reports
+            const successfulReports = [];
+            const skippedReports = [];
+            const failures = [];
+
+            // Map to track per-user summary
+            const userSummaryMap = new Map();
 
             for (const pair of userSitePairs) {
+                const userName = pair.user.name;
+                const phoneNumber = pair.user.phoneNumber;
+
+                // Initialize user summary
+                if (!userSummaryMap.has(phoneNumber)) {
+                    userSummaryMap.set(phoneNumber, {
+                        userName,
+                        phoneNumber,
+                        totalSites: 0,
+                        successfulSites: 0,
+                        failedSites: 0,
+                        skippedSites: 0
+                    });
+                }
+
                 for (const siteId of pair.sites) {
+                    userSummaryMap.get(phoneNumber).totalSites++;
+
                     try {
-                        await sendWeeklyReport(pair.user, siteId);
-                        successCount++;
+                        // Get site name for logging
+                        const site = await siteSchema.findById(siteId).select('sitename');
+                        const siteName = site?.sitename || 'Unknown Site';
+
+                        const result = await sendWeeklyReport(pair.user, siteId);
+                        
+                        if (result.skipped) {
+                            // Report was skipped (e.g., no employees found)
+                            skippedCount++;
+                            userSummaryMap.get(phoneNumber).skippedSites++;
+                            skippedReports.push({
+                                userName,
+                                phoneNumber,
+                                siteId: siteId.toString(),
+                                siteName,
+                                reason: result.reason || 'No employees found',
+                                timestamp: new Date()
+                            });
+                            console.log(`⏭️  Skipped report for ${userName} - ${siteName}: ${result.reason}`);
+                        } else {
+                            // Report sent successfully
+                            successCount++;
+                            userSummaryMap.get(phoneNumber).successfulSites++;
+                            successfulReports.push({
+                                userName,
+                                phoneNumber,
+                                siteId: siteId.toString(),
+                                siteName,
+                                timestamp: new Date()
+                            });
+                        }
                         
                         await new Promise(resolve => setTimeout(resolve, 1000));
                     } catch (error) {
                         console.error(`❌ Failed to send weekly report to ${pair.user.name} for site ${siteId}:`, error.message);
                         failureCount++;
+                        userSummaryMap.get(phoneNumber).failedSites++;
+
+                        // Get site name even for failures
+                        let siteName = 'Unknown Site';
+                        try {
+                            const site = await siteSchema.findById(siteId).select('sitename');
+                            siteName = site?.sitename || 'Unknown Site';
+                        } catch (e) {
+                            console.error('Could not fetch site name for failure log');
+                        }
+
+                        failures.push({
+                            userName,
+                            phoneNumber,
+                            siteId: siteId.toString(),
+                            siteName,
+                            error: error.message,
+                            timestamp: new Date()
+                        });
                     }
                 }
             }
 
-            console.log(`✅ Weekly Report Week 4 completed: ${successCount} sent, ${failureCount} failed`);
+            // Convert user summary map to array
+            const userSummary = Array.from(userSummaryMap.values());
+
+            // Update log with results
+            await this.updateCronJobLog(logId, {
+                status: 'completed',
+                totalUsers: userSitePairs.length,
+                totalSites: userSitePairs.reduce((sum, pair) => sum + pair.sites.length, 0),
+                successCount,
+                failureCount,
+                skippedCount,
+                successfulReports,
+                skippedReports,
+                failures,
+                userSummary,
+                executionTime: Date.now() - startTime
+            });
+
+            console.log(`✅ Weekly Report Week 4 completed: ${successCount} sent, ${failureCount} failed, ${skippedCount} skipped`);
         } catch (error) {
             console.error('❌ Error in sendWeeklyReportWeek4:', error);
+            const logId = await this.createCronJobLog('weekly-week4', { weekNumber: 4, error: 'Failed to create initial log' });
+            await this.updateCronJobLog(logId, {
+                status: 'failed',
+                error: error.message,
+                executionTime: Date.now() - startTime
+            });
             throw error;
         }
     }
@@ -871,6 +1202,7 @@ class CronJobService {
      */
     async sendWeeklyReportFeb28() {
         console.log('📊 Starting Weekly Report for February 28th...');
+        const startTime = Date.now();
         
         try {
             const now = new Date();
@@ -881,38 +1213,160 @@ class CronJobService {
             
             if (isLeapYear) {
                 console.log('⏭️  Skipping Feb 28 job - Leap year detected, will run on Feb 29');
+                
+                // Create log entry for skipped execution
+                const logId = await this.createCronJobLog('weekly-feb28', { weekNumber: 4, month: 2, year, skipped: true, reason: 'Leap year' });
+                await this.updateCronJobLog(logId, {
+                    status: 'completed',
+                    totalUsers: 0,
+                    totalSites: 0,
+                    successCount: 0,
+                    failureCount: 0,
+                    skippedCount: 0,
+                    executionTime: Date.now() - startTime
+                });
                 return;
             }
 
             console.log('✅ Non-leap year detected - Sending Week 4 report for days 22-28');
 
+            // Create log entry
+            const logId = await this.createCronJobLog('weekly-feb28', { weekNumber: 4, month: 2, year });
+
             const userSitePairs = await this.getEligibleUsersForReports();
 
             if (userSitePairs.length === 0) {
                 console.log('⏭️  No eligible users found for weekly reports');
+                await this.updateCronJobLog(logId, {
+                    status: 'completed',
+                    totalUsers: 0,
+                    totalSites: 0,
+                    successCount: 0,
+                    failureCount: 0,
+                    skippedCount: 0,
+                    executionTime: Date.now() - startTime
+                });
                 return;
             }
             
             let successCount = 0;
             let failureCount = 0;
+            let skippedCount = 0;
+
+            // Arrays to track detailed reports
+            const successfulReports = [];
+            const skippedReports = [];
+            const failures = [];
+
+            // Map to track per-user summary
+            const userSummaryMap = new Map();
 
             for (const pair of userSitePairs) {
+                const userName = pair.user.name;
+                const phoneNumber = pair.user.phoneNumber;
+
+                // Initialize user summary
+                if (!userSummaryMap.has(phoneNumber)) {
+                    userSummaryMap.set(phoneNumber, {
+                        userName,
+                        phoneNumber,
+                        totalSites: 0,
+                        successfulSites: 0,
+                        failedSites: 0,
+                        skippedSites: 0
+                    });
+                }
+
                 for (const siteId of pair.sites) {
+                    userSummaryMap.get(phoneNumber).totalSites++;
+
                     try {
-                        await sendWeeklyReport(pair.user, siteId);
-                        successCount++;
+                        // Get site name for logging
+                        const site = await siteSchema.findById(siteId).select('sitename');
+                        const siteName = site?.sitename || 'Unknown Site';
+
+                        const result = await sendWeeklyReport(pair.user, siteId);
+                        
+                        if (result.skipped) {
+                            // Report was skipped (e.g., no employees found)
+                            skippedCount++;
+                            userSummaryMap.get(phoneNumber).skippedSites++;
+                            skippedReports.push({
+                                userName,
+                                phoneNumber,
+                                siteId: siteId.toString(),
+                                siteName,
+                                reason: result.reason || 'No employees found',
+                                timestamp: new Date()
+                            });
+                            console.log(`⏭️  Skipped report for ${userName} - ${siteName}: ${result.reason}`);
+                        } else {
+                            // Report sent successfully
+                            successCount++;
+                            userSummaryMap.get(phoneNumber).successfulSites++;
+                            successfulReports.push({
+                                userName,
+                                phoneNumber,
+                                siteId: siteId.toString(),
+                                siteName,
+                                timestamp: new Date()
+                            });
+                        }
                         
                         await new Promise(resolve => setTimeout(resolve, 1000));
                     } catch (error) {
                         console.error(`❌ Failed to send weekly report to ${pair.user.name} for site ${siteId}:`, error.message);
                         failureCount++;
+                        userSummaryMap.get(phoneNumber).failedSites++;
+
+                        // Get site name even for failures
+                        let siteName = 'Unknown Site';
+                        try {
+                            const site = await siteSchema.findById(siteId).select('sitename');
+                            siteName = site?.sitename || 'Unknown Site';
+                        } catch (e) {
+                            console.error('Could not fetch site name for failure log');
+                        }
+
+                        failures.push({
+                            userName,
+                            phoneNumber,
+                            siteId: siteId.toString(),
+                            siteName,
+                            error: error.message,
+                            timestamp: new Date()
+                        });
                     }
                 }
             }
 
-            console.log(`✅ February 28 Weekly Report completed: ${successCount} sent, ${failureCount} failed`);
+            // Convert user summary map to array
+            const userSummary = Array.from(userSummaryMap.values());
+
+            // Update log with results
+            await this.updateCronJobLog(logId, {
+                status: 'completed',
+                totalUsers: userSitePairs.length,
+                totalSites: userSitePairs.reduce((sum, pair) => sum + pair.sites.length, 0),
+                successCount,
+                failureCount,
+                skippedCount,
+                successfulReports,
+                skippedReports,
+                failures,
+                userSummary,
+                executionTime: Date.now() - startTime
+            });
+
+            console.log(`✅ February 28 Weekly Report completed: ${successCount} sent, ${failureCount} failed, ${skippedCount} skipped`);
         } catch (error) {
             console.error('❌ Error in sendWeeklyReportFeb28:', error);
+            const logId = await this.createCronJobLog('weekly-feb28', { weekNumber: 4, month: 2, error: 'Failed to create initial log' });
+            await this.updateCronJobLog(logId, {
+                status: 'failed',
+                error: error.message,
+                executionTime: Date.now() - startTime
+            });
             throw error;
         }
     }
@@ -927,6 +1381,7 @@ class CronJobService {
      */
     async sendMonthlyReportAll() {
         console.log('📊 Starting Monthly Report for all users...');
+        const startTime = Date.now();
         
         try {
             // Get previous month and year
@@ -937,35 +1392,145 @@ class CronJobService {
 
             console.log(`📅 Sending reports for: ${month}/${year}`);
 
+            // Create log entry
+            const logId = await this.createCronJobLog('monthly-report', { month, year });
+
             const userSitePairs = await this.getEligibleUsersForReports();
 
             if (userSitePairs.length === 0) {
                 console.log('⏭️  No eligible users found for monthly reports');
+                await this.updateCronJobLog(logId, {
+                    status: 'completed',
+                    totalUsers: 0,
+                    totalSites: 0,
+                    successCount: 0,
+                    failureCount: 0,
+                    skippedCount: 0,
+                    executionTime: Date.now() - startTime
+                });
                 return;
             }
             
             let successCount = 0;
             let failureCount = 0;
+            let skippedCount = 0;
+
+            // Arrays to track detailed reports
+            const successfulReports = [];
+            const skippedReports = [];
+            const failures = [];
+
+            // Map to track per-user summary
+            const userSummaryMap = new Map();
 
             // Send reports to all users for all their sites
             for (const pair of userSitePairs) {
+                const userName = pair.user.name;
+                const phoneNumber = pair.user.phoneNumber;
+
+                // Initialize user summary
+                if (!userSummaryMap.has(phoneNumber)) {
+                    userSummaryMap.set(phoneNumber, {
+                        userName,
+                        phoneNumber,
+                        totalSites: 0,
+                        successfulSites: 0,
+                        failedSites: 0,
+                        skippedSites: 0
+                    });
+                }
+
                 for (const siteId of pair.sites) {
+                    userSummaryMap.get(phoneNumber).totalSites++;
+
                     try {
-                        await sendMonthlyReport(pair.user, siteId, month, year);
-                        successCount++;
+                        // Get site name for logging
+                        const site = await siteSchema.findById(siteId).select('sitename');
+                        const siteName = site?.sitename || 'Unknown Site';
+
+                        const result = await sendMonthlyReport(pair.user, siteId, month, year);
+                        
+                        if (result.skipped) {
+                            // Report was skipped (e.g., no employees found)
+                            skippedCount++;
+                            userSummaryMap.get(phoneNumber).skippedSites++;
+                            skippedReports.push({
+                                userName,
+                                phoneNumber,
+                                siteId: siteId.toString(),
+                                siteName,
+                                reason: result.reason || 'No employees found',
+                                timestamp: new Date()
+                            });
+                            console.log(`⏭️  Skipped report for ${userName} - ${siteName}: ${result.reason}`);
+                        } else {
+                            // Report sent successfully
+                            successCount++;
+                            userSummaryMap.get(phoneNumber).successfulSites++;
+                            successfulReports.push({
+                                userName,
+                                phoneNumber,
+                                siteId: siteId.toString(),
+                                siteName,
+                                timestamp: new Date()
+                            });
+                        }
                         
                         // Small delay to avoid API rate limits
                         await new Promise(resolve => setTimeout(resolve, 1500));
                     } catch (error) {
                         console.error(`❌ Failed to send monthly report to ${pair.user.name} for site ${siteId}:`, error.message);
                         failureCount++;
+                        userSummaryMap.get(phoneNumber).failedSites++;
+
+                        // Get site name even for failures
+                        let siteName = 'Unknown Site';
+                        try {
+                            const site = await siteSchema.findById(siteId).select('sitename');
+                            siteName = site?.sitename || 'Unknown Site';
+                        } catch (e) {
+                            console.error('Could not fetch site name for failure log');
+                        }
+
+                        failures.push({
+                            userName,
+                            phoneNumber,
+                            siteId: siteId.toString(),
+                            siteName,
+                            error: error.message,
+                            timestamp: new Date()
+                        });
                     }
                 }
             }
 
-            console.log(`✅ Monthly Report completed: ${successCount} sent, ${failureCount} failed`);
+            // Convert user summary map to array
+            const userSummary = Array.from(userSummaryMap.values());
+
+            // Update log with results
+            await this.updateCronJobLog(logId, {
+                status: 'completed',
+                totalUsers: userSitePairs.length,
+                totalSites: userSitePairs.reduce((sum, pair) => sum + pair.sites.length, 0),
+                successCount,
+                failureCount,
+                skippedCount,
+                successfulReports,
+                skippedReports,
+                failures,
+                userSummary,
+                executionTime: Date.now() - startTime
+            });
+
+            console.log(`✅ Monthly Report completed: ${successCount} sent, ${failureCount} failed, ${skippedCount} skipped`);
         } catch (error) {
             console.error('❌ Error in sendMonthlyReportAll:', error);
+            const logId = await this.createCronJobLog('monthly-report', { error: 'Failed to create initial log' });
+            await this.updateCronJobLog(logId, {
+                status: 'failed',
+                error: error.message,
+                executionTime: Date.now() - startTime
+            });
             throw error;
         }
     }

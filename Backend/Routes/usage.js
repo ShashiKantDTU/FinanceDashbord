@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const ApiUsageLog = require('../models/ApiUsageLog');
+const CronJobLog = require('../models/CronJobLogSchema');
 const User = require('../models/Userschema');
 const { authenticateAndTrack } = require('../Middleware/usageTracker');
 const { getUserUsageStats, checkUsageLimits } = require('../Middleware/usageTracker');
@@ -963,6 +964,470 @@ router.get('/my-stats', authenticateAndTrack, async (req, res) => {
 // /api/usage/endpoint-stats -> Use /api/usage/endpoints-analytics
 // /api/usage/plan-usage -> Not needed (removed plan-based grouping)
 // /api/usage/real-time -> Use /api/usage/system-performance with period=today
+
+// ============================================
+// CRON JOB LOGGING ENDPOINTS
+// ============================================
+
+// GET /api/usage/cron-jobs
+// Get list of all cron job executions with summary
+// Query params: 
+//   - period (today, yesterday, week, month, 3months) OR
+//   - startDate (YYYY-MM-DD) + endDate (YYYY-MM-DD) for custom range
+//   - status (started, completed, failed) - optional filter
+//   - jobName (weekly-week1, weekly-week2, etc.) - optional filter
+//   - limit (default: 50) - number of results
+router.get('/cron-jobs', authenticateSuperAdmin, async (req, res) => {
+    try {
+        // Check if cron job logging is configured
+        if (!CronJobLog) {
+            return res.status(503).json({
+                success: false,
+                message: 'Cron job logging not available'
+            });
+        }
+
+        // Parse query parameters
+        const period = req.query.period || 'week';
+        const customStartDate = req.query.startDate;
+        const customEndDate = req.query.endDate;
+        const statusFilter = req.query.status;
+        const jobNameFilter = req.query.jobName;
+        const limit = parseInt(req.query.limit) || 50;
+
+        const { startDate, endDate } = getDateRange(period, customStartDate, customEndDate);
+
+        // Build query
+        const query = {
+            executionDate: { $gte: startDate, $lte: endDate }
+        };
+
+        if (statusFilter) {
+            query.status = statusFilter;
+        }
+
+        if (jobNameFilter) {
+            query.jobName = jobNameFilter;
+        }
+
+        // Get cron job logs
+        const cronJobs = await CronJobLog.find(query)
+            .sort({ executionDate: -1 })
+            .limit(limit)
+            .select('-successfulReports -skippedReports -failures'); // Exclude large arrays for list view
+
+        // Get summary statistics
+        const summary = await CronJobLog.aggregate([
+            {
+                $match: query
+            },
+            {
+                $group: {
+                    _id: null,
+                    totalJobs: { $sum: 1 },
+                    completedJobs: {
+                        $sum: { $cond: [{ $eq: ['$status', 'completed'] }, 1, 0] }
+                    },
+                    failedJobs: {
+                        $sum: { $cond: [{ $eq: ['$status', 'failed'] }, 1, 0] }
+                    },
+                    totalReportsSent: { $sum: '$successCount' },
+                    totalReportsFailed: { $sum: '$failureCount' },
+                    totalReportsSkipped: { $sum: '$skippedCount' },
+                    totalUsers: { $sum: '$totalUsers' },
+                    totalSites: { $sum: '$totalSites' },
+                    avgExecutionTime: { $avg: '$executionTime' }
+                }
+            }
+        ]);
+
+        // Get job type breakdown
+        const jobTypeBreakdown = await CronJobLog.aggregate([
+            {
+                $match: query
+            },
+            {
+                $group: {
+                    _id: '$jobName',
+                    count: { $sum: 1 },
+                    successCount: { $sum: '$successCount' },
+                    failureCount: { $sum: '$failureCount' },
+                    skippedCount: { $sum: '$skippedCount' },
+                    avgExecutionTime: { $avg: '$executionTime' },
+                    lastRun: { $max: '$executionDate' }
+                }
+            },
+            {
+                $sort: { lastRun: -1 }
+            }
+        ]);
+
+        const stats = summary[0] || {
+            totalJobs: 0,
+            completedJobs: 0,
+            failedJobs: 0,
+            totalReportsSent: 0,
+            totalReportsFailed: 0,
+            totalReportsSkipped: 0,
+            totalUsers: 0,
+            totalSites: 0,
+            avgExecutionTime: 0
+        };
+
+        res.json({
+            success: true,
+            period: {
+                type: customStartDate && customEndDate ? 'custom' : period,
+                startDate,
+                endDate
+            },
+            summary: {
+                totalJobs: stats.totalJobs,
+                completedJobs: stats.completedJobs,
+                failedJobs: stats.failedJobs,
+                totalReportsSent: stats.totalReportsSent,
+                totalReportsFailed: stats.totalReportsFailed,
+                totalReportsSkipped: stats.totalReportsSkipped,
+                totalUsers: stats.totalUsers,
+                totalSites: stats.totalSites,
+                avgExecutionTime: Math.round(stats.avgExecutionTime),
+                successRate: stats.totalReportsSent + stats.totalReportsFailed > 0
+                    ? ((stats.totalReportsSent / (stats.totalReportsSent + stats.totalReportsFailed)) * 100).toFixed(2)
+                    : '0.00'
+            },
+            jobTypeBreakdown,
+            cronJobs: cronJobs.map(job => ({
+                _id: job._id,
+                jobName: job.jobName,
+                executionDate: job.executionDate,
+                status: job.status,
+                totalUsers: job.totalUsers,
+                totalSites: job.totalSites,
+                successCount: job.successCount,
+                failureCount: job.failureCount,
+                skippedCount: job.skippedCount,
+                executionTime: job.executionTime,
+                completedAt: job.completedAt,
+                metadata: job.metadata
+            })),
+            totalRecords: cronJobs.length
+        });
+
+    } catch (error) {
+        console.error('Error fetching cron job logs:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Internal server error',
+            error: error.message
+        });
+    }
+});
+
+// GET /api/usage/cron-jobs/:id
+// Get detailed information about a specific cron job execution
+// Includes all successful reports, failures, and user details
+router.get('/cron-jobs/:id', authenticateSuperAdmin, async (req, res) => {
+    try {
+        // Check if cron job logging is configured
+        if (!CronJobLog) {
+            return res.status(503).json({
+                success: false,
+                message: 'Cron job logging not available'
+            });
+        }
+
+        const jobId = req.params.id;
+
+        // Get the cron job log
+        const cronJob = await CronJobLog.findById(jobId);
+
+        if (!cronJob) {
+            return res.status(404).json({
+                success: false,
+                message: 'Cron job log not found'
+            });
+        }
+
+        // Extract unique phone numbers from all reports
+        const phoneNumbers = new Set();
+        
+        if (cronJob.successfulReports) {
+            cronJob.successfulReports.forEach(report => {
+                if (report.phoneNumber) phoneNumbers.add(report.phoneNumber);
+            });
+        }
+        
+        if (cronJob.skippedReports) {
+            cronJob.skippedReports.forEach(report => {
+                if (report.phoneNumber) phoneNumbers.add(report.phoneNumber);
+            });
+        }
+        
+        if (cronJob.failures) {
+            cronJob.failures.forEach(failure => {
+                if (failure.phoneNumber) phoneNumbers.add(failure.phoneNumber);
+            });
+        }
+
+        // Get user details from User collection
+        const users = await User.find({
+            phoneNumber: { $in: Array.from(phoneNumbers) }
+        }).select('name phoneNumber email plan isTrial planActivatedAt');
+
+        // Create a map for quick lookup
+        const userMap = new Map(users.map(u => [u.phoneNumber, u]));
+
+        // Enrich reports with user details
+        const enrichedSuccessfulReports = cronJob.successfulReports?.map(report => {
+            const user = userMap.get(report.phoneNumber);
+            return {
+                userName: report.userName,
+                phoneNumber: report.phoneNumber,
+                siteId: report.siteId,
+                siteName: report.siteName,
+                timestamp: report.timestamp,
+                userDetails: user ? {
+                    email: user.email,
+                    plan: user.plan,
+                    isTrial: user.isTrial,
+                    planActivatedAt: user.planActivatedAt
+                } : null
+            };
+        }) || [];
+
+        const enrichedSkippedReports = cronJob.skippedReports?.map(report => {
+            const user = userMap.get(report.phoneNumber);
+            return {
+                userName: report.userName,
+                phoneNumber: report.phoneNumber,
+                siteId: report.siteId,
+                siteName: report.siteName,
+                reason: report.reason,
+                timestamp: report.timestamp,
+                userDetails: user ? {
+                    email: user.email,
+                    plan: user.plan,
+                    isTrial: user.isTrial,
+                    planActivatedAt: user.planActivatedAt
+                } : null
+            };
+        }) || [];
+
+        const enrichedFailures = cronJob.failures?.map(failure => {
+            const user = userMap.get(failure.phoneNumber);
+            return {
+                userName: failure.userName,
+                phoneNumber: failure.phoneNumber,
+                siteId: failure.siteId,
+                siteName: failure.siteName,
+                error: failure.error,
+                timestamp: failure.timestamp,
+                userDetails: user ? {
+                    email: user.email,
+                    plan: user.plan,
+                    isTrial: user.isTrial,
+                    planActivatedAt: user.planActivatedAt
+                } : null
+            };
+        }) || [];
+
+        // Enrich user summary with full user details
+        const enrichedUserSummary = cronJob.userSummary?.map(summary => {
+            const user = userMap.get(summary.phoneNumber);
+            return {
+                userName: summary.userName,
+                phoneNumber: summary.phoneNumber,
+                totalSites: summary.totalSites,
+                successfulSites: summary.successfulSites,
+                failedSites: summary.failedSites,
+                skippedSites: summary.skippedSites,
+                successRate: summary.totalSites > 0
+                    ? ((summary.successfulSites / summary.totalSites) * 100).toFixed(2)
+                    : '0.00',
+                userDetails: user ? {
+                    email: user.email,
+                    plan: user.plan,
+                    isTrial: user.isTrial,
+                    planActivatedAt: user.planActivatedAt
+                } : null
+            };
+        }) || [];
+
+        res.json({
+            success: true,
+            cronJob: {
+                _id: cronJob._id,
+                jobName: cronJob.jobName,
+                executionDate: cronJob.executionDate,
+                status: cronJob.status,
+                totalUsers: cronJob.totalUsers,
+                totalSites: cronJob.totalSites,
+                successCount: cronJob.successCount,
+                failureCount: cronJob.failureCount,
+                skippedCount: cronJob.skippedCount,
+                executionTime: cronJob.executionTime,
+                completedAt: cronJob.completedAt,
+                metadata: cronJob.metadata,
+                createdAt: cronJob.createdAt,
+                updatedAt: cronJob.updatedAt
+            },
+            userSummary: enrichedUserSummary,
+            successfulReports: enrichedSuccessfulReports,
+            skippedReports: enrichedSkippedReports,
+            failures: enrichedFailures,
+            statistics: {
+                totalReports: cronJob.successCount + cronJob.failureCount + cronJob.skippedCount,
+                successRate: cronJob.successCount + cronJob.failureCount > 0
+                    ? ((cronJob.successCount / (cronJob.successCount + cronJob.failureCount)) * 100).toFixed(2)
+                    : '0.00',
+                failureRate: cronJob.successCount + cronJob.failureCount > 0
+                    ? ((cronJob.failureCount / (cronJob.successCount + cronJob.failureCount)) * 100).toFixed(2)
+                    : '0.00',
+                skipRate: cronJob.successCount + cronJob.failureCount + cronJob.skippedCount > 0
+                    ? ((cronJob.skippedCount / (cronJob.successCount + cronJob.failureCount + cronJob.skippedCount)) * 100).toFixed(2)
+                    : '0.00',
+                executionTimeFormatted: cronJob.executionTime > 1000 
+                    ? `${(cronJob.executionTime / 1000).toFixed(2)}s`
+                    : `${cronJob.executionTime}ms`
+            }
+        });
+
+    } catch (error) {
+        console.error('Error fetching cron job details:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Internal server error',
+            error: error.message
+        });
+    }
+});
+
+// GET /api/usage/cron-jobs/user/:phone
+// Get all cron job reports for a specific user (by phone number)
+// Shows which reports they received, failed, or were skipped
+router.get('/cron-jobs/user/:phone', authenticateSuperAdmin, async (req, res) => {
+    try {
+        // Check if cron job logging is configured
+        if (!CronJobLog) {
+            return res.status(503).json({
+                success: false,
+                message: 'Cron job logging not available'
+            });
+        }
+
+        const userPhone = req.params.phone;
+        const period = req.query.period || 'month';
+        const customStartDate = req.query.startDate;
+        const customEndDate = req.query.endDate;
+
+        const { startDate, endDate } = getDateRange(period, customStartDate, customEndDate);
+
+        // Get user details
+        const user = await User.findOne({ phoneNumber: userPhone })
+            .select('name phoneNumber email plan isTrial planActivatedAt createdAt');
+
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: 'User not found'
+            });
+        }
+
+        // Find all cron jobs where this user appears
+        const cronJobs = await CronJobLog.find({
+            executionDate: { $gte: startDate, $lte: endDate },
+            $or: [
+                { 'successfulReports.phoneNumber': userPhone },
+                { 'skippedReports.phoneNumber': userPhone },
+                { 'failures.phoneNumber': userPhone },
+                { 'userSummary.phoneNumber': userPhone }
+            ]
+        }).sort({ executionDate: -1 });
+
+        // Process each cron job to extract user-specific data
+        const userReports = cronJobs.map(job => {
+            const userSuccessful = job.successfulReports?.filter(r => r.phoneNumber === userPhone) || [];
+            const userSkipped = job.skippedReports?.filter(r => r.phoneNumber === userPhone) || [];
+            const userFailures = job.failures?.filter(f => f.phoneNumber === userPhone) || [];
+            const userSummary = job.userSummary?.find(u => u.phoneNumber === userPhone) || null;
+
+            return {
+                jobId: job._id,
+                jobName: job.jobName,
+                executionDate: job.executionDate,
+                status: job.status,
+                metadata: job.metadata,
+                userSummary: userSummary,
+                successful: userSuccessful.map(r => ({
+                    siteId: r.siteId,
+                    siteName: r.siteName,
+                    timestamp: r.timestamp
+                })),
+                skipped: userSkipped.map(r => ({
+                    siteId: r.siteId,
+                    siteName: r.siteName,
+                    reason: r.reason,
+                    timestamp: r.timestamp
+                })),
+                failures: userFailures.map(f => ({
+                    siteId: f.siteId,
+                    siteName: f.siteName,
+                    error: f.error,
+                    timestamp: f.timestamp
+                })),
+                counts: {
+                    successful: userSuccessful.length,
+                    skipped: userSkipped.length,
+                    failed: userFailures.length,
+                    total: userSuccessful.length + userSkipped.length + userFailures.length
+                }
+            };
+        });
+
+        // Calculate overall statistics for this user
+        const totalSuccessful = userReports.reduce((sum, r) => sum + r.counts.successful, 0);
+        const totalSkipped = userReports.reduce((sum, r) => sum + r.counts.skipped, 0);
+        const totalFailed = userReports.reduce((sum, r) => sum + r.counts.failed, 0);
+        const totalReports = totalSuccessful + totalSkipped + totalFailed;
+
+        res.json({
+            success: true,
+            period: {
+                type: customStartDate && customEndDate ? 'custom' : period,
+                startDate,
+                endDate
+            },
+            user: {
+                name: user.name,
+                phoneNumber: user.phoneNumber,
+                email: user.email,
+                plan: user.plan,
+                isTrial: user.isTrial,
+                planActivatedAt: user.planActivatedAt,
+                registeredAt: user.createdAt
+            },
+            summary: {
+                totalCronJobs: cronJobs.length,
+                totalReports: totalReports,
+                totalSuccessful: totalSuccessful,
+                totalSkipped: totalSkipped,
+                totalFailed: totalFailed,
+                successRate: totalSuccessful + totalFailed > 0
+                    ? ((totalSuccessful / (totalSuccessful + totalFailed)) * 100).toFixed(2)
+                    : '0.00'
+            },
+            reports: userReports
+        });
+
+    } catch (error) {
+        console.error('Error fetching user cron job reports:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Internal server error',
+            error: error.message
+        });
+    }
+});
 
 // POST /api/usage/cleanup
 // Clean up old usage logs (admin only)
