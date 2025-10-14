@@ -107,6 +107,96 @@ router.post('/trigger/grace-expired', async (req, res) => {
   }
 });
 
+// Manual trigger for weekly report Week 1
+router.post('/trigger/weekly-week1', async (req, res) => {
+  try {
+    await cronJobService.manualTriggerWeeklyReportWeek1();
+    res.json({
+      success: true,
+      message: 'Weekly Report Week 1 (Days 1-7) triggered successfully',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Error triggering Weekly Report Week 1',
+      error: error.message
+    });
+  }
+});
+
+// Manual trigger for weekly report Week 2
+router.post('/trigger/weekly-week2', async (req, res) => {
+  try {
+    await cronJobService.manualTriggerWeeklyReportWeek2();
+    res.json({
+      success: true,
+      message: 'Weekly Report Week 2 (Days 8-14) triggered successfully',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Error triggering Weekly Report Week 2',
+      error: error.message
+    });
+  }
+});
+
+// Manual trigger for weekly report Week 3
+router.post('/trigger/weekly-week3', async (req, res) => {
+  try {
+    await cronJobService.manualTriggerWeeklyReportWeek3();
+    res.json({
+      success: true,
+      message: 'Weekly Report Week 3 (Days 15-21) triggered successfully',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Error triggering Weekly Report Week 3',
+      error: error.message
+    });
+  }
+});
+
+// Manual trigger for weekly report Week 4
+router.post('/trigger/weekly-week4', async (req, res) => {
+  try {
+    await cronJobService.manualTriggerWeeklyReportWeek4();
+    res.json({
+      success: true,
+      message: 'Weekly Report Week 4 (Days 22-28+) triggered successfully',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Error triggering Weekly Report Week 4',
+      error: error.message
+    });
+  }
+});
+
+// Manual trigger for monthly report
+router.post('/trigger/monthly-report', async (req, res) => {
+  try {
+    await cronJobService.manualTriggerMonthlyReport();
+    res.json({
+      success: true,
+      message: 'Monthly Report triggered successfully',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Error triggering Monthly Report',
+      error: error.message
+    });
+  }
+});
+
 // Stop all cron jobs (for maintenance)
 router.post('/stop-all', (req, res) => {
   try {

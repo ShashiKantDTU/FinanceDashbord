@@ -1,6 +1,9 @@
 const cron = require('node-cron');
 const User = require('../models/Userschema');
 const { google } = require('googleapis');
+const { sendMonthlyReport, sendWeeklyReport } = require('../scripts/whatsappReport');
+const siteSchema = require('../models/Siteschema');
+const CronJobLog = require('../models/CronJobLogSchema');
 
 // Configurable knobs (module-level constants)
 const EXPIRED_BATCH_SIZE = 50; // users per batch when processing expired cancellations
@@ -94,8 +97,27 @@ class CronJobService {
         // Run daily at 3 AM for all subscription cleanup tasks
         this.scheduleJob('daily-subscription-cleanup', '0 3 * * *', this.runDailyCleanup.bind(this));
 
-    // Safety net: finalize provisional Google Play purchases every 2 hours
-    this.scheduleJob('finalize-provisional-google-play', '0 */2 * * *', this.finalizeProvisionalGooglePlay.bind(this));
+        // Safety net: finalize provisional Google Play purchases every 2 hours
+        this.scheduleJob('finalize-provisional-google-play', '0 */2 * * *', this.finalizeProvisionalGooglePlay.bind(this));
+
+        // Weekly Report Cron Jobs - Run at 2 AM on specific days
+        // Week 1: Day 8 of every month (for days 1-7)
+        this.scheduleJob('weekly-report-week1', '0 2 8 * *', this.sendWeeklyReportWeek1.bind(this));
+
+        // Week 2: Day 15 of every month (for days 8-14)
+        this.scheduleJob('weekly-report-week2', '0 2 15 * *', this.sendWeeklyReportWeek2.bind(this));
+
+        // Week 3: Day 22 of every month (for days 15-21)
+        this.scheduleJob('weekly-report-week3', '0 2 22 * *', this.sendWeeklyReportWeek3.bind(this));
+
+        // Week 4: Day 29 of every month (for days 22-28, with special handling for February)
+        this.scheduleJob('weekly-report-week4', '0 2 29 * *', this.sendWeeklyReportWeek4.bind(this));
+
+        // Special: February 28th for non-leap years (backup for Week 4)
+        this.scheduleJob('weekly-report-feb28', '0 2 28 2 *', this.sendWeeklyReportFeb28.bind(this));
+
+        // Monthly Report: 1st day of every month at 2 AM (for previous month)
+        this.scheduleJob('monthly-report', '0 2 1 * *', this.sendMonthlyReportAll.bind(this));
 
 
 
@@ -480,6 +502,474 @@ class CronJobService {
         return status;
     }
 
+    // ============================================
+    // HELPER METHODS FOR REPORT GENERATION
+    // ============================================
+
+    /**
+     * Create a cron job log entry
+     */
+    async createCronJobLog(jobName, metadata = {}) {
+        try {
+            const log = await CronJobLog.create({
+                jobName,
+                executionDate: new Date(),
+                status: 'started',
+                metadata
+            });
+            return log._id;
+        } catch (error) {
+            console.error('❌ Error creating cron job log:', error);
+            return null;
+        }
+    }
+
+    /**
+     * Update cron job log with completion status
+     */
+    async updateCronJobLog(logId, updates) {
+        try {
+            if (!logId) return;
+            await CronJobLog.findByIdAndUpdate(logId, updates);
+        } catch (error) {
+            console.error('❌ Error updating cron job log:', error);
+        }
+    }
+
+    /**
+     * Get eligible users for reports (Premium/Business plan OR Trial users only)
+     * Excludes: Free plan and Pro plan (unless on trial)
+     * @returns {Array} Array of eligible users with their active sites
+     */
+    async getEligibleUsersForReports() {
+        try {
+            // Find users who are either:
+            // 1. On premium or business plan (NOT pro, NOT free)
+            // 2. On trial (isTrial: true) - any plan on trial is eligible
+            const users = await User.find({
+                $or: [
+                    { plan: { $in: ['premium', 'business'] } }, // Only premium/business plans
+                    { isTrial: true }, // OR any user on trial
+                ],
+                site: { $exists: true, $not: { $size: 0 } }, // Must have sites
+                whatsAppReportsEnabled: true // Only users who have enabled WhatsApp reports
+            }).populate('site'); // Populate to get site details including isActive
+
+            console.log(`📋 Found ${users.length} eligible users (premium/business/trial)`);
+
+            // Filter out inactive sites and prepare user-site pairs
+            const userSitePairs = [];
+            
+            for (const user of users) {
+                // Filter only active sites
+                const activeSites = user.site.filter(site => site.isActive === true);
+                
+                if (activeSites.length > 0) {
+                    userSitePairs.push({
+                        user: {
+                            name: user.name,
+                            phoneNumber: user.whatsAppReportPhone, // Use WhatsApp number, not regular phone
+                            calculationType: 'default' // Can be extended based on user settings
+                        },
+                        sites: activeSites.map(site => site._id.toString())
+                    });
+                }
+            }
+
+            console.log(`✅ Prepared ${userSitePairs.length} user-site pairs with active sites`);
+            return userSitePairs;
+        } catch (error) {
+            console.error('❌ Error getting eligible users:', error);
+            throw error;
+        }
+    }
+
+    // ============================================
+    // WEEKLY REPORT CRON JOBS
+    // ============================================
+
+    /**
+     * Send weekly report for Week 1 (Days 1-7)
+     * Runs on 8th day of every month at 2 AM
+     */
+    async sendWeeklyReportWeek1() {
+        const startTime = Date.now();
+        console.log('📊 Starting Weekly Report Week 1 (Days 1-7)...');
+        
+        // Create log entry
+        const logId = await this.createCronJobLog('weekly-week1', { weekNumber: 1 });
+        
+        try {
+            // Get eligible users (premium/trial only) with active sites
+            const userSitePairs = await this.getEligibleUsersForReports();
+
+            if (userSitePairs.length === 0) {
+                console.log('⏭️  No eligible users found for weekly reports');
+                await this.updateCronJobLog(logId, {
+                    status: 'completed',
+                    totalUsers: 0,
+                    totalSites: 0,
+                    completedAt: new Date(),
+                    executionTime: Date.now() - startTime
+                });
+                return;
+            }
+            
+            let successCount = 0;
+            let failureCount = 0;
+            let skippedCount = 0;
+            const failures = [];
+            const successfulReports = [];
+            const skippedReports = [];
+            const userSummaryMap = new Map();
+            const totalSites = userSitePairs.reduce((sum, pair) => sum + pair.sites.length, 0);
+
+            // Send reports to all eligible users for all their active sites
+            for (const pair of userSitePairs) {
+                // Initialize user summary
+                const userKey = pair.user.name;
+                if (!userSummaryMap.has(userKey)) {
+                    userSummaryMap.set(userKey, {
+                        userName: pair.user.name,
+                        phoneNumber: pair.user.phoneNumber,
+                        totalSites: pair.sites.length,
+                        successfulSites: 0,
+                        failedSites: 0,
+                        skippedSites: 0
+                    });
+                }
+
+                for (const siteId of pair.sites) {
+                    try {
+                        // Get site name
+                        const site = await siteSchema.findById(siteId);
+                        const siteName = site ? site.sitename : 'Unknown Site';
+
+                        const result = await sendWeeklyReport(pair.user, siteId);
+                        
+                        if (result?.skipped) {
+                            skippedCount++;
+                            userSummaryMap.get(userKey).skippedSites++;
+                            skippedReports.push({
+                                userName: pair.user.name,
+                                phoneNumber: pair.user.phoneNumber,
+                                siteId: siteId,
+                                siteName: siteName,
+                                reason: result.reason || 'Unknown',
+                                timestamp: new Date()
+                            });
+                        } else {
+                            successCount++;
+                            userSummaryMap.get(userKey).successfulSites++;
+                            successfulReports.push({
+                                userName: pair.user.name,
+                                phoneNumber: pair.user.phoneNumber,
+                                siteId: siteId,
+                                siteName: siteName,
+                                timestamp: new Date()
+                            });
+                        }
+                        
+                        // Small delay to avoid API rate limits
+                        await new Promise(resolve => setTimeout(resolve, 1000));
+                    } catch (error) {
+                        console.error(`❌ Failed to send weekly report to ${pair.user.name} for site ${siteId}:`, error.message);
+                        failureCount++;
+                        userSummaryMap.get(userKey).failedSites++;
+                        
+                        // Get site name for failure log
+                        let siteName = 'Unknown Site';
+                        try {
+                            const site = await siteSchema.findById(siteId);
+                            siteName = site ? site.sitename : 'Unknown Site';
+                        } catch {}
+
+                        failures.push({
+                            userName: pair.user.name,
+                            phoneNumber: pair.user.phoneNumber,
+                            siteId: siteId,
+                            siteName: siteName,
+                            error: error.message,
+                            timestamp: new Date()
+                        });
+                    }
+                }
+            }
+
+            console.log(`✅ Weekly Report Week 1 completed: ${successCount} sent, ${failureCount} failed, ${skippedCount} skipped`);
+            
+            // Convert user summary map to array
+            const userSummary = Array.from(userSummaryMap.values());
+
+            // Update log with completion status
+            await this.updateCronJobLog(logId, {
+                status: 'completed',
+                totalUsers: userSitePairs.length,
+                totalSites: totalSites,
+                successCount,
+                failureCount,
+                skippedCount,
+                successfulReports,
+                skippedReports,
+                failures,
+                userSummary,
+                completedAt: new Date(),
+                executionTime: Date.now() - startTime
+            });
+            
+        } catch (error) {
+            console.error('❌ Error in sendWeeklyReportWeek1:', error);
+            
+            // Update log with failure
+            await this.updateCronJobLog(logId, {
+                status: 'failed',
+                failures: [{
+                    error: error.message,
+                    timestamp: new Date()
+                }],
+                completedAt: new Date(),
+                executionTime: Date.now() - startTime
+            });
+            
+            throw error;
+        }
+    }
+
+    /**
+     * Send weekly report for Week 2 (Days 8-14)
+     * Runs on 15th day of every month at 2 AM
+     */
+    async sendWeeklyReportWeek2() {
+        console.log('📊 Starting Weekly Report Week 2 (Days 8-14)...');
+        
+        try {
+            const userSitePairs = await this.getEligibleUsersForReports();
+
+            if (userSitePairs.length === 0) {
+                console.log('⏭️  No eligible users found for weekly reports');
+                return;
+            }
+            
+            let successCount = 0;
+            let failureCount = 0;
+
+            for (const pair of userSitePairs) {
+                for (const siteId of pair.sites) {
+                    try {
+                        await sendWeeklyReport(pair.user, siteId);
+                        successCount++;
+                        
+                        await new Promise(resolve => setTimeout(resolve, 1000));
+                    } catch (error) {
+                        console.error(`❌ Failed to send weekly report to ${pair.user.name} for site ${siteId}:`, error.message);
+                        failureCount++;
+                    }
+                }
+            }
+
+            console.log(`✅ Weekly Report Week 2 completed: ${successCount} sent, ${failureCount} failed`);
+        } catch (error) {
+            console.error('❌ Error in sendWeeklyReportWeek2:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Send weekly report for Week 3 (Days 15-21)
+     * Runs on 22nd day of every month at 2 AM
+     */
+    async sendWeeklyReportWeek3() {
+        console.log('📊 Starting Weekly Report Week 3 (Days 15-21)...');
+        
+        try {
+            const userSitePairs = await this.getEligibleUsersForReports();
+
+            if (userSitePairs.length === 0) {
+                console.log('⏭️  No eligible users found for weekly reports');
+                return;
+            }
+            
+            let successCount = 0;
+            let failureCount = 0;
+
+            for (const pair of userSitePairs) {
+                for (const siteId of pair.sites) {
+                    try {
+                        await sendWeeklyReport(pair.user, siteId);
+                        successCount++;
+                        
+                        await new Promise(resolve => setTimeout(resolve, 1000));
+                    } catch (error) {
+                        console.error(`❌ Failed to send weekly report to ${pair.user.name} for site ${siteId}:`, error.message);
+                        failureCount++;
+                    }
+                }
+            }
+
+            console.log(`✅ Weekly Report Week 3 completed: ${successCount} sent, ${failureCount} failed`);
+        } catch (error) {
+            console.error('❌ Error in sendWeeklyReportWeek3:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Send weekly report for Week 4 (Days 22-28/29/30)
+     * Runs on 29th day of every month at 2 AM
+     * Special handling for February
+     */
+    async sendWeeklyReportWeek4() {
+        console.log('📊 Starting Weekly Report Week 4 (Days 22-28+)...');
+        
+        try {
+            // Check if this is February and handle accordingly
+            const now = new Date();
+            const month = now.getMonth() + 1; // 1-12
+            const year = now.getFullYear();
+            
+            // For February, this job runs on Feb 29 (leap year) or won't run (non-leap year)
+            // We need a separate job for February 28th in non-leap years
+            if (month === 2) {
+                console.log('⚠️  February detected - Week 4 report for days 22-28');
+            }
+
+            const userSitePairs = await this.getEligibleUsersForReports();
+
+            if (userSitePairs.length === 0) {
+                console.log('⏭️  No eligible users found for weekly reports');
+                return;
+            }
+            
+            let successCount = 0;
+            let failureCount = 0;
+
+            for (const pair of userSitePairs) {
+                for (const siteId of pair.sites) {
+                    try {
+                        await sendWeeklyReport(pair.user, siteId);
+                        successCount++;
+                        
+                        await new Promise(resolve => setTimeout(resolve, 1000));
+                    } catch (error) {
+                        console.error(`❌ Failed to send weekly report to ${pair.user.name} for site ${siteId}:`, error.message);
+                        failureCount++;
+                    }
+                }
+            }
+
+            console.log(`✅ Weekly Report Week 4 completed: ${successCount} sent, ${failureCount} failed`);
+        } catch (error) {
+            console.error('❌ Error in sendWeeklyReportWeek4:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Send weekly report for February 28th (non-leap years only)
+     * Runs on Feb 28th at 2 AM
+     * This ensures Week 4 report is sent even in non-leap years
+     */
+    async sendWeeklyReportFeb28() {
+        console.log('📊 Starting Weekly Report for February 28th...');
+        
+        try {
+            const now = new Date();
+            const year = now.getFullYear();
+            
+            // Check if this is a leap year
+            const isLeapYear = (year % 4 === 0 && year % 100 !== 0) || (year % 400 === 0);
+            
+            if (isLeapYear) {
+                console.log('⏭️  Skipping Feb 28 job - Leap year detected, will run on Feb 29');
+                return;
+            }
+
+            console.log('✅ Non-leap year detected - Sending Week 4 report for days 22-28');
+
+            const userSitePairs = await this.getEligibleUsersForReports();
+
+            if (userSitePairs.length === 0) {
+                console.log('⏭️  No eligible users found for weekly reports');
+                return;
+            }
+            
+            let successCount = 0;
+            let failureCount = 0;
+
+            for (const pair of userSitePairs) {
+                for (const siteId of pair.sites) {
+                    try {
+                        await sendWeeklyReport(pair.user, siteId);
+                        successCount++;
+                        
+                        await new Promise(resolve => setTimeout(resolve, 1000));
+                    } catch (error) {
+                        console.error(`❌ Failed to send weekly report to ${pair.user.name} for site ${siteId}:`, error.message);
+                        failureCount++;
+                    }
+                }
+            }
+
+            console.log(`✅ February 28 Weekly Report completed: ${successCount} sent, ${failureCount} failed`);
+        } catch (error) {
+            console.error('❌ Error in sendWeeklyReportFeb28:', error);
+            throw error;
+        }
+    }
+
+    // ============================================
+    // MONTHLY REPORT CRON JOB
+    // ============================================
+
+    /**
+     * Send monthly report for previous month
+     * Runs on 1st day of every month at 2 AM
+     */
+    async sendMonthlyReportAll() {
+        console.log('📊 Starting Monthly Report for all users...');
+        
+        try {
+            // Get previous month and year
+            const now = new Date();
+            const previousMonth = now.getMonth(); // 0-11 (January is 0)
+            const year = previousMonth === 0 ? now.getFullYear() - 1 : now.getFullYear();
+            const month = previousMonth === 0 ? 12 : previousMonth;
+
+            console.log(`📅 Sending reports for: ${month}/${year}`);
+
+            const userSitePairs = await this.getEligibleUsersForReports();
+
+            if (userSitePairs.length === 0) {
+                console.log('⏭️  No eligible users found for monthly reports');
+                return;
+            }
+            
+            let successCount = 0;
+            let failureCount = 0;
+
+            // Send reports to all users for all their sites
+            for (const pair of userSitePairs) {
+                for (const siteId of pair.sites) {
+                    try {
+                        await sendMonthlyReport(pair.user, siteId, month, year);
+                        successCount++;
+                        
+                        // Small delay to avoid API rate limits
+                        await new Promise(resolve => setTimeout(resolve, 1500));
+                    } catch (error) {
+                        console.error(`❌ Failed to send monthly report to ${pair.user.name} for site ${siteId}:`, error.message);
+                        failureCount++;
+                    }
+                }
+            }
+
+            console.log(`✅ Monthly Report completed: ${successCount} sent, ${failureCount} failed`);
+        } catch (error) {
+            console.error('❌ Error in sendMonthlyReportAll:', error);
+            throw error;
+        }
+    }
+
     // Manual trigger for testing
     async manualTriggerDailyCleanup() {
         console.log('🔧 Manual trigger: Daily subscription cleanup');
@@ -499,6 +989,33 @@ class CronJobService {
     async manualTriggerExpiredTrials() {
         console.log('🔧 Manual trigger: Expired trials check');
         await this.handleExpiredTrials();
+    }
+
+    // Manual triggers for weekly reports
+    async manualTriggerWeeklyReportWeek1() {
+        console.log('🔧 Manual trigger: Weekly Report Week 1');
+        await this.sendWeeklyReportWeek1();
+    }
+
+    async manualTriggerWeeklyReportWeek2() {
+        console.log('🔧 Manual trigger: Weekly Report Week 2');
+        await this.sendWeeklyReportWeek2();
+    }
+
+    async manualTriggerWeeklyReportWeek3() {
+        console.log('🔧 Manual trigger: Weekly Report Week 3');
+        await this.sendWeeklyReportWeek3();
+    }
+
+    async manualTriggerWeeklyReportWeek4() {
+        console.log('🔧 Manual trigger: Weekly Report Week 4');
+        await this.sendWeeklyReportWeek4();
+    }
+
+    // Manual trigger for monthly report
+    async manualTriggerMonthlyReport() {
+        console.log('🔧 Manual trigger: Monthly Report');
+        await this.sendMonthlyReportAll();
     }
 
     

@@ -5,7 +5,7 @@ const mongoose = require('mongoose');
 const MONGODB_URI = 'mongodb://localhost:27017/finance-dashboard';
 
 // Configuration
-const SITE_ID = "6870f208c36ebbb9064d6649";
+const SITE_ID = "68ee282b41993bb4a9485e06";
 const CREATED_BY = "sunnypoddar1919@gmail.com";
 const START_DATE = new Date(2024, 5, 1); // June 2024
 const END_DATE = new Date(); // Today's date
@@ -360,14 +360,14 @@ function generateEmployeeName(index) {
 // Generate employees data
 function generateEmployeesData() {
     const employees = [];
-    const numEmployees = 250; // Generate 250 employees
+    const numEmployees = 25; // Generate 25 employees
 
     for (let i = 0; i < numEmployees; i++) {
         const empId = `EMP${String(i + 1).padStart(4, '0')}`; // Changed to 4 digits for 250+ employees
         const name = generateEmployeeName(i); // Use function to generate unique names
         const rate = Math.floor(Math.random() * 351) + 550; // 550-900 daily rate
 
-        // Generate data for each month from June 2024 to May 2025
+        // Generate data for each month from June 2024 to END_DATE
         const currentDate = new Date(START_DATE);
         const endDate = new Date(END_DATE);
         while (currentDate <= endDate) {
