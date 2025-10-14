@@ -1044,7 +1044,9 @@ class CronJobService {
         
         try {
             // Check if this is February and handle accordingly
-            const now = new Date();
+            // CRITICAL: Use IST date to match cron timezone
+            const { getISTDate } = require('../Utils/WeeklyReportUtils');
+            const now = getISTDate();
             const month = now.getMonth() + 1; // 1-12
             const year = now.getFullYear();
             
@@ -1205,7 +1207,9 @@ class CronJobService {
         const startTime = Date.now();
         
         try {
-            const now = new Date();
+            // CRITICAL: Use IST date to match cron timezone
+            const { getISTDate } = require('../Utils/WeeklyReportUtils');
+            const now = getISTDate();
             const year = now.getFullYear();
             
             // Check if this is a leap year
@@ -1384,13 +1388,16 @@ class CronJobService {
         const startTime = Date.now();
         
         try {
-            // Get previous month and year
-            const now = new Date();
+            // Get previous month and year using IST timezone
+            // CRITICAL: Cron runs at 2 AM IST, must use IST date to get correct month
+            // When cron runs at 2 AM IST on Nov 1, server in UTC shows Oct 31 @ 8:30 PM
+            const { getISTDate } = require('../Utils/WeeklyReportUtils');
+            const now = getISTDate();
             const previousMonth = now.getMonth(); // 0-11 (January is 0)
             const year = previousMonth === 0 ? now.getFullYear() - 1 : now.getFullYear();
             const month = previousMonth === 0 ? 12 : previousMonth;
 
-            console.log(`📅 Sending reports for: ${month}/${year}`);
+            console.log(`📅 Sending reports for: ${month}/${year} (Previous month from IST date)`);
 
             // Create log entry
             const logId = await this.createCronJobLog('monthly-report', { month, year });

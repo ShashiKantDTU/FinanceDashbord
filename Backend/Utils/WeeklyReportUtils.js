@@ -70,16 +70,52 @@ const siteExpenseSchema = require('../models/SiteExpenseSchema');
 const sitePaymentSchema = require('../models/SitePaymentSchema');
 
 /**
- * Calculate date range for last 7 days
+ * Get current date in IST timezone
+ * This ensures consistency with cron job scheduling which uses 'Asia/Kolkata' timezone
+ * @returns {Date} Current date/time in IST
+ */
+function getISTDate() {
+    // Get current UTC time
+    const now = new Date();
+    
+    // Convert to IST (UTC +5:30)
+    // Using toLocaleString to get IST time, then parse it back to Date object
+    const istString = now.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' });
+    const istDate = new Date(istString);
+    
+    return istDate;
+}
+
+/**
+ * Calculate date range for last 7 days ENDING YESTERDAY
+ * CRITICAL: Reports run at 2 AM, so "today" data is incomplete
+ * We need last 7 COMPLETE days, which means ending yesterday
+ * 
+ * IMPORTANT: Uses IST timezone to match cron job scheduling
+ * 
+ * Example: Cron runs at 2 AM IST on Oct 15
+ *   - Today (IST) = Oct 15
+ *   - Yesterday = Oct 14
+ *   - Last 7 days = Oct 8-14 (complete data)
+ * 
  * @returns {Object} { startDate, endDate, startDay, endDay, month, year }
  */
 function getLast7DaysRange() {
-    const today = new Date();
-    const endDate = new Date(today);
+    // CRITICAL: Use IST date to match cron job timezone (Asia/Kolkata)
+    // When cron runs at 2 AM IST, server might be in UTC (8:30 PM previous day)
+    const today = getISTDate();
+    
+    // Calculate yesterday (since today's data at 2 AM is incomplete)
+    const yesterday = new Date(today);
+    yesterday.setDate(today.getDate() - 1);
+    
+    // End date is yesterday at 23:59:59 (last second of yesterday)
+    const endDate = new Date(yesterday);
     endDate.setHours(23, 59, 59, 999);
     
-    const startDate = new Date(today);
-    startDate.setDate(today.getDate() - 6); // Last 7 days including today
+    // Start date is 7 days before yesterday (yesterday - 6 days = 7 days total)
+    const startDate = new Date(yesterday);
+    startDate.setDate(yesterday.getDate() - 6);
     startDate.setHours(0, 0, 0, 0);
 
     return {
@@ -87,9 +123,11 @@ function getLast7DaysRange() {
         endDate,
         startDay: startDate.getDate(),
         endDay: endDate.getDate(),
-        month: today.getMonth() + 1,
-        year: today.getFullYear(),
-        formattedRange: `${startDate.toLocaleDateString('en-IN')} to ${endDate.toLocaleDateString('en-IN')}`
+        month: yesterday.getMonth() + 1,
+        year: yesterday.getFullYear(),
+        formattedRange: `${startDate.toLocaleDateString('en-IN')} to ${endDate.toLocaleDateString('en-IN')}`,
+        timezone: 'Asia/Kolkata (IST)',
+        note: 'Last 7 complete days ending yesterday'
     };
 }
 
@@ -485,7 +523,8 @@ async function fetchCompleteWeeklyReportData(siteID, calculationType = 'default'
             monthlyExpenses,
             weeklyMetrics,
             monthlyMetrics,
-            generatedAt: new Date()
+            generatedAt: getISTDate(),
+            timezone: 'Asia/Kolkata (IST)'
         };
     } catch (error) {
         console.error('❌ Error fetching complete weekly report data:', error);
@@ -494,6 +533,7 @@ async function fetchCompleteWeeklyReportData(siteID, calculationType = 'default'
 }
 
 module.exports = {
+    getISTDate,
     getLast7DaysRange,
     parseAttendance,
     calculateWeeklyAttendance,
