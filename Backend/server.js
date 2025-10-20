@@ -78,7 +78,9 @@ app.use('/api/play-purchase/notifications', express.raw({ type: 'application/jso
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// (usageTracker middleware can be added here if enabled later)
+// NOTE: apiCallTracker runs per-route via authenticateAndTrack middleware
+// This ensures req.user exists before tracking (see usageTracker.js)
+
 // Import routes
 const authRoutes = require('./Routes/auth');
 const dashboardRoutes = require('./Routes/dashboard');
@@ -93,7 +95,8 @@ const cronRoutes = require('./Routes/cronRoutes');
 const { router: pdfReportRoutes } = require('./Routes/pdfReports');
 const excelReportRoutes = require('./Routes/excelReports');
 const servicesRoutes = require('./Routes/services');
-const internalApiRequests = require('./Routes/internalApiRequests')
+const internalApiRequests = require('./Routes/internalApiRequests');
+const apiTrackingManagementRoutes = require('./Routes/apiTrackingManagement');
 // const optimizedEmployeeRoutes = require('./Routes/optimizedEmployeeRoutes');
 
 // Import cron job service
@@ -131,7 +134,8 @@ app.use('/api/reports', pdfReportRoutes);
 app.use('/api/reports', excelReportRoutes); // New Excel (placeholder) report endpoint
 // app.use('/api/employee-optimized', optimizedEmployeeRoutes);
 app.use('/api/services', servicesRoutes);
-app.use('/api/internal', internalApiRequests)
+app.use('/api/internal', internalApiRequests);
+app.use('/api/super-admin/api-tracking', apiTrackingManagementRoutes);
 
 
 // Basic route

@@ -39,7 +39,13 @@ const supervisorSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: "User",
         required: true,
-      }
+    },
+    language: {
+        type: String,
+        enum: ['en', 'hi', 'hing'],
+        default: 'en',
+        required: false
+    }
 }, {
     timestamps: true
 });

@@ -291,8 +291,12 @@ const authenticateAndTrack = async (req, res, next) => {
     }
     console.timeEnd("Authentication");
     
-    // If authentication succeeds, apply usage tracking
-    usageTracker(req, res, next);
+    // After authentication succeeds, run API call tracker (non-blocking)
+    const { apiCallTracker } = require('./apiCallTracker');
+    apiCallTracker(req, res, () => {
+      // Then apply usage tracking
+      usageTracker(req, res, next);
+    });
   });
 };
 

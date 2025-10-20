@@ -17,6 +17,8 @@ const { sendPasswordResetEmail } = require("../Utils/emailService");
 const { redisClient } = require('../config/redisClient');
 // WhatsApp OTP helper
 const { sendWhatsAppOtp } = require('../Utils/whatsappOtp');
+// API Call Tracker
+const { addUserToTracking } = require('../Middleware/apiCallTracker');
 const router = express.Router();
 // Redis connection is initialized centrally in server.js. This file just uses the shared client.
 
@@ -205,6 +207,11 @@ router.post("/otp/verify", async (req, res) => {
       });
       await user.save();
       // console.log(`New mobile user created: ${firebaseUid}`);
+      
+      // Add new user to API tracking (fire-and-forget)
+      addUserToTracking(phoneNumber).catch(err => {
+        console.error('Failed to add user to tracking:', err.message);
+      });
     }
 
     // Generate JWT token for your app
@@ -223,6 +230,7 @@ router.post("/otp/verify", async (req, res) => {
         phoneNumber: user.phoneNumber,
         whatsAppReportsEnabled: user.whatsAppReportsEnabled,
         whatsAppReportPhone: user.whatsAppReportPhone,
+        language: user.language || 'en',
         role: "Admin",
       }
     })
@@ -358,6 +366,11 @@ router.post("/otplogin", async (req, res) => {
       });
       await user.save();
       // console.log(`New mobile user created: ${firebaseUid}`);
+      
+      // Add new user to API tracking (fire-and-forget)
+      addUserToTracking(phoneNumber).catch(err => {
+        console.error('Failed to add user to tracking:', err.message);
+      });
     }
 
     // Generate JWT token for your app
@@ -377,6 +390,7 @@ router.post("/otplogin", async (req, res) => {
         phoneNumber: user.phoneNumber,
         whatsAppReportsEnabled: user.whatsAppReportsEnabled,
         whatsAppReportPhone: user.whatsAppReportPhone,
+        language: user.language || 'en',
       },
     });
   } catch (error) {
@@ -456,6 +470,11 @@ router.post("/truecallerlogin", async (req, res) => {
       });
       await user.save();
       // console.log(`New mobile user created: ${firebaseUid}`);
+      
+      // Add new user to API tracking (fire-and-forget)
+      addUserToTracking(phoneNumber).catch(err => {
+        console.error('Failed to add user to tracking:', err.message);
+      });
     }
 
     // Generate JWT token for your app
@@ -474,7 +493,8 @@ router.post("/truecallerlogin", async (req, res) => {
         role: "Admin",
         phoneNumber: user.phoneNumber,
         whatsAppReportsEnabled: user.whatsAppReportsEnabled,
-        whatsAppReportPhone: user.whatsAppReportPhone
+        whatsAppReportPhone: user.whatsAppReportPhone,
+        language: user.language || 'en'
       }
     })
 
@@ -526,7 +546,8 @@ router.post("/login", async (req, res) => {
           role: "Admin",
           phoneNumber: user.phoneNumber,
           whatsAppReportsEnabled: user.whatsAppReportsEnabled,
-          whatsAppReportPhone: user.whatsAppReportPhone
+          whatsAppReportPhone: user.whatsAppReportPhone,
+          language: user.language || 'en'
         },
       });
     } else {
@@ -563,7 +584,8 @@ router.post("/login", async (req, res) => {
               siteid: existingSupervisor.site[0],
               siteName: site.sitename,
               isActive: site.isActive,
-              siteStatus: site.isActive ? "Active" : "Inactive"
+              siteStatus: site.isActive ? "Active" : "Inactive",
+              language: existingSupervisor.language || 'en'
             },
           });
         }else{
@@ -776,18 +798,23 @@ router.get("/verify", authenticateToken, async (req, res) => {
       whatsAppReportPhone: req.user?.whatsAppReportPhone
     };
 
-    // Fallback: ensure email/name for Admin if missing (older tokens)
-    if (baseUser.role === "Admin" && (!baseUser.email || !baseUser.name)) {
+    // Fallback: ensure email/name/language for Admin if missing (older tokens)
+    if (baseUser.role === "Admin" && (!baseUser.email || !baseUser.name || !baseUser.language)) {
       try {
-        const dbUser = await User.findById(baseUser.id).select("email name").lean();
+        const dbUser = await User.findById(baseUser.id).select("email name language").lean();
         if (dbUser) {
           baseUser.email = baseUser.email || dbUser.email;
           // prefer token name if present
           if (!baseUser.name) baseUser.name = dbUser.name;
+          baseUser.language = dbUser.language || 'en';
         }
       } catch (_) {
         // Silent — verification should still succeed if token valid
+        baseUser.language = baseUser.language || 'en';
       }
+    } else if (baseUser.role === "Admin") {
+      // Ensure language is set even if other fields are present
+      baseUser.language = baseUser.language || 'en';
     }
 
     if (baseUser.role === "Supervisor") {
@@ -795,6 +822,8 @@ router.get("/verify", authenticateToken, async (req, res) => {
         // Get supervisor document for authoritative site assignment
         const supervisor = await Supervisor.findById(baseUser.id).lean();
         if (supervisor) {
+          // Add language support for supervisor
+          baseUser.language = supervisor.language || 'en';
           // site may be stored as array (as seen in login) — pick first
           const siteId = Array.isArray(supervisor.site)
             ? supervisor.site[0]
@@ -1215,6 +1244,96 @@ router.put("/update-name", authenticateToken, async (req, res) => {
   } catch (error) {
     res.status(500).json({
       message: "Error updating name",
+      error: error.message
+    });
+  }
+});
+// Update user profile route (name and language) - Supports both User and Supervisor schemas
+router.put("/update-profile", authenticateToken, async (req, res) => {
+  try {
+    const { name, language } = req.body;
+    const userRole = req.user.role; // Get role from JWT token
+
+    if ((!name || name.trim() === "") && (!language || language.trim() === "")) {
+      return res.status(400).json({
+        message: "At least one field (name or language) is required"
+      });
+    }
+
+    // Validate language if provided
+    if (language) {
+      const validLanguages = ['en', 'hi', 'hing'];
+      if (!validLanguages.includes(language.trim())) {
+        return res.status(400).json({
+          message: "Invalid language. Must be: en, hi, or hing"
+        });
+      }
+    }
+
+    // Determine which model to use based on role
+    let user;
+    if (userRole === "Supervisor") {
+      // Update Supervisor schema
+      user = await Supervisor.findById(req.user.id);
+      if (!user) {
+        return res.status(404).json({
+          message: "Supervisor not found"
+        });
+      }
+
+      // Update fields if provided
+      if (name && name.trim() !== "") {
+        user.profileName = name.trim(); // Supervisor uses 'profileName' field
+      }
+      if (language && language.trim() !== "") {
+        user.language = language.trim();
+      }
+
+      await user.save();
+
+      res.status(200).json({
+        message: "Profile updated successfully",
+        user: {
+          id: user._id,
+          name: user.profileName,
+          role: "Supervisor",
+          language: user.language || 'en'
+        }
+      });
+    } else {
+      // Update User schema (Admin/Contractor)
+      user = await User.findById(req.user.id);
+      if (!user) {
+        return res.status(404).json({
+          message: "User not found"
+        });
+      }
+
+      // Update fields if provided
+      if (name && name.trim() !== "") {
+        user.name = name.trim();
+      }
+      if (language && language.trim() !== "") {
+        user.language = language.trim();
+      }
+
+      await user.save();
+
+      res.status(200).json({
+        message: "Profile updated successfully",
+        user: {
+          id: user._id,
+          name: user.name,
+          phoneNumber: user.phoneNumber,
+          whatsAppReportsEnabled: user.whatsAppReportsEnabled,
+          whatsAppReportPhone: user.whatsAppReportPhone,
+          language: user.language || 'en'
+        }
+      });
+    }
+  } catch (error) {
+    res.status(500).json({
+      message: "Error updating profile",
       error: error.message
     });
   }

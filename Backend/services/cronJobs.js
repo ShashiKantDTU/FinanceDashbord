@@ -119,8 +119,9 @@ class CronJobService {
         // Monthly Report: 1st day of every month at 2 AM (for previous month)
         this.scheduleJob('monthly-report', '0 2 1 * *', this.sendMonthlyReportAll.bind(this));
 
-
-
+        // API Call Tracking: Cleanup expired users every 6 hours
+        // Note: Actions are executed IMMEDIATELY when threshold is hit (not queued)
+        this.scheduleJob('api-tracking-cleanup', '0 */6 * * *', this.cleanupExpiredApiTracking.bind(this));
 
         console.log('✅ All cron jobs initialized');
     }
@@ -1588,6 +1589,40 @@ class CronJobService {
     async manualTriggerMonthlyReport() {
         console.log('🔧 Manual trigger: Monthly Report');
         await this.sendMonthlyReportAll();
+    }
+
+    // ============================================
+    // API CALL TRACKING CRON JOBS
+    // ============================================
+
+    /**
+     * Cleanup expired users from tracking set
+     * Runs every 6 hours
+     */
+    async cleanupExpiredApiTracking() {
+        console.log('🧹 Cleaning up expired API tracking users...');
+        
+        try {
+            const { cleanupExpiredUsers } = require('../Middleware/apiCallTracker');
+            
+            const removedCount = await cleanupExpiredUsers();
+            
+            if (removedCount > 0) {
+                console.log(`✅ Cleaned up ${removedCount} expired users from API tracking`);
+            } else {
+                console.log('✨ No expired users to clean up');
+            }
+            
+        } catch (error) {
+            console.error('❌ Error cleaning up API tracking:', error.message);
+            throw error;
+        }
+    }
+
+    // Manual trigger for API tracking cleanup
+    async manualTriggerApiTrackingCleanup() {
+        console.log('🔧 Manual trigger: API Tracking Cleanup');
+        await this.cleanupExpiredApiTracking();
     }
 
     
