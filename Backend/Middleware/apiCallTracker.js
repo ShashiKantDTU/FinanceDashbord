@@ -3,7 +3,7 @@ const { redisClient } = require('../config/redisClient');
 // Configuration
 const TRACKING_EXPIRY_DAYS = 10;
 const TRACKING_EXPIRY_SECONDS = TRACKING_EXPIRY_DAYS * 24 * 60 * 60; // 10 days
-const API_CALL_THRESHOLD = 50; // Threshold for immediate action execution
+const API_CALL_THRESHOLD = 20; // Threshold for immediate action execution
 
 // Redis key patterns
 const TRACKING_SET_KEY = 'api:track:users'; // Sorted set: phone -> expiry timestamp
