@@ -10,7 +10,7 @@ const {
 const { redisClient } = require('../config/redisClient');
 
 // Protect all routes with super admin auth
-// router.use(authenticateSuperAdmin);
+router.use(authenticateSuperAdmin);
 
 /**
  * Add user to API tracking
@@ -108,8 +108,8 @@ router.get('/status/:phoneNumber', async (req, res) => {
                 phoneNumber,
                 isBeingTracked: isTracked,
                 apiCallCount: callCount,
-                threshold: 50,
-                status: callCount >= 50 ? 'threshold_reached' : 'tracking'
+                threshold: 20,
+                status: callCount >= 20 ? 'threshold_reached' : 'tracking'
             }
         });
     } catch (error) {
@@ -168,7 +168,7 @@ router.get('/list', async (req, res) => {
             data: {
                 totalUsers: trackedUsers.length,
                 users: trackedUsers,
-                threshold: 50
+                threshold: 20
             }
         });
     } catch (error) {

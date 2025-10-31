@@ -5,9 +5,9 @@ const mongoose = require('mongoose');
 const MONGODB_URI = 'mongodb://localhost:27017/finance-dashboard';
 
 // Configuration
-const SITE_ID = "68ee282b41993bb4a9485e06";
+const SITE_ID = "6904c7970eb39a6f24ee32e9";
 const CREATED_BY = "sunnypoddar1919@gmail.com";
-const START_DATE = new Date(2024, 5, 1); // June 2024
+const START_DATE = new Date(2025, 5, 1); // June 2025
 const END_DATE = new Date(); // Today's date
 
 // Employee Schema Definition
@@ -343,6 +343,30 @@ const lastNames = [
     "Bhatia", "Sethi", "Chopra", "Tandon", "Sood", "Khurana", "Ahuja", "Grover", "Sachdeva", "Anand"
 ];
 
+// Function to get the latest employee ID from database
+async function getLatestEmployeeId() {
+    try {
+        // Find all employees with empid matching EMP pattern and sort by empid in descending order
+        const latestEmployee = await Employee.findOne(
+            { empid: /^EMP\d+$/ },
+            { empid: 1 }
+        ).sort({ empid: -1 }).lean();
+
+        if (!latestEmployee) {
+            console.log("No existing employees found. Starting from EMP0001");
+            return 0;
+        }
+
+        // Extract the numeric part from empid (e.g., "EMP0123" -> 123)
+        const numericPart = parseInt(latestEmployee.empid.replace('EMP', ''), 10);
+        console.log(`Latest employee ID found: ${latestEmployee.empid} (${numericPart})`);
+        return numericPart;
+    } catch (error) {
+        console.error("Error fetching latest employee ID:", error);
+        return 0;
+    }
+}
+
 // Function to generate unique employee names
 function generateEmployeeName(index) {
     const firstNameIndex = index % firstNames.length;
@@ -358,12 +382,15 @@ function generateEmployeeName(index) {
 }
 
 // Generate employees data
-function generateEmployeesData() {
+function generateEmployeesData(startingEmpNumber = 0) {
     const employees = [];
     const numEmployees = 25; // Generate 25 employees
 
+    console.log(`Generating ${numEmployees} employees starting from EMP${String(startingEmpNumber + 1).padStart(4, '0')}`);
+
     for (let i = 0; i < numEmployees; i++) {
-        const empId = `EMP${String(i + 1).padStart(4, '0')}`; // Changed to 4 digits for 250+ employees
+        const currentEmpNumber = startingEmpNumber + i + 1;
+        const empId = `EMP${String(currentEmpNumber).padStart(4, '0')}`; // Auto-incrementing from last found ID
         const name = generateEmployeeName(i); // Use function to generate unique names
         const rate = Math.floor(Math.random() * 351) + 550; // 550-900 daily rate
 
@@ -454,9 +481,14 @@ async function insertDataToMongoDB() {
         await mongoose.connect(MONGODB_URI);
         console.log("✅ Connected to MongoDB successfully!");
 
-        // Generate the data
+        // Get the latest employee ID from database
+        console.log("\nChecking for existing employees...");
+        const latestEmpNumber = await getLatestEmployeeId();
+        console.log(`Will start generating employees from EMP${String(latestEmpNumber + 1).padStart(4, '0')}\n`);
+
+        // Generate the data starting from the next available employee number
         console.log("Generating dummy employee data...");
-        const employeesData = generateEmployeesData();
+        const employeesData = generateEmployeesData(latestEmpNumber);
 
         // Clear existing data (optional - remove if you want to keep existing data)
         // console.log("Clearing existing employee data...");
@@ -475,9 +507,14 @@ async function insertDataToMongoDB() {
             console.log(`📊 Inserted ${insertedCount}/${employeesData.length} records...`);
         }
 
+        // Calculate employee ID range
+        const numEmployees = 25; // Same as in generateEmployeesData
+        const startEmpId = `EMP${String(latestEmpNumber + 1).padStart(4, '0')}`;
+        const endEmpId = `EMP${String(latestEmpNumber + numEmployees).padStart(4, '0')}`;
+
         console.log(`\n🎉 Successfully inserted ${employeesData.length} employee records!`);
-        console.log(`👥 Employees per month: 250`);
-        console.log(`📊 Period: June 2024 to July 29, 2025`);
+        console.log(`👥 Employee IDs: ${startEmpId} to ${endEmpId}`);
+        console.log(`📊 Period: June 2025 to ${END_DATE.toLocaleDateString()}`);
         console.log(`🏢 Site ID: ${SITE_ID}`);
         console.log(`👤 Created by: ${CREATED_BY}`);
 
@@ -490,7 +527,8 @@ async function insertDataToMongoDB() {
             metadata: {
                 total_records: employeesData.length,
                 generated_on: new Date().toISOString(),
-                period: "June 2024 to May 2025",
+                employee_id_range: `${startEmpId} to ${endEmpId}`,
+                period: `June 2025 to ${END_DATE.toLocaleDateString()}`,
                 site_id: SITE_ID,
                 created_by: CREATED_BY
             }

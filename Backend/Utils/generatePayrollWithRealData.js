@@ -2,6 +2,8 @@ const ExcelJS = require('exceljs');
 const mongoose = require('mongoose');
 const employeeSchema = require("../models/EmployeeSchema");
 const siteSchema = require("../models/Siteschema");
+const SiteExpenseSchema = require("../models/SiteExpenseSchema");
+const SitePaymentSchema = require("../models/SitePaymentSchema");
 
 /**
  * Fetch employee data using the same aggregation pipeline as PDF reports
@@ -121,6 +123,148 @@ async function fetchSiteInfo(siteID) {
 }
 
 /**
+ * Fetch site expenses for a specific month
+ * @param {string} siteID - Site identifier
+ * @param {number} month - Month number (1-12)
+ * @param {number} year - Year number
+ * @returns {Object} Expense data with category breakdown
+ */
+async function fetchSiteExpenses(siteID, month, year) {
+  try {
+    const startDate = new Date(year, month - 1, 1);
+    const endDate = new Date(year, month, 0, 23, 59, 59, 999);
+
+    const expenses = await SiteExpenseSchema.find({
+      siteID: new mongoose.Types.ObjectId(siteID),
+      date: {
+        $gte: startDate,
+        $lte: endDate
+      }
+    }).lean().sort({ date: 1 });
+
+    const byCategory = {};
+    let total = 0;
+
+    expenses.forEach(expense => {
+      const category = expense.category || 'Uncategorized';
+      if (!byCategory[category]) {
+        byCategory[category] = {
+          total: 0,
+          items: []
+        };
+      }
+      byCategory[category].total += expense.value;
+      byCategory[category].items.push(expense);
+      total += expense.value;
+    });
+
+    return {
+      total,
+      byCategory,
+      expenses,
+      count: expenses.length
+    };
+  } catch (error) {
+    console.error('❌ Error fetching site expenses:', error);
+    return { total: 0, byCategory: {}, expenses: [], count: 0 };
+  }
+}
+
+/**
+ * Fetch site payments for a specific month
+ * @param {string} siteID - Site identifier
+ * @param {number} month - Month number (1-12)
+ * @param {number} year - Year number
+ * @returns {Object} Payment data
+ */
+async function fetchSitePayments(siteID, month, year) {
+  try {
+    const startDate = new Date(year, month - 1, 1);
+    const endDate = new Date(year, month, 0, 23, 59, 59, 999);
+
+    const payments = await SitePaymentSchema.find({
+      siteID: new mongoose.Types.ObjectId(siteID),
+      date: {
+        $gte: startDate,
+        $lte: endDate
+      }
+    }).lean().sort({ date: 1 });
+
+    const total = payments.reduce((sum, payment) => sum + payment.value, 0);
+
+    return {
+      total,
+      payments,
+      count: payments.length
+    };
+  } catch (error) {
+    console.error('❌ Error fetching site payments:', error);
+    return { total: 0, payments: [], count: 0 };
+  }
+}
+
+/**
+ * Calculate financial summary for the site
+ * @param {Array} employeeData - Array of employee data
+ * @param {Object} expenseData - Site expenses data
+ * @param {Object} paymentData - Site payments data
+ * @returns {Object} Financial summary
+ */
+function calculateFinancialSummary(employeeData, expenseData, paymentData) {
+  const totalWages = employeeData.reduce((sum, emp) => sum + (emp.totalWage || 0), 0);
+  const totalAdvances = employeeData.reduce((sum, emp) => sum + (emp.totalPayouts || 0), 0);
+  const totalBonus = employeeData.reduce((sum, emp) => sum + (emp.totalAdditionalReqPays || 0), 0);
+  const pendingPayment = totalWages - totalAdvances;
+
+  const totalExpenses = expenseData.total || 0;
+  const totalPayments = paymentData.total || 0;
+
+  const totalCosts = totalWages + totalExpenses;
+  const netProfit = totalPayments - totalCosts;
+  const profitMargin = totalPayments > 0 ? (netProfit / totalPayments) * 100 : 0;
+
+  const cashIn = totalPayments;
+  const cashOut = totalAdvances + totalExpenses;
+  const netCashPosition = cashIn - cashOut;
+
+  return {
+    labour: {
+      totalWages,
+      totalAdvances,
+      totalBonus,
+      pendingPayment
+    },
+    expenses: {
+      total: totalExpenses,
+      byCategory: expenseData.byCategory,
+      count: expenseData.count
+    },
+    payments: {
+      total: totalPayments,
+      count: paymentData.count
+    },
+    profitLoss: {
+      revenue: totalPayments,
+      costs: totalCosts,
+      netProfit,
+      profitMargin
+    },
+    cashFlow: {
+      cashIn,
+      cashOut,
+      netCashPosition
+    },
+    statistics: {
+      employeeCount: employeeData.length,
+      totalWorkingDays: employeeData.reduce((sum, emp) => sum + (emp.totalDays || 0), 0),
+      totalOvertimeHours: employeeData.reduce((sum, emp) => sum + (emp.totalovertime || 0), 0),
+      expenseItems: expenseData.count,
+      paymentTransactions: paymentData.count
+    }
+  };
+}
+
+/**
  * Generate a complete payroll Excel report with real data from database
  * @param {Object} params - Parameters for report generation
  * @param {string} params.siteID - Site identifier
@@ -143,19 +287,35 @@ async function generateFullPayrollReportWithRealData(params = {}) {
     throw new Error('siteID is required for fetching real data');
   }
 
-  // Fetch real data from database
-  const [employeeData, siteInfo] = await Promise.all([
+  // Fetch ALL data from database (including financial data)
+  const [employeeData, siteInfo, expenseData, paymentData] = await Promise.all([
     fetchEmployeeData(siteID, month, year, calculationType),
-    fetchSiteInfo(siteID)
+    fetchSiteInfo(siteID),
+    fetchSiteExpenses(siteID, month, year),
+    fetchSitePayments(siteID, month, year)
   ]);
 
   console.log(`📊 Found ${employeeData.length} employees for ${siteInfo.sitename}`);
+  console.log(`💰 Found ${expenseData.count} expense transactions`);
+  console.log(`💵 Found ${paymentData.count} payment transactions`);
 
   if (employeeData.length === 0) {
     console.log('⚠️ No employee data found for the specified criteria');
   }
 
+  // Calculate financial summary
+  const financialSummary = calculateFinancialSummary(employeeData, expenseData, paymentData);
+
   const workbook = new ExcelJS.Workbook();
+
+  // =========================================================================
+  // SHEET 1: FINANCIAL SUMMARY (NEW)
+  // =========================================================================
+  createFinancialSummarySheet(workbook, financialSummary, siteInfo, month, year);
+
+  // =========================================================================
+  // SHEET 2: MONTHLY ATTENDANCE REPORT (EXISTING)
+  // =========================================================================
   const worksheet = workbook.addWorksheet('Monthly Attendance Report');
 
   // Set worksheet properties for better appearance
@@ -631,6 +791,16 @@ async function generateFullPayrollReportWithRealData(params = {}) {
   // Create second worksheet for individual employee details
   await createEmployeeDetailsWorksheet(workbook, employeeData, siteInfo, month, year);
 
+  // =========================================================================
+  // SHEET 4: SITE EXPENSES (NEW)
+  // =========================================================================
+  createSiteExpensesSheet(workbook, expenseData, siteInfo, month, year);
+
+  // =========================================================================
+  // SHEET 5: PAYMENTS RECEIVED (NEW)
+  // =========================================================================
+  createSitePaymentsSheet(workbook, paymentData, siteInfo, month, year);
+
   // Generate buffer and return
   const buffer = await workbook.xlsx.writeBuffer();
   console.log('✅ Success! Professional payroll report generated with real data');
@@ -1053,6 +1223,532 @@ async function createEmployeeDetailsWorksheet(workbook, employeeData, siteInfo, 
       fgColor: { argb: 'FFF8F9FA' }
     };
   }
+}
+
+/**
+ * Create Financial Summary Sheet
+ * @param {ExcelJS.Workbook} workbook - The workbook instance
+ * @param {Object} financialSummary - Financial summary data
+ * @param {Object} siteInfo - Site information
+ * @param {number} month - Month number
+ * @param {number} year - Year number
+ */
+function createFinancialSummarySheet(workbook, financialSummary, siteInfo, month, year) {
+  const worksheet = workbook.addWorksheet('Financial Summary');
+  
+  const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'];
+  const monthName = monthNames[month - 1];
+
+  const fs = financialSummary;
+
+  // Helper function to format currency
+  const formatCurrency = (value) => {
+    return `₹${value.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  };
+
+  // Set column widths
+  worksheet.columns = [
+    { width: 5 },
+    { width: 25 },
+    { width: 20 },
+    { width: 20 },
+    { width: 20 },
+    { width: 20 }
+  ];
+
+  let row = 1;
+
+  // Title Section
+  worksheet.mergeCells(`A${row}:F${row}`);
+  let cell = worksheet.getCell(`A${row}`);
+  cell.value = 'FINANCIAL SUMMARY';
+  cell.font = { name: 'Calibri', size: 24, bold: true, color: { argb: 'FF1a365d' } };
+  cell.alignment = { horizontal: 'center', vertical: 'middle' };
+  worksheet.getRow(row).height = 35;
+  row++;
+
+  // Site and Period Info
+  worksheet.mergeCells(`A${row}:F${row}`);
+  cell = worksheet.getCell(`A${row}`);
+  cell.value = `${siteInfo.sitename} - ${monthName} ${year}`;
+  cell.font = { name: 'Calibri', size: 14, color: { argb: 'FF718096' } };
+  cell.alignment = { horizontal: 'center', vertical: 'middle' };
+  worksheet.getRow(row).height = 25;
+  row += 2;
+
+  // Money Received Section
+  worksheet.mergeCells(`B${row}:C${row}`);
+  cell = worksheet.getCell(`B${row}`);
+  cell.value = '💵 MONEY RECEIVED THIS MONTH';
+  cell.font = { name: 'Calibri', size: 12, bold: true, color: { argb: 'FF27ae60' } };
+  cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF0FDF4' } };
+  cell.border = { top: { style: 'thick', color: { argb: 'FF27ae60' } }, left: { style: 'thick', color: { argb: 'FF27ae60' } }, right: { style: 'thick', color: { argb: 'FF27ae60' } } };
+  cell.alignment = { horizontal: 'left', vertical: 'middle' };
+  worksheet.getRow(row).height = 25;
+  row++;
+
+  worksheet.mergeCells(`B${row}:C${row}`);
+  cell = worksheet.getCell(`B${row}`);
+  cell.value = formatCurrency(fs.payments.total);
+  cell.font = { name: 'Calibri', size: 20, bold: true, color: { argb: 'FF1a365d' } };
+  cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF0FDF4' } };
+  cell.border = { left: { style: 'thick', color: { argb: 'FF27ae60' } }, right: { style: 'thick', color: { argb: 'FF27ae60' } } };
+  cell.alignment = { horizontal: 'left', vertical: 'middle' };
+  worksheet.getRow(row).height = 30;
+  row++;
+
+  worksheet.mergeCells(`B${row}:C${row}`);
+  cell = worksheet.getCell(`B${row}`);
+  cell.value = `${fs.payments.count} transactions`;
+  cell.font = { name: 'Calibri', size: 10, color: { argb: 'FF718096' } };
+  cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF0FDF4' } };
+  cell.border = { bottom: { style: 'thick', color: { argb: 'FF27ae60' } }, left: { style: 'thick', color: { argb: 'FF27ae60' } }, right: { style: 'thick', color: { argb: 'FF27ae60' } } };
+  cell.alignment = { horizontal: 'left', vertical: 'middle' };
+  worksheet.getRow(row).height = 20;
+  row += 2;
+
+  // Spending Breakdown Section
+  worksheet.mergeCells(`B${row}:F${row}`);
+  cell = worksheet.getCell(`B${row}`);
+  cell.value = '💰 SPENDING BREAKDOWN';
+  cell.font = { name: 'Calibri', size: 14, bold: true, color: { argb: 'FF2d3748' } };
+  cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE8F4F8' } };
+  cell.alignment = { horizontal: 'left', vertical: 'middle' };
+  worksheet.getRow(row).height = 25;
+  row++;
+
+  // Three column headers
+  cell = worksheet.getCell(`B${row}`);
+  cell.value = 'Labour Costs';
+  cell.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FF718096' } };
+
+  cell = worksheet.getCell(`D${row}`);
+  cell.value = 'Site Expenses';
+  cell.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FF718096' } };
+
+  cell = worksheet.getCell(`F${row}`);
+  cell.value = 'Advances Paid';
+  cell.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FF718096' } };
+  worksheet.getRow(row).height = 18;
+  row++;
+
+  // Three column values
+  cell = worksheet.getCell(`B${row}`);
+  cell.value = formatCurrency(fs.labour.totalWages);
+  cell.font = { name: 'Calibri', size: 16, bold: true, color: { argb: 'FF2980b9' } };
+
+  cell = worksheet.getCell(`D${row}`);
+  cell.value = formatCurrency(fs.expenses.total);
+  cell.font = { name: 'Calibri', size: 16, bold: true, color: { argb: 'FFe74c3c' } };
+
+  cell = worksheet.getCell(`F${row}`);
+  cell.value = formatCurrency(fs.labour.totalAdvances);
+  cell.font = { name: 'Calibri', size: 16, bold: true, color: { argb: 'FF8e44ad' } };
+  worksheet.getRow(row).height = 25;
+  row++;
+
+  // Statistics
+  cell = worksheet.getCell(`B${row}`);
+  cell.value = `${fs.statistics.employeeCount} employees`;
+  cell.font = { name: 'Calibri', size: 9, color: { argb: 'FF718096' } };
+
+  cell = worksheet.getCell(`D${row}`);
+  cell.value = `${fs.expenses.count} transactions`;
+  cell.font = { name: 'Calibri', size: 9, color: { argb: 'FF718096' } };
+
+  cell = worksheet.getCell(`F${row}`);
+  cell.value = `Pending: ${formatCurrency(fs.labour.pendingPayment)}`;
+  cell.font = { name: 'Calibri', size: 9, color: { argb: 'FFe67e22' }, bold: true };
+  worksheet.getRow(row).height = 18;
+  row += 2;
+
+  // Profit/Loss Section
+  const profitColor = fs.profitLoss.netProfit >= 0 ? 'FF27ae60' : 'FFe74c3c';
+  const profitLabel = fs.profitLoss.netProfit >= 0 ? 'NET PROFIT' : 'NET LOSS';
+
+  worksheet.mergeCells(`B${row}:F${row}`);
+  cell = worksheet.getCell(`B${row}`);
+  cell.value = `📊 ${profitLabel}`;
+  cell.font = { name: 'Calibri', size: 14, bold: true, color: { argb: profitColor } };
+  cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: fs.profitLoss.netProfit >= 0 ? 'FFF0FDF4' : 'FFFEF2F2' } };
+  cell.border = { top: { style: 'thick', color: { argb: profitColor } }, left: { style: 'thick', color: { argb: profitColor } }, right: { style: 'thick', color: { argb: profitColor } } };
+  cell.alignment = { horizontal: 'left', vertical: 'middle' };
+  worksheet.getRow(row).height = 25;
+  row++;
+
+  // Calculation breakdown
+  worksheet.mergeCells(`B${row}:D${row}`);
+  cell = worksheet.getCell(`B${row}`);
+  cell.value = `Money Received: ${formatCurrency(fs.profitLoss.revenue)}`;
+  cell.font = { name: 'Calibri', size: 11, color: { argb: 'FF2d3748' } };
+  cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: fs.profitLoss.netProfit >= 0 ? 'FFF0FDF4' : 'FFFEF2F2' } };
+  cell.border = { left: { style: 'thick', color: { argb: profitColor } } };
+
+  worksheet.mergeCells(`E${row}:F${row}`);
+  cell = worksheet.getCell(`E${row}`);
+  cell.value = formatCurrency(Math.abs(fs.profitLoss.netProfit));
+  cell.font = { name: 'Calibri', size: 18, bold: true, color: { argb: profitColor } };
+  cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: fs.profitLoss.netProfit >= 0 ? 'FFF0FDF4' : 'FFFEF2F2' } };
+  cell.border = { right: { style: 'thick', color: { argb: profitColor } } };
+  cell.alignment = { horizontal: 'right', vertical: 'middle' };
+  worksheet.getRow(row).height = 22;
+  row++;
+
+  worksheet.mergeCells(`B${row}:D${row}`);
+  cell = worksheet.getCell(`B${row}`);
+  cell.value = `Total Costs: ${formatCurrency(fs.profitLoss.costs)}`;
+  cell.font = { name: 'Calibri', size: 11, color: { argb: 'FF2d3748' } };
+  cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: fs.profitLoss.netProfit >= 0 ? 'FFF0FDF4' : 'FFFEF2F2' } };
+  cell.border = { bottom: { style: 'thick', color: { argb: profitColor } }, left: { style: 'thick', color: { argb: profitColor } } };
+
+  worksheet.mergeCells(`E${row}:F${row}`);
+  cell = worksheet.getCell(`E${row}`);
+  cell.value = `Margin: ${fs.profitLoss.profitMargin.toFixed(1)}%`;
+  cell.font = { name: 'Calibri', size: 10, color: { argb: 'FF718096' } };
+  cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: fs.profitLoss.netProfit >= 0 ? 'FFF0FDF4' : 'FFFEF2F2' } };
+  cell.border = { bottom: { style: 'thick', color: { argb: profitColor } }, right: { style: 'thick', color: { argb: profitColor } } };
+  cell.alignment = { horizontal: 'right', vertical: 'middle' };
+  worksheet.getRow(row).height = 22;
+  row += 2;
+
+  // Cash Flow Summary
+  worksheet.mergeCells(`B${row}:F${row}`);
+  cell = worksheet.getCell(`B${row}`);
+  cell.value = `Cash Flow: In ${formatCurrency(fs.cashFlow.cashIn)} | Out ${formatCurrency(fs.cashFlow.cashOut)} | Net Position ${formatCurrency(fs.cashFlow.netCashPosition)}`;
+  cell.font = { name: 'Calibri', size: 9, color: { argb: 'FF718096' } };
+  cell.alignment = { horizontal: 'center', vertical: 'middle' };
+  worksheet.getRow(row).height = 18;
+}
+
+/**
+ * Create Site Expenses Sheet
+ * @param {ExcelJS.Workbook} workbook - The workbook instance
+ * @param {Object} expenseData - Expense data
+ * @param {Object} siteInfo - Site information
+ * @param {number} month - Month number
+ * @param {number} year - Year number
+ */
+function createSiteExpensesSheet(workbook, expenseData, siteInfo, month, year) {
+  const worksheet = workbook.addWorksheet('Site Expenses');
+  
+  const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'];
+  const monthName = monthNames[month - 1];
+
+  const formatCurrency = (value) => {
+    return `₹${value.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  };
+
+  // Set column widths
+  worksheet.columns = [
+    { width: 15 },  // Date
+    { width: 20 },  // Category
+    { width: 18 },  // Amount
+    { width: 50 },  // Remark
+    { width: 20 }   // Created By
+  ];
+
+  let row = 1;
+
+  // Title
+  worksheet.mergeCells(`A${row}:E${row}`);
+  let cell = worksheet.getCell(`A${row}`);
+  cell.value = 'SITE EXPENSES BREAKDOWN';
+  cell.font = { name: 'Calibri', size: 20, bold: true, color: { argb: 'FF1a365d' } };
+  cell.alignment = { horizontal: 'center', vertical: 'middle' };
+  worksheet.getRow(row).height = 30;
+  row++;
+
+  // Subtitle
+  worksheet.mergeCells(`A${row}:E${row}`);
+  cell = worksheet.getCell(`A${row}`);
+  cell.value = `${siteInfo.sitename} - ${monthName} ${year}`;
+  cell.font = { name: 'Calibri', size: 12, color: { argb: 'FF718096' } };
+  cell.alignment = { horizontal: 'center', vertical: 'middle' };
+  worksheet.getRow(row).height = 20;
+  row++;
+
+  // Summary Box
+  worksheet.mergeCells(`A${row}:E${row}`);
+  cell = worksheet.getCell(`A${row}`);
+  cell.value = `Total Expenses: ${formatCurrency(expenseData.total)} | ${expenseData.count} transactions`;
+  cell.font = { name: 'Calibri', size: 12, bold: true, color: { argb: 'FF2d3748' } };
+  cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF4E6' } };
+  cell.border = {
+    top: { style: 'medium', color: { argb: 'FFe74c3c' } },
+    bottom: { style: 'medium', color: { argb: 'FFe74c3c' } },
+    left: { style: 'medium', color: { argb: 'FFe74c3c' } },
+    right: { style: 'medium', color: { argb: 'FFe74c3c' } }
+  };
+  cell.alignment = { horizontal: 'center', vertical: 'middle' };
+  worksheet.getRow(row).height = 25;
+  row += 2;
+
+  // Category Summary Table Header
+  cell = worksheet.getCell(`A${row}`);
+  cell.value = 'CATEGORY';
+  cell.font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FFFFFFFF' } };
+  cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2c3e50' } };
+  cell.alignment = { horizontal: 'center', vertical: 'middle' };
+
+  cell = worksheet.getCell(`B${row}`);
+  cell.value = 'AMOUNT';
+  cell.font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FFFFFFFF' } };
+  cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2c3e50' } };
+  cell.alignment = { horizontal: 'center', vertical: 'middle' };
+
+  cell = worksheet.getCell(`C${row}`);
+  cell.value = 'ITEMS';
+  cell.font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FFFFFFFF' } };
+  cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2c3e50' } };
+  cell.alignment = { horizontal: 'center', vertical: 'middle' };
+
+  cell = worksheet.getCell(`D${row}`);
+  cell.value = 'PERCENTAGE';
+  cell.font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FFFFFFFF' } };
+  cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2c3e50' } };
+  cell.alignment = { horizontal: 'center', vertical: 'middle' };
+  worksheet.getRow(row).height = 22;
+  row++;
+
+  // Category breakdown
+  const categories = Object.keys(expenseData.byCategory).sort((a, b) => {
+    return expenseData.byCategory[b].total - expenseData.byCategory[a].total;
+  });
+
+  categories.forEach((category, index) => {
+    const catData = expenseData.byCategory[category];
+    const percentage = expenseData.total > 0 ? ((catData.total / expenseData.total) * 100).toFixed(1) : 0;
+    const bgColor = index % 2 === 0 ? 'FFF7FAFC' : 'FFFFFFFF';
+
+    cell = worksheet.getCell(`A${row}`);
+    cell.value = category;
+    cell.font = { name: 'Calibri', size: 10 };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bgColor } };
+
+    cell = worksheet.getCell(`B${row}`);
+    cell.value = formatCurrency(catData.total);
+    cell.font = { name: 'Calibri', size: 10, bold: true };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bgColor } };
+    cell.alignment = { horizontal: 'right' };
+
+    cell = worksheet.getCell(`C${row}`);
+    cell.value = catData.items.length;
+    cell.font = { name: 'Calibri', size: 10 };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bgColor } };
+    cell.alignment = { horizontal: 'center' };
+
+    cell = worksheet.getCell(`D${row}`);
+    cell.value = `${percentage}%`;
+    cell.font = { name: 'Calibri', size: 10 };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bgColor } };
+    cell.alignment = { horizontal: 'right' };
+
+    worksheet.getRow(row).height = 18;
+    row++;
+  });
+
+  row += 2;
+
+  // Detailed Expense List
+  worksheet.mergeCells(`A${row}:E${row}`);
+  cell = worksheet.getCell(`A${row}`);
+  cell.value = 'DETAILED EXPENSE LIST';
+  cell.font = { name: 'Calibri', size: 12, bold: true, color: { argb: 'FF2d3748' } };
+  cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE8F4F8' } };
+  cell.alignment = { horizontal: 'center', vertical: 'middle' };
+  worksheet.getRow(row).height = 22;
+  row++;
+
+  // Table Header
+  cell = worksheet.getCell(`A${row}`);
+  cell.value = 'DATE';
+  cell.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
+  cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2c3e50' } };
+  cell.alignment = { horizontal: 'center', vertical: 'middle' };
+
+  cell = worksheet.getCell(`B${row}`);
+  cell.value = 'CATEGORY';
+  cell.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
+  cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2c3e50' } };
+  cell.alignment = { horizontal: 'center', vertical: 'middle' };
+
+  cell = worksheet.getCell(`C${row}`);
+  cell.value = 'AMOUNT';
+  cell.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
+  cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2c3e50' } };
+  cell.alignment = { horizontal: 'center', vertical: 'middle' };
+
+  cell = worksheet.getCell(`D${row}`);
+  cell.value = 'REMARK';
+  cell.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
+  cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2c3e50' } };
+  cell.alignment = { horizontal: 'center', vertical: 'middle' };
+
+  cell = worksheet.getCell(`E${row}`);
+  cell.value = 'CREATED BY';
+  cell.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
+  cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2c3e50' } };
+  cell.alignment = { horizontal: 'center', vertical: 'middle' };
+  worksheet.getRow(row).height = 20;
+  row++;
+
+  // Expense rows
+  expenseData.expenses.forEach((expense, index) => {
+    const bgColor = index % 2 === 0 ? 'FFF7FAFC' : 'FFFFFFFF';
+    const dateStr = new Date(expense.date).toLocaleDateString('en-IN');
+
+    cell = worksheet.getCell(`A${row}`);
+    cell.value = dateStr;
+    cell.font = { name: 'Calibri', size: 9 };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bgColor } };
+
+    cell = worksheet.getCell(`B${row}`);
+    cell.value = expense.category;
+    cell.font = { name: 'Calibri', size: 9 };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bgColor } };
+
+    cell = worksheet.getCell(`C${row}`);
+    cell.value = formatCurrency(expense.value);
+    cell.font = { name: 'Calibri', size: 9, bold: true, color: { argb: 'FFe74c3c' } };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bgColor } };
+    cell.alignment = { horizontal: 'right' };
+
+    cell = worksheet.getCell(`D${row}`);
+    cell.value = expense.remark || '-';
+    cell.font = { name: 'Calibri', size: 9 };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bgColor } };
+
+    cell = worksheet.getCell(`E${row}`);
+    cell.value = expense.createdBy || '-';
+    cell.font = { name: 'Calibri', size: 9 };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bgColor } };
+
+    worksheet.getRow(row).height = 18;
+    row++;
+  });
+}
+
+/**
+ * Create Site Payments Sheet
+ * @param {ExcelJS.Workbook} workbook - The workbook instance
+ * @param {Object} paymentData - Payment data
+ * @param {Object} siteInfo - Site information
+ * @param {number} month - Month number
+ * @param {number} year - Year number
+ */
+function createSitePaymentsSheet(workbook, paymentData, siteInfo, month, year) {
+  const worksheet = workbook.addWorksheet('Payments Received');
+  
+  const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'];
+  const monthName = monthNames[month - 1];
+
+  const formatCurrency = (value) => {
+    return `₹${value.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  };
+
+  // Set column widths
+  worksheet.columns = [
+    { width: 15 },  // Date
+    { width: 20 },  // Amount
+    { width: 50 },  // Remark
+    { width: 20 }   // Received By
+  ];
+
+  let row = 1;
+
+  // Title
+  worksheet.mergeCells(`A${row}:D${row}`);
+  let cell = worksheet.getCell(`A${row}`);
+  cell.value = 'PAYMENTS RECEIVED';
+  cell.font = { name: 'Calibri', size: 20, bold: true, color: { argb: 'FF1a365d' } };
+  cell.alignment = { horizontal: 'center', vertical: 'middle' };
+  worksheet.getRow(row).height = 30;
+  row++;
+
+  // Subtitle
+  worksheet.mergeCells(`A${row}:D${row}`);
+  cell = worksheet.getCell(`A${row}`);
+  cell.value = `${siteInfo.sitename} - ${monthName} ${year}`;
+  cell.font = { name: 'Calibri', size: 12, color: { argb: 'FF718096' } };
+  cell.alignment = { horizontal: 'center', vertical: 'middle' };
+  worksheet.getRow(row).height = 20;
+  row++;
+
+  // Summary Box
+  worksheet.mergeCells(`A${row}:D${row}`);
+  cell = worksheet.getCell(`A${row}`);
+  cell.value = `Total Payments: ${formatCurrency(paymentData.total)} | ${paymentData.count} transactions`;
+  cell.font = { name: 'Calibri', size: 12, bold: true, color: { argb: 'FF27ae60' } };
+  cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF0FDF4' } };
+  cell.border = {
+    top: { style: 'medium', color: { argb: 'FF27ae60' } },
+    bottom: { style: 'medium', color: { argb: 'FF27ae60' } },
+    left: { style: 'medium', color: { argb: 'FF27ae60' } },
+    right: { style: 'medium', color: { argb: 'FF27ae60' } }
+  };
+  cell.alignment = { horizontal: 'center', vertical: 'middle' };
+  worksheet.getRow(row).height = 25;
+  row += 2;
+
+  // Table Header
+  cell = worksheet.getCell(`A${row}`);
+  cell.value = 'DATE';
+  cell.font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FFFFFFFF' } };
+  cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF27ae60' } };
+  cell.alignment = { horizontal: 'center', vertical: 'middle' };
+
+  cell = worksheet.getCell(`B${row}`);
+  cell.value = 'AMOUNT';
+  cell.font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FFFFFFFF' } };
+  cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF27ae60' } };
+  cell.alignment = { horizontal: 'center', vertical: 'middle' };
+
+  cell = worksheet.getCell(`C${row}`);
+  cell.value = 'REMARK';
+  cell.font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FFFFFFFF' } };
+  cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF27ae60' } };
+  cell.alignment = { horizontal: 'center', vertical: 'middle' };
+
+  cell = worksheet.getCell(`D${row}`);
+  cell.value = 'RECEIVED BY';
+  cell.font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FFFFFFFF' } };
+  cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF27ae60' } };
+  cell.alignment = { horizontal: 'center', vertical: 'middle' };
+  worksheet.getRow(row).height = 22;
+  row++;
+
+  // Payment rows
+  paymentData.payments.forEach((payment, index) => {
+    const bgColor = index % 2 === 0 ? 'FFF0FDF4' : 'FFFFFFFF';
+    const dateStr = new Date(payment.date).toLocaleDateString('en-IN');
+
+    cell = worksheet.getCell(`A${row}`);
+    cell.value = dateStr;
+    cell.font = { name: 'Calibri', size: 10 };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bgColor } };
+
+    cell = worksheet.getCell(`B${row}`);
+    cell.value = formatCurrency(payment.value);
+    cell.font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FF27ae60' } };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bgColor } };
+    cell.alignment = { horizontal: 'right' };
+
+    cell = worksheet.getCell(`C${row}`);
+    cell.value = payment.remark || '-';
+    cell.font = { name: 'Calibri', size: 10 };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bgColor } };
+
+    cell = worksheet.getCell(`D${row}`);
+    cell.value = payment.receivedBy || '-';
+    cell.font = { name: 'Calibri', size: 10 };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bgColor } };
+
+    worksheet.getRow(row).height = 18;
+    row++;
+  });
 }
 
 module.exports = {
