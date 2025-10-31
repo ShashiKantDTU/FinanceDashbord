@@ -399,6 +399,7 @@ router.get('/user-endpoint-analytics', authenticateSuperAdmin, async (req, res) 
 // Query params: 
 //   - period (today, yesterday, week, month, 3months) OR
 //   - startDate (YYYY-MM-DD) + endDate (YYYY-MM-DD) for custom range
+// OPTIMIZED: Uses aggregation pipelines to minimize database queries
 router.get('/new-users', authenticateSuperAdmin, async (req, res) => {
     try {
         // Check if logging database is configured
@@ -416,85 +417,82 @@ router.get('/new-users', authenticateSuperAdmin, async (req, res) => {
         
         const { startDate, endDate } = getDateRange(period, customStartDate, customEndDate);
 
-        // Step 1: Get all unique users who made requests in the selected period
-        const usersInPeriod = await ApiUsageLog.distinct('userPhone', {
-            timestamp: { $gte: startDate, $lte: endDate }
-        });
-
-        // Step 2: For each user, check if they have ANY logs before the period started
-        // If NO logs before startDate = NEW USER
-        const newUserPhones = [];
-        
-        for (const phone of usersInPeriod) {
-            if (!phone) continue; // Skip null/undefined phones
-            
-            // Check if this user has any logs before the period
-            const oldLogCount = await ApiUsageLog.countDocuments({
-                userPhone: phone,
-                timestamp: { $lt: startDate }
-            });
-            
-            // If no old logs, this is a new user in this period
-            if (oldLogCount === 0) {
-                newUserPhones.push(phone);
+        // OPTIMIZATION: Single aggregation to find new users and get all their stats
+        // This replaces the previous approach of looping through users individually
+        const newUsersAggregation = await ApiUsageLog.aggregate([
+            {
+                // Get all logs grouped by user with their first timestamp
+                $group: {
+                    _id: '$userPhone',
+                    firstTimestamp: { $min: '$timestamp' },
+                    totalRequests: { $sum: 1 },
+                    requestsInPeriod: {
+                        $sum: {
+                            $cond: [
+                                { $and: [
+                                    { $gte: ['$timestamp', startDate] },
+                                    { $lte: ['$timestamp', endDate] }
+                                ]},
+                                1,
+                                0
+                            ]
+                        }
+                    },
+                    firstEndpoint: { $first: '$endpoint' },
+                    firstMethod: { $first: '$method' }
+                }
+            },
+            {
+                // Filter to only users whose first timestamp is >= startDate (new users)
+                // AND who have activity in the period
+                $match: {
+                    firstTimestamp: { $gte: startDate },
+                    requestsInPeriod: { $gt: 0 }
+                }
+            },
+            {
+                // Sort by first timestamp (most recent first)
+                $sort: { firstTimestamp: -1 }
             }
-        }
+        ]);
 
-        // Step 3: Get user details from User collection for the new users
+        // Extract phone numbers for user lookup
+        const newUserPhones = newUsersAggregation.map(u => u._id).filter(Boolean);
+
+        // Get user details from User collection (single query)
         const newUsersFromDB = await User.find({
             phoneNumber: { $in: newUserPhones }
-        }).select('name phoneNumber email createdAt plan planActivatedAt site supervisors').sort({ createdAt: -1 });
+        }).select('name phoneNumber email createdAt plan planActivatedAt site supervisors');
 
         // Create a map for quick lookup
         const userMap = new Map(newUsersFromDB.map(u => [u.phoneNumber, u]));
 
-        // Step 4: Get their first request timestamp and request count from logs
-        const newUsersWithDetails = await Promise.all(
-            newUserPhones.map(async (phone) => {
-                const user = userMap.get(phone);
-                
-                // Get first log for this user
-                const firstLog = await ApiUsageLog.findOne({
-                    userPhone: phone
-                }).sort({ timestamp: 1 }).select('timestamp endpoint method');
+        // Create a map for aggregation data
+        const aggDataMap = new Map(newUsersAggregation.map(u => [u._id, u]));
 
-                // Get total requests by this user in the period
-                const requestsInPeriod = await ApiUsageLog.countDocuments({
-                    userPhone: phone,
-                    timestamp: { $gte: startDate, $lte: endDate }
-                });
-
-                // Get total requests ever by this user
-                const totalRequests = await ApiUsageLog.countDocuments({
-                    userPhone: phone
-                });
-
-                return {
-                    phone: phone,
-                    name: user ? (user.name || phone) : phone,
-                    email: user ? user.email : null,
-                    plan: user ? user.plan : 'unknown',
-                    planActivatedAt: user ? user.planActivatedAt : null,
-                    registeredAt: user ? user.createdAt : null,
-                    siteCount: user ? (user.site ? user.site.length : 0) : 0,
-                    supervisorCount: user ? (user.supervisors ? user.supervisors.length : 0) : 0,
-                    firstApiUsage: firstLog ? firstLog.timestamp : null,
-                    firstEndpoint: firstLog ? firstLog.endpoint : null,
-                    firstMethod: firstLog ? firstLog.method : null,
-                    requestsInPeriod,
-                    totalRequests
-                };
-            })
-        );
-
-        // Sort by first API usage (most recent first)
-        newUsersWithDetails.sort((a, b) => {
-            if (!a.firstApiUsage) return 1;
-            if (!b.firstApiUsage) return -1;
-            return b.firstApiUsage - a.firstApiUsage;
+        // Combine user details with aggregation data
+        const newUsersWithDetails = newUserPhones.map(phone => {
+            const user = userMap.get(phone);
+            const aggData = aggDataMap.get(phone);
+            
+            return {
+                phone: phone,
+                name: user ? (user.name || phone) : phone,
+                email: user ? user.email : null,
+                plan: user ? user.plan : 'unknown',
+                planActivatedAt: user ? user.planActivatedAt : null,
+                registeredAt: user ? user.createdAt : null,
+                siteCount: user ? (user.site ? user.site.length : 0) : 0,
+                supervisorCount: user ? (user.supervisors ? user.supervisors.length : 0) : 0,
+                firstApiUsage: aggData.firstTimestamp,
+                firstEndpoint: aggData.firstEndpoint,
+                firstMethod: aggData.firstMethod,
+                requestsInPeriod: aggData.requestsInPeriod,
+                totalRequests: aggData.totalRequests
+            };
         });
 
-        // Step 5: Get daily breakdown of new users (by first API usage)
+        // OPTIMIZATION: Build daily breakdown from aggregation data (no additional queries)
         const dailyMap = new Map();
 
         for (const userDetail of newUsersWithDetails) {
@@ -520,13 +518,24 @@ router.get('/new-users', authenticateSuperAdmin, async (req, res) => {
             a.date.localeCompare(b.date)
         );
 
-        // Step 6: Calculate summary statistics
+        // Calculate summary statistics
         const totalDays = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24)) || 1;
         const avgNewUsersPerDay = (newUserPhones.length / totalDays).toFixed(2);
 
-        // Get total unique users who have ever made a request
-        const totalActiveUsers = await ApiUsageLog.distinct('userPhone');
-        const activeUsersBeforePeriod = totalActiveUsers.filter(phone => !newUserPhones.includes(phone)).length;
+        // OPTIMIZATION: Get total active users count with a single aggregation
+        const totalActiveUsersCount = await ApiUsageLog.aggregate([
+            {
+                $group: {
+                    _id: '$userPhone'
+                }
+            },
+            {
+                $count: 'total'
+            }
+        ]);
+
+        const totalActiveUsers = totalActiveUsersCount[0]?.total || 0;
+        const activeUsersBeforePeriod = totalActiveUsers - newUserPhones.length;
         
         const growthRate = activeUsersBeforePeriod > 0 
             ? ((newUserPhones.length / activeUsersBeforePeriod) * 100).toFixed(2)
@@ -542,7 +551,7 @@ router.get('/new-users', authenticateSuperAdmin, async (req, res) => {
             },
             summary: {
                 newUsersCount: newUserPhones.length,
-                totalActiveUsers: totalActiveUsers.length,
+                totalActiveUsers: totalActiveUsers,
                 activeUsersBeforePeriod,
                 growthRate: parseFloat(growthRate),
                 avgNewUsersPerDay: parseFloat(avgNewUsersPerDay)
