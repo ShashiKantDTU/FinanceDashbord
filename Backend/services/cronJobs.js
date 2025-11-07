@@ -94,7 +94,10 @@ class CronJobService {
     init() {
         console.log('🕐 Initializing cron jobs...');
 
-        // Run daily at 3 AM for all subscription cleanup tasks
+        // Run expired trial cleanup every 4 hours starting at midnight (12 AM, 4 AM, 8 AM, 12 PM, 4 PM, 8 PM)
+        this.scheduleJob('expired-trials-cleanup', '0 */4 * * *', this.handleExpiredTrials.bind(this));
+
+        // Run daily at 3 AM for cancelled and grace period subscription cleanup
         this.scheduleJob('daily-subscription-cleanup', '0 3 * * *', this.runDailyCleanup.bind(this));
 
         // Safety net: finalize provisional Google Play purchases every 2 hours
@@ -151,13 +154,12 @@ class CronJobService {
     }
 
 
-    // Run all cleanup tasks sequentially
+    // Run all cleanup tasks sequentially (excluding expired trials which run separately)
     async runDailyCleanup() {
         console.log('🧹 Starting daily subscription cleanup...');
         const startTime = Date.now();
 
         try {
-            await this.handleExpiredTrials();
             await this.handleExpiredUsers();
             await this.handleGraceExpiredUsers();
             
