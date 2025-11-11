@@ -404,7 +404,7 @@ function generateHeader(doc, reportData) {
     // Professional header with site name as main title
     doc.fillColor(PDF_CONSTANTS.COLORS.PRIMARY)
         .fontSize(PDF_CONSTANTS.FONTS.HEADER)
-        .font('Bold')
+        .font('UserFont')  // Use UserFont for site name (supports Hindi)
         .text(reportData.siteName.toUpperCase(), PDF_CONSTANTS.MARGIN.LEFT, PDF_CONSTANTS.MARGIN.TOP, { 
             width: 550, 
             ellipsis: true 
@@ -473,7 +473,7 @@ function generateEmployeeTable(doc, reportData) {
     
     doc.fillColor(PDF_CONSTANTS.COLORS.TEXT_SECONDARY)
         .fontSize(PDF_CONSTANTS.FONTS.BODY_SMALL)
-        .font('Regular')
+        .font('UserFont')  // Use UserFont for site name
         .text(`${reportData.siteName} - ${reportData.month}`, PDF_CONSTANTS.MARGIN.LEFT, y + 25, { 
             width: PDF_CONSTANTS.PAGE.CONTENT_WIDTH 
         });
@@ -495,7 +495,7 @@ function generateEmployeeTable(doc, reportData) {
         ...reportData.employees.map((emp, index) => [
             (index + 1).toString(),
             emp.id,
-            emp.name,
+            { text: emp.name, font: 'UserFont' },  // Use UserFont for employee names
             emp.present.toString(),
             emp.overtime.toString(),
             { text: emp.dailyRateFormatted, textColor: PDF_CONSTANTS.COLORS.ACCENT },
@@ -884,7 +884,7 @@ function generateSiteExpensesSection(doc, reportData) {
             .font('Helvetica-Bold')
             .text(formatCurrency(expense.value), 280, y, { width: 100, align: 'right' })
             .fillColor('#718096')
-            .font('Helvetica')
+            .font('UserFont')  // Use UserFont for remarks (may contain Hindi)
             .text(remark, 400, y, { width: 350, ellipsis: true });
 
         y += 18;
@@ -987,7 +987,7 @@ function generatePaymentsReceivedSection(doc, reportData) {
             .text(formatCurrency(payment.value), 150, y, { width: 120, align: 'right' })
             .fillColor('#718096')
             .fontSize(8)
-            .font('Helvetica')
+            .font('UserFont')  // Use UserFont for remarks and receivedBy (may contain Hindi)
             .text(remark, 290, y, { width: 400, ellipsis: true })
             .text(receivedBy, 700, y, { width: 100, ellipsis: true });
 
@@ -1120,7 +1120,7 @@ function drawEmployeeHeader(doc, employee, sectionStartX, sectionWidth, y) {
               .stop(1, '#0f2a47', 1);
     
     doc.rect(sectionStartX, y, sectionWidth, 35).fill(headerGrad);
-    doc.fillColor('#ffffff').font('Helvetica-Bold').fontSize(14)
+    doc.fillColor('#ffffff').font('UserFont').fontSize(14)  // Use UserFont for employee name
         .text(employee.name, sectionStartX + 10, y + 10, { width: 500 });
     doc.fillColor('#e2e8f0').font('Helvetica').fontSize(11)
         .text(`Employee ID: ${employee.id}`, sectionStartX + 260, y + 12, { width: sectionWidth - 320, align: 'right' });
@@ -1561,6 +1561,25 @@ async function generatePaymentReportPdf(user, siteID, month, year) {
         doc.registerFont('Bold', 'Helvetica-Bold');
         doc.registerFont('Oblique', 'Helvetica-Oblique');
         doc.registerFont('BoldOblique', 'Helvetica-BoldOblique');
+
+        // Register Devanagari font for Hindi support
+        try {
+            const devanagariPath = path.join(__dirname, '..', 'fonts', 'NotoSansDevanagari-Regular.ttf');
+            if (fs.existsSync(devanagariPath)) {
+                const devanagariBuffer = fs.readFileSync(devanagariPath);
+                doc.registerFont('UserFont', devanagariBuffer);
+                console.log('✅ Devanagari font loaded successfully');
+            } else {
+                console.warn('⚠️ Devanagari font not found. Hindi text may not render correctly.');
+                console.warn('   Please download NotoSansDevanagari-Regular.ttf to Backend/fonts/');
+                // Fallback to Helvetica
+                doc.registerFont('UserFont', 'Helvetica');
+            }
+        } catch (error) {
+            console.error('❌ Error loading Devanagari font:', error.message);
+            // Fallback to Helvetica
+            doc.registerFont('UserFont', 'Helvetica');
+        }
 
         // Create PDF bookmarks/outline for easy navigation
         const { outline } = doc;
