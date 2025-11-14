@@ -115,7 +115,22 @@ router.get('/dashboard', authenticateSuperAdmin, async (req, res) => {
                     mainUserId: { $first: '$mainUserId' },  // Get user ID for lookup
                     totalRequests: { $sum: 1 },
                     totalDataBytes: { $sum: '$responseSizeBytes' },
-                    uniqueEndpoints: { $addToSet: '$endpoint' }
+                    uniqueEndpoints: { $addToSet: '$endpoint' },
+                    // Calculate active days by collecting unique date strings
+                    activeDaysSet: {
+                        $addToSet: {
+                            $dateToString: {
+                                format: '%Y-%m-%d',
+                                date: '$timestamp'
+                            }
+                        }
+                    }
+                }
+            },
+            {
+                $addFields: {
+                    // Convert the set to count for activeDays
+                    activeDays: { $size: '$activeDaysSet' }
                 }
             },
             {
@@ -170,7 +185,8 @@ router.get('/dashboard', authenticateSuperAdmin, async (req, res) => {
                 name: userName,
                 totalRequests: user.totalRequests,
                 totalDataBytes: user.totalDataBytes,
-                endpointCount: user.uniqueEndpoints.length
+                endpointCount: user.uniqueEndpoints.length,
+                activeDays: user.activeDays || 0
             };
         });
 
