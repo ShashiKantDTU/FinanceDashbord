@@ -995,17 +995,19 @@ router.get('/my-stats', authenticateAndTrack, async (req, res) => {
 // /api/usage/real-time -> Use /api/usage/system-performance with period=today
 
 // ============================================
-// CRON JOB LOGGING ENDPOINTS
+// CRON JOB MONITORING ENDPOINTS
 // ============================================
+// Purpose: Track what happened in each individual cron job execution
+// - View latest/previous cron job executions separately
+// - See exactly what happened in each execution
+// - All job types separated for easy tracking
 
 // GET /api/usage/cron-jobs
-// Get list of all cron job executions with summary
+// Get list of all recent cron job executions (all types mixed, sorted by date)
+// Each execution is separate - you can see exactly what happened in each one
 // Query params: 
-//   - period (today, yesterday, week, month, 3months) OR
-//   - startDate (YYYY-MM-DD) + endDate (YYYY-MM-DD) for custom range
-//   - status (started, completed, failed) - optional filter
-//   - jobName (weekly-week1, weekly-week2, etc.) - optional filter
-//   - limit (default: 50) - number of results
+//   - limit (default: 50) - number of recent executions to return
+//   - jobType (optional) - filter by specific job type: 'monthly', 'weekly-week1', 'weekly-week2', 'weekly-week3', 'weekly-week4', 'weekly-feb28'
 router.get('/cron-jobs', authenticateSuperAdmin, async (req, res) => {
     try {
         // Check if cron job logging is configured
@@ -1016,118 +1018,68 @@ router.get('/cron-jobs', authenticateSuperAdmin, async (req, res) => {
             });
         }
 
-        // Parse query parameters
-        const period = req.query.period || 'week';
-        const customStartDate = req.query.startDate;
-        const customEndDate = req.query.endDate;
-        const statusFilter = req.query.status;
-        const jobNameFilter = req.query.jobName;
         const limit = parseInt(req.query.limit) || 50;
-
-        const { startDate, endDate } = getDateRange(period, customStartDate, customEndDate);
+        const jobType = req.query.jobType; // Optional filter
 
         // Build query
-        const query = {
-            executionDate: { $gte: startDate, $lte: endDate }
-        };
-
-        if (statusFilter) {
-            query.status = statusFilter;
+        const query = {};
+        if (jobType) {
+            query.jobName = jobType;
         }
 
-        if (jobNameFilter) {
-            query.jobName = jobNameFilter;
-        }
-
-        // Get cron job logs
-        const cronJobs = await CronJobLog.find(query)
+        // Get all cron job executions sorted by most recent first
+        const cronExecutions = await CronJobLog.find(query)
             .sort({ executionDate: -1 })
             .limit(limit)
-            .select('-successfulReports -skippedReports -failures'); // Exclude large arrays for list view
+            .select('-successfulReports -skippedReports -failures'); // Exclude details for list view
 
-        // Get summary statistics
-        const summary = await CronJobLog.aggregate([
-            {
-                $match: query
+        // Get job type descriptions
+        const jobDescriptions = {
+            'monthly': {
+                description: 'Monthly report - Runs on 1st of every month at 2 AM',
+                schedule: '0 2 1 * *',
+                coverage: 'Previous month complete data'
             },
-            {
-                $group: {
-                    _id: null,
-                    totalJobs: { $sum: 1 },
-                    completedJobs: {
-                        $sum: { $cond: [{ $eq: ['$status', 'completed'] }, 1, 0] }
-                    },
-                    failedJobs: {
-                        $sum: { $cond: [{ $eq: ['$status', 'failed'] }, 1, 0] }
-                    },
-                    totalReportsSent: { $sum: '$successCount' },
-                    totalReportsFailed: { $sum: '$failureCount' },
-                    totalReportsSkipped: { $sum: '$skippedCount' },
-                    totalUsers: { $sum: '$totalUsers' },
-                    totalSites: { $sum: '$totalSites' },
-                    avgExecutionTime: { $avg: '$executionTime' }
-                }
+            'weekly-week1': {
+                description: 'Week 1 report - Runs on 8th of every month at 2 AM',
+                schedule: '0 2 8 * *',
+                coverage: 'Days 1-7 of current month'
+            },
+            'weekly-week2': {
+                description: 'Week 2 report - Runs on 15th of every month at 2 AM',
+                schedule: '0 2 15 * *',
+                coverage: 'Days 8-14 of current month'
+            },
+            'weekly-week3': {
+                description: 'Week 3 report - Runs on 22nd of every month at 2 AM',
+                schedule: '0 2 22 * *',
+                coverage: 'Days 15-21 of current month'
+            },
+            'weekly-week4': {
+                description: 'Week 4 report - Runs on 29th of every month at 2 AM',
+                schedule: '0 2 29 * *',
+                coverage: 'Days 22-28 of current month'
+            },
+            'weekly-feb28': {
+                description: 'February Week 4 - Runs on 28th Feb at 2 AM (non-leap years)',
+                schedule: '0 2 28 2 *',
+                coverage: 'Backup for Week 4 in February'
             }
-        ]);
-
-        // Get job type breakdown
-        const jobTypeBreakdown = await CronJobLog.aggregate([
-            {
-                $match: query
-            },
-            {
-                $group: {
-                    _id: '$jobName',
-                    count: { $sum: 1 },
-                    successCount: { $sum: '$successCount' },
-                    failureCount: { $sum: '$failureCount' },
-                    skippedCount: { $sum: '$skippedCount' },
-                    avgExecutionTime: { $avg: '$executionTime' },
-                    lastRun: { $max: '$executionDate' }
-                }
-            },
-            {
-                $sort: { lastRun: -1 }
-            }
-        ]);
-
-        const stats = summary[0] || {
-            totalJobs: 0,
-            completedJobs: 0,
-            failedJobs: 0,
-            totalReportsSent: 0,
-            totalReportsFailed: 0,
-            totalReportsSkipped: 0,
-            totalUsers: 0,
-            totalSites: 0,
-            avgExecutionTime: 0
         };
 
-        res.json({
-            success: true,
-            period: {
-                type: customStartDate && customEndDate ? 'custom' : period,
-                startDate,
-                endDate
-            },
-            summary: {
-                totalJobs: stats.totalJobs,
-                completedJobs: stats.completedJobs,
-                failedJobs: stats.failedJobs,
-                totalReportsSent: stats.totalReportsSent,
-                totalReportsFailed: stats.totalReportsFailed,
-                totalReportsSkipped: stats.totalReportsSkipped,
-                totalUsers: stats.totalUsers,
-                totalSites: stats.totalSites,
-                avgExecutionTime: Math.round(stats.avgExecutionTime),
-                successRate: stats.totalReportsSent + stats.totalReportsFailed > 0
-                    ? ((stats.totalReportsSent / (stats.totalReportsSent + stats.totalReportsFailed)) * 100).toFixed(2)
-                    : '0.00'
-            },
-            jobTypeBreakdown,
-            cronJobs: cronJobs.map(job => ({
+        // Format executions with job descriptions
+        const formattedExecutions = cronExecutions.map(job => {
+            const jobInfo = jobDescriptions[job.jobName] || {
+                description: job.jobName,
+                schedule: 'N/A',
+                coverage: 'N/A'
+            };
+
+            return {
                 _id: job._id,
                 jobName: job.jobName,
+                jobDescription: jobInfo.description,
+                coverage: jobInfo.coverage,
                 executionDate: job.executionDate,
                 status: job.status,
                 totalUsers: job.totalUsers,
@@ -1135,11 +1087,32 @@ router.get('/cron-jobs', authenticateSuperAdmin, async (req, res) => {
                 successCount: job.successCount,
                 failureCount: job.failureCount,
                 skippedCount: job.skippedCount,
+                successRate: job.successCount + job.failureCount > 0
+                    ? ((job.successCount / (job.successCount + job.failureCount)) * 100).toFixed(2)
+                    : '0.00',
                 executionTime: job.executionTime,
+                executionTimeFormatted: job.executionTime > 1000 
+                    ? `${(job.executionTime / 1000).toFixed(2)}s`
+                    : `${job.executionTime}ms`,
                 completedAt: job.completedAt,
-                metadata: job.metadata
-            })),
-            totalRecords: cronJobs.length
+                metadata: job.metadata,
+                createdAt: job.createdAt
+            };
+        });
+
+        // Get the latest execution for quick reference
+        const latestExecution = formattedExecutions[0] || null;
+
+        res.json({
+            success: true,
+            message: jobType 
+                ? `Showing last ${limit} executions of ${jobType}`
+                : `Showing last ${limit} cron job executions (all types)`,
+            latestExecution: latestExecution,
+            totalReturned: formattedExecutions.length,
+            executions: formattedExecutions,
+            availableJobTypes: Object.keys(jobDescriptions),
+            jobTypeDescriptions: jobDescriptions
         });
 
     } catch (error) {
