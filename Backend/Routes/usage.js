@@ -149,7 +149,7 @@ router.get('/dashboard', authenticateSuperAdmin, async (req, res) => {
                 { _id: { $in: userIds } },
                 { phoneNumber: { $in: userPhones } }
             ]
-        }).select('_id name phoneNumber');
+        }).select('_id name phoneNumber plan');
         
         // Create maps for both ID and phone lookups
         const userMapById = new Map(users.map(u => [u._id.toString(), u]));
@@ -158,12 +158,14 @@ router.get('/dashboard', authenticateSuperAdmin, async (req, res) => {
         // Merge latest names with usage data
         const allUsersWithNames = allUsers.map(user => {
             let userName = null;
+            let userPlan = 'unknown';
             
             // Try to get user by ID first
             if (user.mainUserId) {
                 const foundUser = userMapById.get(user.mainUserId.toString());
                 if (foundUser) {
                     userName = foundUser.name || foundUser.phoneNumber;
+                    userPlan = foundUser.plan || 'unknown';
                 }
             }
             
@@ -172,6 +174,7 @@ router.get('/dashboard', authenticateSuperAdmin, async (req, res) => {
                 const foundUser = userMapByPhone.get(user._id);
                 if (foundUser) {
                     userName = foundUser.name || foundUser.phoneNumber;
+                    userPlan = foundUser.plan || 'unknown';
                 }
             }
             
@@ -183,6 +186,7 @@ router.get('/dashboard', authenticateSuperAdmin, async (req, res) => {
             return {
                 phone: user._id,
                 name: userName,
+                plan: userPlan,
                 totalRequests: user.totalRequests,
                 totalDataBytes: user.totalDataBytes,
                 endpointCount: user.uniqueEndpoints.length,
