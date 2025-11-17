@@ -1496,6 +1496,8 @@ router.get(
         error: "Invalid date, month, or year.",
       });
     }
+
+    const role = req.user?.role?.toLowerCase();
     if (date < 1 || date > 31) {
       return res.status(400).json({
         success: false,
@@ -1548,7 +1550,7 @@ router.get(
         dateStr === vd.date && monthStr === vd.month && yearStr === vd.year
     );
 
-    if (!isValidDate) {
+    if (role !== "admin" && !isValidDate) {
       const validDatesStr = validDates
         .map((vd) => `${vd.date}/${vd.month}/${vd.year}`)
         .join(", ");
@@ -1566,8 +1568,7 @@ router.get(
       });
     }
 
-    // check if site belongs to requested user
-    const role = req.user?.role?.toLowerCase();
+
 
     if (role === "supervisor") {
       const supervisorsite = req.user.site[0]?.toString().trim();

@@ -127,4 +127,65 @@ const userSchema = new mongoose.Schema(
   }
 );
 
+// Post-save hook to log new user registrations to Google Sheets
+userSchema.post('save', async function(doc, next) {
+  // Check if this was a new document using wasNew flag
+  // In post-save, isNew is already false, so we check if _id was just created
+  const wasNew = this.$locals.wasNew;
+  
+  if (!wasNew) {
+    return;
+  }
+
+  // Skip users without phone numbers (e.g., email/password-only registrations)
+  if (!this.phoneNumber || this.phoneNumber.trim() === '') {
+    return;
+  }
+
+  try {
+    // Import the appendToSheet function
+    const { appendToSheet } = require('../Utils/sheets');
+
+    // Get spreadsheet configuration from environment variables
+    const SPREADSHEET_ID = process.env.SPREADSHEET_ID;
+    const SHEET_NAME = process.env.SHEET_NAME || 'Users'; // Default to 'Users' if not set
+
+    // Check if SPREADSHEET_ID is configured
+    if (!SPREADSHEET_ID) {
+      console.warn('SPREADSHEET_ID not configured. Skipping Google Sheets logging for new user registration.');
+      return;
+    }
+
+    // Prepare the row data: timestamp, name, phone number
+    const now = new Date();
+    const readableDate = now.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      timeZone: 'Asia/Kolkata'
+    });
+    
+    const newRow = [
+      '', // Column A - left blank
+      readableDate, // Column B - creation date (e.g., "Nov 12, 2025")
+      this.name || 'N/A', // Column C - name
+      this.phoneNumber // Column D - phone number
+    ];
+
+    // Append to Google Sheets
+    await appendToSheet(SPREADSHEET_ID, SHEET_NAME, [newRow]);
+    
+    console.log(`Successfully logged new user registration to Google Sheets: ${this.phoneNumber}`);
+  } catch (err) {
+    // Log the error but don't throw it - we don't want sheet logging failures to affect user registration
+    console.error('Failed to log user registration to Google Sheets:', err.message);
+  }
+});
+
+// Pre-save hook to track if document is new
+userSchema.pre('save', function(next) {
+  this.$locals.wasNew = this.isNew;
+  next();
+});
+
 module.exports = mongoose.model("User", userSchema);
