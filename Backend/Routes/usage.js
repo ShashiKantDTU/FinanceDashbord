@@ -149,7 +149,7 @@ router.get('/dashboard', authenticateSuperAdmin, async (req, res) => {
                 { _id: { $in: userIds } },
                 { phoneNumber: { $in: userPhones } }
             ]
-        }).select('_id name phoneNumber plan');
+        }).select('_id name phoneNumber plan isTrial');
         
         // Create maps for both ID and phone lookups
         const userMapById = new Map(users.map(u => [u._id.toString(), u]));
@@ -159,6 +159,7 @@ router.get('/dashboard', authenticateSuperAdmin, async (req, res) => {
         const allUsersWithNames = allUsers.map(user => {
             let userName = null;
             let userPlan = 'unknown';
+            let isTrial = false;
             
             // Try to get user by ID first
             if (user.mainUserId) {
@@ -166,6 +167,7 @@ router.get('/dashboard', authenticateSuperAdmin, async (req, res) => {
                 if (foundUser) {
                     userName = foundUser.name || foundUser.phoneNumber;
                     userPlan = foundUser.plan || 'unknown';
+                    isTrial = foundUser.isTrial || false;
                 }
             }
             
@@ -175,6 +177,7 @@ router.get('/dashboard', authenticateSuperAdmin, async (req, res) => {
                 if (foundUser) {
                     userName = foundUser.name || foundUser.phoneNumber;
                     userPlan = foundUser.plan || 'unknown';
+                    isTrial = foundUser.isTrial || false;
                 }
             }
             
@@ -187,6 +190,7 @@ router.get('/dashboard', authenticateSuperAdmin, async (req, res) => {
                 phone: user._id,
                 name: userName,
                 plan: userPlan,
+                isTrial: isTrial,
                 totalRequests: user.totalRequests,
                 totalDataBytes: user.totalDataBytes,
                 endpointCount: user.uniqueEndpoints.length,
@@ -312,7 +316,7 @@ router.get('/user-endpoint-analytics', authenticateSuperAdmin, async (req, res) 
         const userPhones = [...new Set(userEndpointData.map(d => d._id.phone))].filter(Boolean);
         const users = await User.find({ 
             phoneNumber: { $in: userPhones } 
-        }).select('_id name phoneNumber email plan');
+        }).select('_id name phoneNumber email plan isTrial');
         
         const userMap = new Map(users.map(u => [u.phoneNumber, u]));
 
@@ -330,6 +334,7 @@ router.get('/user-endpoint-analytics', authenticateSuperAdmin, async (req, res) 
                     name: user ? (user.name || phone) : phone,
                     email: user ? user.email : null,
                     plan: user ? user.plan : 'unknown',
+                    isTrial: user ? (user.isTrial || false) : false,
                     totalRequests: 0,
                     totalDataBytes: 0,
                     uniqueEndpoints: 0,
@@ -482,7 +487,7 @@ router.get('/new-users', authenticateSuperAdmin, async (req, res) => {
         // Get user details from User collection (single query)
         const newUsersFromDB = await User.find({
             phoneNumber: { $in: newUserPhones }
-        }).select('name phoneNumber email createdAt plan planActivatedAt site supervisors');
+        }).select('name phoneNumber email createdAt plan planActivatedAt site supervisors isTrial');
 
         // Create a map for quick lookup
         const userMap = new Map(newUsersFromDB.map(u => [u.phoneNumber, u]));
@@ -500,6 +505,7 @@ router.get('/new-users', authenticateSuperAdmin, async (req, res) => {
                 name: user ? (user.name || phone) : phone,
                 email: user ? user.email : null,
                 plan: user ? user.plan : 'unknown',
+                isTrial: user ? (user.isTrial || false) : false,
                 planActivatedAt: user ? user.planActivatedAt : null,
                 registeredAt: user ? user.createdAt : null,
                 siteCount: user ? (user.site ? user.site.length : 0) : 0,
@@ -528,7 +534,8 @@ router.get('/new-users', authenticateSuperAdmin, async (req, res) => {
                 dayData.users.push({
                     phone: userDetail.phone,
                     name: userDetail.name,
-                    plan: userDetail.plan
+                    plan: userDetail.plan,
+                    isTrial: userDetail.isTrial
                 });
             }
         }
@@ -608,7 +615,7 @@ router.get('/user-activity/:phone', authenticateSuperAdmin, async (req, res) => 
 
         // Get user details
         const user = await User.findOne({ phoneNumber: userPhone })
-            .select('name phoneNumber email plan createdAt planActivatedAt');
+            .select('name phoneNumber email plan createdAt planActivatedAt isTrial');
 
         if (!user) {
             return res.status(404).json({
@@ -756,6 +763,7 @@ router.get('/user-activity/:phone', authenticateSuperAdmin, async (req, res) => 
                 phone: user.phoneNumber,
                 email: user.email,
                 plan: user.plan,
+                isTrial: user.isTrial || false,
                 registeredAt: user.createdAt,
                 planActivatedAt: user.planActivatedAt
             },
