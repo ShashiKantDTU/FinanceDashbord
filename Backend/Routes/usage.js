@@ -69,7 +69,7 @@ const getDateRange = (period, customStartDate = null, customEndDate = null) => {
 
 // GET /api/usage/dashboard
 // NEW: Performance-focused dashboard with time period filtering
-// Query params: period (today, yesterday, week, month, 3months)
+// Query params: period (today, yesterday, week, month, 3months) and custom date range (startDate, endDate)
 router.get('/dashboard', authenticateSuperAdmin, async (req, res) => {
     try {
         // Check if logging database is configured
@@ -80,8 +80,12 @@ router.get('/dashboard', authenticateSuperAdmin, async (req, res) => {
             });
         }
 
+        // Support both period and custom date range
         const period = req.query.period || 'week';
-        const { startDate, endDate } = getDateRange(period);
+        const customStartDate = req.query.startDate;
+        const customEndDate = req.query.endDate;
+        
+        const { startDate, endDate } = getDateRange(period, customStartDate, customEndDate);
 
         // Get total requests in the period
         const totalStats = await ApiUsageLog.aggregate([
