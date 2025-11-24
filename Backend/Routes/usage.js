@@ -3,6 +3,8 @@ const router = express.Router();
 const ApiUsageLog = require('../models/ApiUsageLog');
 const CronJobLog = require('../models/CronJobLogSchema');
 const User = require('../models/Userschema');
+const Employee = require('../models/EmployeeSchema');
+const Site = require('../models/Siteschema');
 const { authenticateAndTrack } = require('../Middleware/usageTracker');
 const { getUserUsageStats, checkUsageLimits } = require('../Middleware/usageTracker');
 const { logConnection } = require('../config/logDatabase');
@@ -1512,6 +1514,94 @@ router.get('/health', authenticateSuperAdmin, async (req, res) => {
         res.status(500).json({
             success: false,
             message: 'Error checking database health',
+            error: error.message
+        });
+    }
+});
+
+// GET /api/usage/site-labour-stats
+// NEW: Aggregates labour data by site for a specific month/year
+router.get('/site-labour-stats', authenticateSuperAdmin, async (req, res) => {
+    try {
+        const { month, year } = req.query;
+        
+        // Default to current month/year if not provided
+        const now = new Date();
+        const searchMonth = month ? parseInt(month) : now.getMonth() + 1; // 1-12
+        const searchYear = year ? parseInt(year) : now.getFullYear();
+
+        const stats = await Employee.aggregate([
+            // 1. FILTER: Get only this month's data
+            {
+                $match: {
+                    month: searchMonth,
+                    year: searchYear
+                }
+            },
+
+            // 2. GROUP: Calculate the counts first (Reduces dataset size significantly)
+            {
+                $group: {
+                    _id: "$siteID",              // This is the Link to the Site Collection
+                    totalLabours: { $sum: 1 }
+                }
+            },
+
+            // 3. FIRST LOOKUP: Fetch Site Details (to get 'sitename' and 'owner' ID)
+            {
+                $lookup: {
+                    from: "sites",               // Name of your Site collection
+                    localField: "_id",           // The _id from our Group stage (which is the siteID)
+                    foreignField: "_id",         // The _id in the Site collection
+                    as: "siteData"
+                }
+            },
+            
+            // 4. UNWIND: Flatten the site array (since 1 ID = 1 Site)
+            { $unwind: "$siteData" },
+
+            // 5. SECOND LOOKUP: Fetch User/Owner Details (using the ID we just got from step 3)
+            {
+                $lookup: {
+                    from: "users",               // Name of your User collection
+                    localField: "siteData.owner",// We grab the owner ID from the previous lookup
+                    foreignField: "_id",         // Match it against _id in Users collection
+                    as: "ownerData"
+                }
+            },
+
+            // 6. UNWIND: Flatten the owner array
+            { $unwind: "$ownerData" },
+
+            // 7. PROJECT: Clean up the output to show only what you need
+            {
+                $project: {
+                    _id: 0,                           // Hide the messy ID
+                    SiteName: "$siteData.sitename",   // From Site Collection
+                    OwnerName: "$ownerData.name",     // From User Collection
+                    OwnerPhone: "$ownerData.phoneNumber", // Optional: Add phone if needed
+                    OwnerPlan: "$ownerData.plan",     // Owner's plan
+                    EmployeeCount: "$totalLabours"    // From the Group stage
+                }
+            },
+
+            // 8. SORT: High to Low
+            {
+                $sort: { EmployeeCount: -1 }
+            }
+        ]);
+
+        res.json({
+            success: true,
+            period: { month: searchMonth, year: searchYear },
+            data: stats
+        });
+
+    } catch (error) {
+        console.error('Error fetching site labour stats:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Internal server error',
             error: error.message
         });
     }
