@@ -4,6 +4,7 @@ const Site = require("../models/Siteschema");
 const Employee = require("../models/EmployeeSchema");
 const { authenticateAndTrack } = require("../Middleware/usageTracker");
 const { Supervisor } = require("../models/supervisorSchema");
+const PLAN_LIMITS = require("../config/planLimits");
 // const { sendWeeklyReport } = require("../scripts/whatsappReport");
 
 const router = express.Router();
@@ -151,12 +152,11 @@ router.post("/home/addsite", authenticateAndTrack, async (req, res) => {
     // Check if user has reached the site limit based on their plan
     if (plan === "free" && userdata.site.length >= 1) {
       return res.status(403).json({
-        message:
-          "Haazri Basic plan has limit of 1 site only, To manage multiple sites Upgrade your plan to Contractor Pro or Haazri Automate.",
+        message: `${currentPlanLimits.displayName} has limit of ${maxSites} active site(s) only. To manage multiple sites, please upgrade your plan.`,
       });
     }
 
-    // premimum plan has unlimited limits
+    
 
     // Create new site using the Site model
     const newSite = new Site({
@@ -365,8 +365,12 @@ router.post("/sites/activate", authenticateAndTrack, async (req, res) => {
 
     // Plan limits
     const plan = userdata.plan || "free";
-    const planLimits = { free: 1, pro: 10, premium: 20 };
-    const limit = planLimits[plan] ?? 1;
+    const currentPlanLimits = PLAN_LIMITS[plan] || PLAN_LIMITS.free;
+    let limit = currentPlanLimits.maxSites;
+
+    if (plan === 'enterprise') {
+      limit = userdata.enterpriseLimits?.maxActiveSites || PLAN_LIMITS.enterprise.maxSites;
+    }
 
     // Normalize inputs
     const toCreateNames = createSites.map((s) => (typeof s === "string" ? s.trim() : s)).filter(Boolean);
@@ -376,10 +380,7 @@ router.post("/sites/activate", authenticateAndTrack, async (req, res) => {
     const requestedActiveCount = selectedIds.length + toCreateNames.length;
     if (requestedActiveCount > limit) {
       return res.status(403).json({
-        message:
-          plan === "free"
-            ? "Haazri Basic plan allows only 1 active site. Upgrade to manage more."
-            : `Your ${plan} plan allows only ${limit} active sites.`,
+        message: `Your ${currentPlanLimits.displayName} plan allows only ${limit} active sites.`,
       });
     }
 

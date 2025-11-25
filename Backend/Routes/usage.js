@@ -714,7 +714,7 @@ router.get('/user-activity/:phone', authenticateSuperAdmin, async (req, res) => 
         })
         .select('endpoint method status responseSizeBytes timestamp')
         .sort({ timestamp: -1 })
-        .limit(50);
+        .limit(2000);
 
         // Get daily activity pattern
         const dailyActivity = await ApiUsageLog.aggregate([

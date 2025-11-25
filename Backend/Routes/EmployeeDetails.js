@@ -2,6 +2,7 @@ const express = require("express");
 const mongoose = require("mongoose");
 const employeeSchema = require("../models/EmployeeSchema");
 const User = require("../models/Userschema");
+const PLAN_LIMITS = require("../config/planLimits");
 const {
   FetchlatestData,
   calculateEmployeeData,
@@ -163,30 +164,23 @@ router.post("/addemployee", authenticateAndTrack, async (req, res) => {
       month: month,
       year: year,
     });
-    if (plan === "free") {
-      if (totalEmployees >= 20) {
-        return res.status(403).json({
-          success: false,
-          message:
-            "You have reached the maximum limit of 20 employees for this month per site. Please upgrade to contractor pro or Haazri Automate to add more employees.",
-        });
-      }
-    } else if (plan === "pro") {
-      if (totalEmployees >= 100) {
-        return res.status(403).json({
-          success: false,
-          message:
-            "You have reached the maximum limit of 100 employees for this month per site. Please upgrade to Haazri Automate to add more employees.",
-        });
-      }
-    } else if (plan === "premium") {
-      if (totalEmployees >= 200) {
-        return res.status(403).json({
-          success: false,
-          message:
-            "You have reached the maximum limit of 200 employees for this month per site. Please upgrade to Business Plan to add more employees for more info on Business Plan contact support.",
-        });
-      }
+
+    const currentPlanLimits = PLAN_LIMITS[plan] || PLAN_LIMITS.free;
+    let maxEmployees = currentPlanLimits.maxEmployeesPerSite;
+
+    if (plan === "enterprise") {
+      maxEmployees = req.user.enterpriseLimits?.maxEmployeesPerSite || PLAN_LIMITS.enterprise.maxEmployeesPerSite;
+    }
+
+    if (totalEmployees >= maxEmployees) {
+      return res.status(403).json({
+        success: false,
+        message: `You have reached the maximum limit of ${maxEmployees} employees for this month per site. ${
+          plan === "free" || plan === "pro"
+            ? "Please upgrade your plan to add more employees."
+            : "Please contact support to increase your limit."
+        }`,
+      });
     }
 
     // Check if employee already exists for this month/year
@@ -704,30 +698,22 @@ router.post("/importemployees", authenticateAndTrack, async (req, res) => {
       month: targetMonth,
       year: targetYear,
     });
-    if (plan === "free") {
-      if (totalEmployees >= 20 || employeeIds.length + totalEmployees > 20) {
-        return res.status(403).json({
-          success: false,
-          message:
-            "You have the maximum limit of 20 employees for this month per site. Please upgrade to contractor pro or Haazri Automate to add more employees.",
-        });
-      }
-    } else if (plan === "pro") {
-      if (totalEmployees >= 100 || employeeIds.length + totalEmployees > 100) {
-        return res.status(403).json({
-          success: false,
-          message:
-            "You have the maximum limit of 100 employees for this month per site. Please upgrade to Haazri Automate to add more employees.",
-        });
-      }
-    } else if (plan === "premium") {
-      if (totalEmployees >= 200 || employeeIds.length + totalEmployees > 200) {
-        return res.status(403).json({
-          success: false,
-          message:
-            "You have reached the maximum limit of 200 employees for this month per site. Please upgrade to Business Plan to add more employees for more info on Business Plan contact support.",
-        });
-      }
+    const currentPlanLimits = PLAN_LIMITS[plan] || PLAN_LIMITS.free;
+    let maxEmployees = currentPlanLimits.maxEmployeesPerSite;
+
+    if (plan === "enterprise") {
+      maxEmployees = req.user.enterpriseLimits?.maxEmployeesPerSite || PLAN_LIMITS.enterprise.maxEmployeesPerSite;
+    }
+
+    if (totalEmployees >= maxEmployees || employeeIds.length + totalEmployees > maxEmployees) {
+      return res.status(403).json({
+        success: false,
+        message: `You have reached the maximum limit of ${maxEmployees} employees for this month per site. ${
+          plan === "free" || plan === "pro"
+            ? "Please upgrade your plan to add more employees."
+            : "Please contact support to increase your limit."
+        }`,
+      });
     }
 
     // console.log(

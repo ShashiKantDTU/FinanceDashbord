@@ -349,6 +349,14 @@ router.get("/plan", authenticateToken, async (req, res) => {
     isPaymentVerified: req.user.isPaymentVerified,
   };
 
+  // Add limits for enterprise plan
+  if (req.user.plan === "enterprise") {
+    response.limits = {
+      maxActiveSites: req.user.enterpriseLimits?.maxActiveSites || 10,
+      maxEmployeesPerSite: req.user.enterpriseLimits?.maxEmployeesPerSite || 100,
+    };
+  }
+
   // Only include isTrial, isCancelled, isGrace, and purchaseToken for normal users, not supervisors
   if (req.user.role !== "Supervisor") {
     response.isTrial = req.user.isTrial || false;

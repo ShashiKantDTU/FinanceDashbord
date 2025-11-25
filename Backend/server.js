@@ -97,6 +97,7 @@ const excelReportRoutes = require('./Routes/excelReports');
 const servicesRoutes = require('./Routes/services');
 const internalApiRequests = require('./Routes/internalApiRequests');
 const apiTrackingManagementRoutes = require('./Routes/apiTrackingManagement');
+const configRoutes = require('./Routes/config');
 // const optimizedEmployeeRoutes = require('./Routes/optimizedEmployeeRoutes');
 
 // Import cron job service
@@ -136,6 +137,7 @@ app.use('/api/reports', excelReportRoutes); // New Excel (placeholder) report en
 app.use('/api/services', servicesRoutes);
 app.use('/api/internal', internalApiRequests);
 app.use('/api/super-admin/api-tracking', apiTrackingManagementRoutes);
+app.use('/api/config', configRoutes);
 
 
 // Basic route
