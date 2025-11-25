@@ -48,6 +48,7 @@ const authenticateToken = async (req, res, next) => {
             req.user.planExpiresAt = user.planExpiresAt
             req.user.planActivatedAt = user.planActivatedAt
             req.user.billing_cycle = user.billing_cycle
+            req.user.enterpriseLimits = user.enterpriseLimits; // Add enterprise limits for supervisors
             // Note: isTrial and isCancelled are NOT set for supervisors as they're not needed
 
             if (!user.plan || user.plan === null || user.plan === undefined) {
@@ -83,6 +84,7 @@ const authenticateToken = async (req, res, next) => {
                     req.user.isCancelled = user.isCancelled || false;
                     req.user.isGrace = user.isGrace || false;
                     req.user.purchaseToken = user.purchaseToken || null;
+                    req.user.enterpriseLimits = user.enterpriseLimits; // Add enterprise limits
                     req.user.whatsAppReportsEnabled = user.whatsAppReportsEnabled || false;
                     req.user.whatsAppReportPhone = user.whatsAppReportPhone || null;
                 } else {
