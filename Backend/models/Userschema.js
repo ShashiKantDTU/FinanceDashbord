@@ -35,19 +35,16 @@ const userSchema = new mongoose.Schema(
     // 👇 Plan info
     plan: {
       type: String,
-      enum: ["free", "pro", "premium", "business"],
+      enum: ["free", "pro", "premium", "business", "enterprise"],
       default: "free",
     },
     planActivatedAt: { type: Date },
     billing_cycle: { type: String, enum: ["monthly", "yearly"] },
     planExpiresAt: { type: Date },
-
-    // 👇 Business Custom Plan Limits (only used when plan === 'business')
-    businessLimits: {
-      maxSites: { type: Number, default: null }, // Custom site limit per user
-      maxEmployeesPerSite: { type: Number, default: null }, // Custom employee limit per site
-      customPlanName: { type: String, default: null }, // Custom plan display name
-      notes: { type: String, default: null }, // Admin notes about the custom plan
+    // 👇 Enterprise Custom Plan Limits (only used when plan === 'enterprise')
+    enterpriseLimits: {
+      maxActiveSites: { type: Number, default: 10 }, // Custom limit for active sites
+      maxEmployeesPerSite: { type: Number, default: 100 }, // Custom limit for employees per site
     },
     isTrial: { type: Boolean, default: false },
     isCancelled: { type: Boolean, default: false },
@@ -69,7 +66,7 @@ const userSchema = new mongoose.Schema(
         {
           plan: {
             type: String,
-            enum: ["free", "pro", "premium", "business"],
+            enum: ["free", "pro", "premium", "business", "enterprise"],
             required: true,
           },
           purchasedAt: {
