@@ -122,7 +122,6 @@ const userSchema = new mongoose.Schema(
     acquisition: {
       source: {
         type: String,
-        enum: ["facebook", "google", "instagram", "youtube", "organic", "unknown"],
         default: "organic",
       },
       campaign: {
@@ -131,7 +130,6 @@ const userSchema = new mongoose.Schema(
       },
       medium: {
         type: String,
-        enum: ["cpc", "cpm", "organic", "referral", "unknown"],
         default: "organic",
       },
     },
