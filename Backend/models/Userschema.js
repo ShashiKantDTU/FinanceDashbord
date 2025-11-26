@@ -118,6 +118,23 @@ const userSchema = new mongoose.Schema(
       default: "en",
       required: false, // Optional - defaults to 'en' if not provided
     },
+    // 👇 Acquisition/Attribution Tracking - How user discovered the app
+    acquisition: {
+      source: {
+        type: String,
+        enum: ["facebook", "google", "instagram", "youtube", "organic", "unknown"],
+        default: "organic",
+      },
+      campaign: {
+        type: String,
+        default: "organic",
+      },
+      medium: {
+        type: String,
+        enum: ["cpc", "cpm", "organic", "referral", "unknown"],
+        default: "organic",
+      },
+    },
   },
   {
     timestamps: true,
@@ -153,7 +170,7 @@ userSchema.post('save', async function(doc, next) {
       return;
     }
 
-    // Prepare the row data: timestamp, name, phone number
+    // Prepare the row data: timestamp, name, phone number, acquisition data
     const now = new Date();
     const readableDate = now.toLocaleDateString('en-US', {
       year: 'numeric',
@@ -162,11 +179,19 @@ userSchema.post('save', async function(doc, next) {
       timeZone: 'Asia/Kolkata'
     });
     
+    // Get acquisition data with defaults
+    const acquisitionSource = this.acquisition?.source || 'organic';
+    const acquisitionCampaign = this.acquisition?.campaign || 'organic';
+    const acquisitionMedium = this.acquisition?.medium || 'organic';
+    
     const newRow = [
       '', // Column A - left blank
       readableDate, // Column B - creation date (e.g., "Nov 12, 2025")
       this.name || 'N/A', // Column C - name
-      this.phoneNumber // Column D - phone number
+      this.phoneNumber, // Column D - phone number
+      acquisitionSource, // Column E - acquisition source
+      acquisitionCampaign, // Column F - acquisition campaign
+      acquisitionMedium // Column G - acquisition medium
     ];
 
     // Append to Google Sheets

@@ -162,7 +162,7 @@ router.post("/otp/send", async (req, res) => {
 });
 
 router.post("/otp/verify", async (req, res) => {
-    const { phoneNumber, otp } = req.body;
+    const { phoneNumber, otp, acquisition } = req.body;
     console.log("OTP verify route hit");
     if (!phoneNumber || !otp) {
         return res.status(400).json({ message: "Phone number and OTP are required" });
@@ -194,6 +194,14 @@ router.post("/otp/verify", async (req, res) => {
       const trialExpiryDate = new Date();
       trialExpiryDate.setDate(trialExpiryDate.getDate() + 5);
       const name = phoneNumber;
+      
+      // Prepare acquisition data with defaults
+      const acquisitionData = {
+        source: acquisition?.source || 'organic',
+        campaign: acquisition?.campaign || 'organic',
+        medium: acquisition?.medium || 'organic'
+      };
+      
       user = new User({
         name: name,
         phoneNumber: phoneNumber,
@@ -203,7 +211,8 @@ router.post("/otp/verify", async (req, res) => {
         whatsAppReportPhone: phoneNumber,
         planExpiresAt: trialExpiryDate,
         planSource: 'manual',
-        planActivatedAt: new Date()
+        planActivatedAt: new Date(),
+        acquisition: acquisitionData
       });
       await user.save();
       // console.log(`New mobile user created: ${firebaseUid}`);
@@ -332,7 +341,7 @@ router.post("/register", async (req, res) => {
 router.post("/otplogin", async (req, res) => {
   // check if ID token is provided in req Body
   console.log("OTP login route hit");
-  const { token: firebaseIdToken } = req.body;
+  const { token: firebaseIdToken, acquisition } = req.body;
   if (!firebaseIdToken) {
     return res.status(400).json({ message: "ID token is required" });
   }
@@ -352,6 +361,13 @@ router.post("/otplogin", async (req, res) => {
       const trialExpiryDate = new Date();
       trialExpiryDate.setDate(trialExpiryDate.getDate() + 5);
 
+      // Prepare acquisition data with defaults
+      const acquisitionData = {
+        source: acquisition?.source || 'organic',
+        campaign: acquisition?.campaign || 'organic',
+        medium: acquisition?.medium || 'organic'
+      };
+
       user = new User({
         name: phoneNumber,
         uid: firebaseUid,
@@ -362,7 +378,8 @@ router.post("/otplogin", async (req, res) => {
         isTrial: true,
         planExpiresAt: trialExpiryDate,
         planSource: 'manual',
-        planActivatedAt: new Date()
+        planActivatedAt: new Date(),
+        acquisition: acquisitionData
       });
       await user.save();
       // console.log(`New mobile user created: ${firebaseUid}`);
@@ -402,7 +419,7 @@ router.post("/otplogin", async (req, res) => {
 
 router.post("/truecallerlogin", async (req, res) => {
   try {
-    const { authorizationCode, codeVerifier } = req.body;
+    const { authorizationCode, codeVerifier, acquisition } = req.body;
     console.log("authorization code " + authorizationCode)
 
     if (!authorizationCode || !codeVerifier) {
@@ -457,6 +474,14 @@ router.post("/truecallerlogin", async (req, res) => {
       const trialExpiryDate = new Date();
       trialExpiryDate.setDate(trialExpiryDate.getDate() + 5);
       const name = verifiedUserData.given_name + " " + verifiedUserData.family_name || phoneNumber;
+      
+      // Prepare acquisition data with defaults
+      const acquisitionData = {
+        source: acquisition?.source || 'organic',
+        campaign: acquisition?.campaign || 'organic',
+        medium: acquisition?.medium || 'organic'
+      };
+      
       user = new User({
         name: name,
         phoneNumber: phoneNumber,
@@ -466,7 +491,8 @@ router.post("/truecallerlogin", async (req, res) => {
         whatsAppReportPhone: phoneNumber,
         planExpiresAt: trialExpiryDate,
         planSource: 'manual',
-        planActivatedAt: new Date()
+        planActivatedAt: new Date(),
+        acquisition: acquisitionData
       });
       await user.save();
       // console.log(`New mobile user created: ${firebaseUid}`);
