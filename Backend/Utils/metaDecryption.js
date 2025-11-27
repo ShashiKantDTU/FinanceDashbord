@@ -13,6 +13,9 @@ function decryptMetaCampaignData(metaEncrypted) {
   try {
     if (!metaEncrypted) return null;
     
+    // Debug: Log what we received
+    console.log('Meta decryption: Received meta_encrypted:', typeof metaEncrypted, metaEncrypted);
+    
     // Check if decryption key is configured
     if (!DECRYPTION_KEY_HEX || DECRYPTION_KEY_HEX.length !== 64) {
       console.log('Meta decryption: META_INSTALL_REFERRER_KEY not configured or invalid');
@@ -27,13 +30,23 @@ function decryptMetaCampaignData(metaEncrypted) {
         ? JSON.parse(metaEncrypted) 
         : metaEncrypted;
     } catch (e) {
-      console.log('Meta decryption: Invalid JSON format');
+      console.log('Meta decryption: Invalid JSON format, error:', e.message);
       return null;
     }
     
-    // 2. Validate structure
-    if (!contentJson.source || !contentJson.source.data || !contentJson.source.nonce) {
+    // Debug: Log parsed structure
+    console.log('Meta decryption: Parsed structure:', JSON.stringify(contentJson, null, 2));
+    
+    // 2. Validate structure - source can be null for organic/non-ad Meta traffic
+    if (!contentJson.source) {
+      console.log('Meta decryption: source is null - this is organic Meta traffic (not from a paid ad)');
+      return null;
+    }
+    
+    if (!contentJson.source.data || !contentJson.source.nonce) {
       console.log('Meta decryption: Missing required fields (source.data or source.nonce)');
+      console.log('Meta decryption: Has source.data?', !!contentJson.source.data);
+      console.log('Meta decryption: Has source.nonce?', !!contentJson.source.nonce);
       return null;
     }
     
@@ -114,6 +127,11 @@ function processAcquisition(acquisition) {
         result.source = 'instagram';
       } else if (decrypted.publisher_platform === 'facebook') {
         result.source = 'facebook';
+      }
+    } else {
+      // Decryption failed - store raw_referrer for debugging
+      if (acquisition.raw_referrer) {
+        result.raw_referrer = acquisition.raw_referrer;
       }
     }
   }

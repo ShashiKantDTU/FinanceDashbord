@@ -166,6 +166,12 @@ router.post("/otp/send", async (req, res) => {
 router.post("/otp/verify", async (req, res) => {
     const { phoneNumber, otp, acquisition } = req.body;
     console.log("OTP verify route hit");
+    
+    // Log acquisition payload for debugging
+    if (acquisition) {
+      console.log(`📊 [otp/verify] Acquisition payload for ${phoneNumber}:`, JSON.stringify(acquisition, null, 2));
+    }
+    
     if (!phoneNumber || !otp) {
         return res.status(400).json({ message: "Phone number and OTP are required" });
     }
@@ -341,6 +347,12 @@ router.post("/otplogin", async (req, res) => {
   // check if ID token is provided in req Body
   console.log("OTP login route hit");
   const { token: firebaseIdToken, acquisition } = req.body;
+  
+  // Log acquisition payload for debugging
+  if (acquisition) {
+    console.log(`📊 [otplogin] Acquisition payload:`, JSON.stringify(acquisition, null, 2));
+  }
+  
   if (!firebaseIdToken) {
     return res.status(400).json({ message: "ID token is required" });
   }
@@ -417,6 +429,11 @@ router.post("/truecallerlogin", async (req, res) => {
   try {
     const { authorizationCode, codeVerifier, acquisition } = req.body;
     console.log("authorization code " + authorizationCode)
+    
+    // Log acquisition payload for debugging
+    if (acquisition) {
+      console.log(`📊 [truecallerlogin] Acquisition payload:`, JSON.stringify(acquisition, null, 2));
+    }
 
     if (!authorizationCode || !codeVerifier) {
       return res.status(400).json({

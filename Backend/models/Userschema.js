@@ -143,6 +143,10 @@ const userSchema = new mongoose.Schema(
       adgroup_name: {
         type: String, // Ad set name from Meta
       },
+      // Raw referrer for debugging (stored if decryption fails)
+      raw_referrer: {
+        type: String,
+      },
     },
   },
   {
