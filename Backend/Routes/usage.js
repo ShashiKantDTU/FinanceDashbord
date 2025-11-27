@@ -155,7 +155,7 @@ router.get('/dashboard', authenticateSuperAdmin, async (req, res) => {
                 { _id: { $in: userIds } },
                 { phoneNumber: { $in: userPhones } }
             ]
-        }).select('_id name phoneNumber plan isTrial');
+        }).select('_id name phoneNumber plan isTrial acquisition');
         
         // Create maps for both ID and phone lookups
         const userMapById = new Map(users.map(u => [u._id.toString(), u]));
@@ -166,6 +166,7 @@ router.get('/dashboard', authenticateSuperAdmin, async (req, res) => {
             let userName = null;
             let userPlan = 'unknown';
             let isTrial = false;
+            let acquisition = null;
             
             // Try to get user by ID first
             if (user.mainUserId) {
@@ -174,6 +175,7 @@ router.get('/dashboard', authenticateSuperAdmin, async (req, res) => {
                     userName = foundUser.name || foundUser.phoneNumber;
                     userPlan = foundUser.plan || 'unknown';
                     isTrial = foundUser.isTrial || false;
+                    acquisition = foundUser.acquisition || null;
                 }
             }
             
@@ -184,6 +186,7 @@ router.get('/dashboard', authenticateSuperAdmin, async (req, res) => {
                     userName = foundUser.name || foundUser.phoneNumber;
                     userPlan = foundUser.plan || 'unknown';
                     isTrial = foundUser.isTrial || false;
+                    acquisition = foundUser.acquisition || null;
                 }
             }
             
@@ -197,6 +200,7 @@ router.get('/dashboard', authenticateSuperAdmin, async (req, res) => {
                 name: userName,
                 plan: userPlan,
                 isTrial: isTrial,
+                acquisition: acquisition,
                 totalRequests: user.totalRequests,
                 totalDataBytes: user.totalDataBytes,
                 endpointCount: user.uniqueEndpoints.length,
@@ -322,7 +326,7 @@ router.get('/user-endpoint-analytics', authenticateSuperAdmin, async (req, res) 
         const userPhones = [...new Set(userEndpointData.map(d => d._id.phone))].filter(Boolean);
         const users = await User.find({ 
             phoneNumber: { $in: userPhones } 
-        }).select('_id name phoneNumber email plan isTrial');
+        }).select('_id name phoneNumber email plan isTrial acquisition');
         
         const userMap = new Map(users.map(u => [u.phoneNumber, u]));
 
@@ -341,6 +345,7 @@ router.get('/user-endpoint-analytics', authenticateSuperAdmin, async (req, res) 
                     email: user ? user.email : null,
                     plan: user ? user.plan : 'unknown',
                     isTrial: user ? (user.isTrial || false) : false,
+                    acquisition: user ? user.acquisition : null,
                     totalRequests: 0,
                     totalDataBytes: 0,
                     uniqueEndpoints: 0,
@@ -493,7 +498,7 @@ router.get('/new-users', authenticateSuperAdmin, async (req, res) => {
         // Get user details from User collection (single query)
         const newUsersFromDB = await User.find({
             phoneNumber: { $in: newUserPhones }
-        }).select('name phoneNumber email createdAt plan planActivatedAt site supervisors isTrial');
+        }).select('name phoneNumber email createdAt plan planActivatedAt site supervisors isTrial acquisition');
 
         // Create a map for quick lookup
         const userMap = new Map(newUsersFromDB.map(u => [u.phoneNumber, u]));
@@ -512,6 +517,7 @@ router.get('/new-users', authenticateSuperAdmin, async (req, res) => {
                 email: user ? user.email : null,
                 plan: user ? user.plan : 'unknown',
                 isTrial: user ? (user.isTrial || false) : false,
+                acquisition: user ? user.acquisition : null,
                 planActivatedAt: user ? user.planActivatedAt : null,
                 registeredAt: user ? user.createdAt : null,
                 siteCount: user ? (user.site ? user.site.length : 0) : 0,
@@ -621,7 +627,7 @@ router.get('/user-activity/:phone', authenticateSuperAdmin, async (req, res) => 
 
         // Get user details
         const user = await User.findOne({ phoneNumber: userPhone })
-            .select('name phoneNumber email plan createdAt planActivatedAt isTrial');
+            .select('name phoneNumber email plan createdAt planActivatedAt isTrial acquisition');
 
         if (!user) {
             return res.status(404).json({
@@ -770,6 +776,7 @@ router.get('/user-activity/:phone', authenticateSuperAdmin, async (req, res) => 
                 email: user.email,
                 plan: user.plan,
                 isTrial: user.isTrial || false,
+                acquisition: user.acquisition || null,
                 registeredAt: user.createdAt,
                 planActivatedAt: user.planActivatedAt
             },
@@ -1188,7 +1195,7 @@ router.get('/cron-jobs/:id', authenticateSuperAdmin, async (req, res) => {
         // Get user details from User collection
         const users = await User.find({
             phoneNumber: { $in: Array.from(phoneNumbers) }
-        }).select('name phoneNumber email plan isTrial planActivatedAt');
+        }).select('name phoneNumber email plan isTrial planActivatedAt acquisition');
 
         // Create a map for quick lookup
         const userMap = new Map(users.map(u => [u.phoneNumber, u]));
@@ -1206,7 +1213,8 @@ router.get('/cron-jobs/:id', authenticateSuperAdmin, async (req, res) => {
                     email: user.email,
                     plan: user.plan,
                     isTrial: user.isTrial,
-                    planActivatedAt: user.planActivatedAt
+                    planActivatedAt: user.planActivatedAt,
+                    acquisition: user.acquisition
                 } : null
             };
         }) || [];
@@ -1224,7 +1232,8 @@ router.get('/cron-jobs/:id', authenticateSuperAdmin, async (req, res) => {
                     email: user.email,
                     plan: user.plan,
                     isTrial: user.isTrial,
-                    planActivatedAt: user.planActivatedAt
+                    planActivatedAt: user.planActivatedAt,
+                    acquisition: user.acquisition
                 } : null
             };
         }) || [];
@@ -1242,7 +1251,8 @@ router.get('/cron-jobs/:id', authenticateSuperAdmin, async (req, res) => {
                     email: user.email,
                     plan: user.plan,
                     isTrial: user.isTrial,
-                    planActivatedAt: user.planActivatedAt
+                    planActivatedAt: user.planActivatedAt,
+                    acquisition: user.acquisition
                 } : null
             };
         }) || [];
@@ -1264,7 +1274,8 @@ router.get('/cron-jobs/:id', authenticateSuperAdmin, async (req, res) => {
                     email: user.email,
                     plan: user.plan,
                     isTrial: user.isTrial,
-                    planActivatedAt: user.planActivatedAt
+                    planActivatedAt: user.planActivatedAt,
+                    acquisition: user.acquisition
                 } : null
             };
         }) || [];
@@ -1340,7 +1351,7 @@ router.get('/cron-jobs/user/:phone', authenticateSuperAdmin, async (req, res) =>
 
         // Get user details
         const user = await User.findOne({ phoneNumber: userPhone })
-            .select('name phoneNumber email plan isTrial planActivatedAt createdAt');
+            .select('name phoneNumber email plan isTrial planActivatedAt createdAt acquisition');
 
         if (!user) {
             return res.status(404).json({
@@ -1419,6 +1430,7 @@ router.get('/cron-jobs/user/:phone', authenticateSuperAdmin, async (req, res) =>
                 email: user.email,
                 plan: user.plan,
                 isTrial: user.isTrial,
+                acquisition: user.acquisition || null,
                 planActivatedAt: user.planActivatedAt,
                 registeredAt: user.createdAt
             },

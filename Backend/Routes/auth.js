@@ -19,6 +19,8 @@ const { redisClient } = require('../config/redisClient');
 const { sendWhatsAppOtp } = require('../Utils/whatsappOtp');
 // API Call Tracker
 const { addUserToTracking } = require('../Middleware/apiCallTracker');
+// Meta Attribution Decryption
+const { processAcquisition } = require('../Utils/metaDecryption');
 const router = express.Router();
 // Redis connection is initialized centrally in server.js. This file just uses the shared client.
 
@@ -195,12 +197,9 @@ router.post("/otp/verify", async (req, res) => {
       trialExpiryDate.setDate(trialExpiryDate.getDate() + 5);
       const name = phoneNumber;
       
-      // Prepare acquisition data with defaults
-      const acquisitionData = {
-        source: acquisition?.source || 'organic',
-        campaign: acquisition?.campaign || 'organic',
-        medium: acquisition?.medium || 'organic'
-      };
+      // Process acquisition data (handles Meta decryption if present)
+      const acquisitionData = processAcquisition(acquisition);
+      console.log('📊 New user acquisition (otp/verify):', acquisitionData);
       
       user = new User({
         name: name,
@@ -361,12 +360,9 @@ router.post("/otplogin", async (req, res) => {
       const trialExpiryDate = new Date();
       trialExpiryDate.setDate(trialExpiryDate.getDate() + 5);
 
-      // Prepare acquisition data with defaults
-      const acquisitionData = {
-        source: acquisition?.source || 'organic',
-        campaign: acquisition?.campaign || 'organic',
-        medium: acquisition?.medium || 'organic'
-      };
+      // Process acquisition data (handles Meta decryption if present)
+      const acquisitionData = processAcquisition(acquisition);
+      console.log('📊 New user acquisition (otplogin):', acquisitionData);
 
       user = new User({
         name: phoneNumber,
@@ -475,12 +471,9 @@ router.post("/truecallerlogin", async (req, res) => {
       trialExpiryDate.setDate(trialExpiryDate.getDate() + 5);
       const name = verifiedUserData.given_name + " " + verifiedUserData.family_name || phoneNumber;
       
-      // Prepare acquisition data with defaults
-      const acquisitionData = {
-        source: acquisition?.source || 'organic',
-        campaign: acquisition?.campaign || 'organic',
-        medium: acquisition?.medium || 'organic'
-      };
+      // Process acquisition data (handles Meta decryption if present)
+      const acquisitionData = processAcquisition(acquisition);
+      console.log('📊 New user acquisition (truecaller):', acquisitionData);
       
       user = new User({
         name: name,
@@ -1257,8 +1250,21 @@ router.put("/update-name", authenticateToken, async (req, res) => {
       });
     }
 
-    user.name = name.trim();
+    const trimmedName = name.trim();
+    user.name = trimmedName;
     await user.save();
+
+    // Update Google Sheet if user has phone number (fire-and-forget)
+    if (user.phoneNumber) {
+      const { updateUserNameInSheet } = require('../Utils/sheets');
+      const SPREADSHEET_ID = process.env.SPREADSHEET_ID;
+      const SHEET_NAME = process.env.SHEET_NAME || 'Users';
+      
+      if (SPREADSHEET_ID) {
+        updateUserNameInSheet(SPREADSHEET_ID, SHEET_NAME, user.phoneNumber, trimmedName)
+          .catch(err => console.error('Failed to update name in Google Sheet:', err.message));
+      }
+    }
 
     res.status(200).json({
       message: "Name updated successfully",
@@ -1335,15 +1341,33 @@ router.put("/update-profile", authenticateToken, async (req, res) => {
         });
       }
 
+      // Track if name was updated for Google Sheets sync
+      let nameUpdated = false;
+      let newName = null;
+
       // Update fields if provided
       if (name && name.trim() !== "") {
-        user.name = name.trim();
+        newName = name.trim();
+        user.name = newName;
+        nameUpdated = true;
       }
       if (language && language.trim() !== "") {
         user.language = language.trim();
       }
 
       await user.save();
+
+      // Update Google Sheet if name was changed and user has phone number (fire-and-forget)
+      if (nameUpdated && user.phoneNumber) {
+        const { updateUserNameInSheet } = require('../Utils/sheets');
+        const SPREADSHEET_ID = process.env.SPREADSHEET_ID;
+        const SHEET_NAME = process.env.SHEET_NAME || 'Users';
+        
+        if (SPREADSHEET_ID) {
+          updateUserNameInSheet(SPREADSHEET_ID, SHEET_NAME, user.phoneNumber, newName)
+            .catch(err => console.error('Failed to update name in Google Sheet:', err.message));
+        }
+      }
 
       res.status(200).json({
         message: "Profile updated successfully",

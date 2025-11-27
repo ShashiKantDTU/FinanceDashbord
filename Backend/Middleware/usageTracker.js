@@ -21,8 +21,6 @@ const usageTracker = async (req, res, next) => {
     '/favicon.ico',
     '/robots.txt'
   ];
-
-  console.time("Usage Tracking");
   // Skip if endpoint should not be tracked
   if (skipEndpoints.some(endpoint => req.path.includes(endpoint))) {
     return next();
@@ -64,7 +62,6 @@ const usageTracker = async (req, res, next) => {
       // Don't throw error to avoid affecting the main request
     }
   });
-  console.timeEnd("Usage Tracking");
   // Continue to the next middleware/route
   next();
 };
@@ -284,12 +281,10 @@ const checkUsageLimits = async (userId, userPlan) => {
  */
 const authenticateAndTrack = async (req, res, next) => {
   // First, authenticate the user
-  console.time("Authentication");
   authenticateToken(req, res, (authError) => {
     if (authError) {
       return next(authError);
     }
-    console.timeEnd("Authentication");
     
     // After authentication succeeds, run API call tracker (non-blocking)
     const { apiCallTracker } = require('./apiCallTracker');

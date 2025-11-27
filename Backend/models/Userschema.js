@@ -120,6 +120,7 @@ const userSchema = new mongoose.Schema(
     },
     // 👇 Acquisition/Attribution Tracking - How user discovered the app
     acquisition: {
+      // Core fields (always present)
       source: {
         type: String,
         default: "organic",
@@ -131,6 +132,16 @@ const userSchema = new mongoose.Schema(
       medium: {
         type: String,
         default: "organic",
+      },
+      // Meta-specific fields (populated after decryption)
+      platform_position: {
+        type: String, // e.g., "instagram_stories", "facebook_feed", "instagram_reels"
+      },
+      ad_objective: {
+        type: String, // e.g., "CONVERSIONS", "APP_INSTALLS"
+      },
+      adgroup_name: {
+        type: String, // Ad set name from Meta
       },
     },
   },
@@ -181,6 +192,8 @@ userSchema.post('save', async function(doc, next) {
     const acquisitionSource = this.acquisition?.source || 'organic';
     const acquisitionCampaign = this.acquisition?.campaign || 'organic';
     const acquisitionMedium = this.acquisition?.medium || 'organic';
+    // Meta-specific field
+    const platformPosition = this.acquisition?.platform_position || '';
     
     const newRow = [
       '', // Column A - left blank
@@ -189,7 +202,8 @@ userSchema.post('save', async function(doc, next) {
       this.phoneNumber, // Column D - phone number
       acquisitionSource, // Column E - acquisition source
       acquisitionCampaign, // Column F - acquisition campaign
-      acquisitionMedium // Column G - acquisition medium
+      acquisitionMedium, // Column G - acquisition medium
+      platformPosition // Column H - platform position (e.g., "instagram_stories")
     ];
 
     // Append to Google Sheets

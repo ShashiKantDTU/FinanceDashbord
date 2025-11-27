@@ -47,5 +47,73 @@ async function appendToSheet(spreadsheetId, range, values) {
   }
 }
 
-// Export the function
-module.exports = { appendToSheet };
+/**
+ * Updates a user's name in Google Sheet by finding their row via phone number.
+ * 
+ * Sheet Structure:
+ * Column A - blank
+ * Column B - date
+ * Column C - name
+ * Column D - phone number
+ * Column E - acquisition source
+ * Column F - acquisition campaign
+ * Column G - acquisition medium
+ * 
+ * @param {string} spreadsheetId The ID of the spreadsheet.
+ * @param {string} sheetName The name of the sheet (e.g., 'Users').
+ * @param {string} phoneNumber The phone number to search for (unique identifier).
+ * @param {string} newName The new name to update.
+ * @returns {boolean} True if update was successful, false otherwise.
+ */
+async function updateUserNameInSheet(spreadsheetId, sheetName, phoneNumber, newName) {
+  try {
+    const client = await auth.getClient();
+    const sheets = google.sheets({ version: 'v4', auth: client });
+
+    // Step 1: Get all phone numbers from Column D to find the row
+    const searchRange = `${sheetName}!D:D`; // Phone number column
+    
+    const searchResponse = await sheets.spreadsheets.values.get({
+      spreadsheetId: spreadsheetId,
+      range: searchRange,
+    });
+
+    const rows = searchResponse.data.values || [];
+    
+    // Step 2: Find the row index where phone number matches
+    let rowIndex = -1;
+    for (let i = 0; i < rows.length; i++) {
+      if (rows[i][0] === phoneNumber) {
+        rowIndex = i + 1; // Sheets are 1-indexed
+        break;
+      }
+    }
+
+    if (rowIndex === -1) {
+      console.log(`Phone number ${phoneNumber} not found in Google Sheet.`);
+      return false;
+    }
+
+    // Step 3: Update the name in Column C for that row
+    const updateRange = `${sheetName}!C${rowIndex}`; // Name is in Column C
+    
+    const updateResponse = await sheets.spreadsheets.values.update({
+      spreadsheetId: spreadsheetId,
+      range: updateRange,
+      valueInputOption: 'USER_ENTERED',
+      resource: {
+        values: [[newName]],
+      },
+    });
+
+    console.log(`Successfully updated name to "${newName}" for phone ${phoneNumber} at row ${rowIndex}`);
+    return true;
+
+  } catch (err) {
+    console.error('Error updating user name in Google Sheets:', err.message);
+    return false;
+  }
+}
+
+// Export the functions
+module.exports = { appendToSheet, updateUserNameInSheet };
