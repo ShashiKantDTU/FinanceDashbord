@@ -1593,6 +1593,8 @@ router.get('/site-labour-stats', authenticateSuperAdmin, async (req, res) => {
                     OwnerName: "$ownerData.name",     // From User Collection
                     OwnerPhone: "$ownerData.phoneNumber", // Optional: Add phone if needed
                     OwnerPlan: "$ownerData.plan",     // Owner's plan
+                    OwnerIsTrial: "$ownerData.isTrial", // Trial status
+                    OwnerAcquisition: "$ownerData.acquisition", // Attribution data
                     EmployeeCount: "$totalLabours"    // From the Group stage
                 }
             },
