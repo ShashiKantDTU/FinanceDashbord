@@ -233,6 +233,33 @@ router.get('/dashboard', authenticateSuperAdmin, async (req, res) => {
             }
         ]);
 
+        // Get daily active users breakdown
+        const dailyActiveUsers = await ApiUsageLog.aggregate([
+            {
+                $match: {
+                    timestamp: { $gte: startDate, $lte: endDate }
+                }
+            },
+            {
+                $group: {
+                    _id: {
+                        date: { $dateToString: { format: '%Y-%m-%d', date: '$timestamp' } }
+                    },
+                    uniqueUsers: { $addToSet: '$userPhone' }
+                }
+            },
+            {
+                $project: {
+                    _id: 0,
+                    date: '$_id.date',
+                    activeUsers: { $size: '$uniqueUsers' }
+                }
+            },
+            {
+                $sort: { date: 1 }
+            }
+        ]);
+
         const stats = totalStats[0] || {
             totalRequests: 0,
             totalDataBytes: 0,
@@ -258,7 +285,8 @@ router.get('/dashboard', authenticateSuperAdmin, async (req, res) => {
                 totalUsersInResponse: allUsersWithNames.length
             },
             users: allUsersWithNames,  // Changed from 'topUsers' to 'users' and returns ALL users
-            hourlyDistribution
+            hourlyDistribution,
+            dailyActiveUsers
         });
 
     } catch (error) {
