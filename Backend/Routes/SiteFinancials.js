@@ -149,6 +149,14 @@ router.get("/sites/:siteID/financial-summary", authenticateAndTrack, async (req,
     const { siteID } = req.params;
     const { month, year } = req.query;
 
+    const plan = req.user?.plan || 'free';
+    if (plan === 'free') {
+        return res.status(403).json({
+            success: false,
+            error: "Access to financial summary is restricted on the free plan. Please upgrade your plan to access this feature."
+        });
+    }
+
     // Validate required parameters
     if (!month || !year) {
         return res.status(400).json({
