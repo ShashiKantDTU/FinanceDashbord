@@ -35,7 +35,7 @@ const userSchema = new mongoose.Schema(
     // 👇 Plan info
     plan: {
       type: String,
-      enum: ["free", "pro", "premium", "business", "enterprise"],
+      enum: ["free", "lite", "pro", "premium", "business", "enterprise"],
       default: "free",
     },
     planActivatedAt: { type: Date },
@@ -66,7 +66,7 @@ const userSchema = new mongoose.Schema(
         {
           plan: {
             type: String,
-            enum: ["free", "pro", "premium", "business", "enterprise"],
+            enum: ["free", "lite", "pro", "premium", "business", "enterprise"],
             required: true,
           },
           purchasedAt: {

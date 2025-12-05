@@ -137,6 +137,8 @@ async function verifyAndroidPurchase(
         mappedProductId = "pro";
       } else if (lineItem.productId === "haazri_automate") {
         mappedProductId = "premium";
+      } else if (lineItem.productId === "haazri_lite" || lineItem.productId === "lite_monthly") {
+        mappedProductId = "lite";
       }
 
       console.log(

@@ -4,14 +4,19 @@ const PLAN_LIMITS = {
     maxEmployeesPerSite: 10,
     displayName: "Haazri Basic",
   },
+  lite: {
+    maxSites: 1,
+    maxEmployeesPerSite: 17,
+    displayName: "Haazri Lite",
+  },
   pro: {
     maxSites: 3,
-    maxEmployeesPerSite: 35,
+    maxEmployeesPerSite: 40,
     displayName: "Contractor Pro",
   },
   premium: {
     maxSites: 6,
-    maxEmployeesPerSite: 70,
+    maxEmployeesPerSite: 80,
     displayName: "Haazri Automate",
   },
   business: {

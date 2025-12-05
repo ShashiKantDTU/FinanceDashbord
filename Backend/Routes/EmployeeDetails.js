@@ -176,7 +176,7 @@ router.post("/addemployee", authenticateAndTrack, async (req, res) => {
       return res.status(403).json({
         success: false,
         message: `You have reached the maximum limit of ${maxEmployees} employees for this month per site. ${
-          plan === "free" || plan === "pro"
+          plan === "free" || plan === "lite" || plan === "pro"
             ? "Please upgrade your plan to add more employees."
             : "Please contact support to increase your limit."
         }`,
@@ -709,7 +709,7 @@ router.post("/importemployees", authenticateAndTrack, async (req, res) => {
       return res.status(403).json({
         success: false,
         message: `You have reached the maximum limit of ${maxEmployees} employees for this month per site. ${
-          plan === "free" || plan === "pro"
+          plan === "free" || plan === "lite" || plan === "pro"
             ? "Please upgrade your plan to add more employees."
             : "Please contact support to increase your limit."
         }`,
