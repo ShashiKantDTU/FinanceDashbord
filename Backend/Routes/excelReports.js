@@ -79,7 +79,7 @@ router.post("/generate-excel-report", authenticateAndTrack, async (req, res) => 
       return res.status(403).json({ success: false, error: "Forbidden. You do not have access to this resource." });
     }
 
-    console.log(`📊 Generating Excel report for ${req.body.siteID} - ${req.body.month}/${req.body.year}`);
+    console.log(`Generating Excel report for ${req.body.siteID} - ${req.body.month}/${req.body.year}`);
 
     const result = await generateAndSendExcel(req.body);
 

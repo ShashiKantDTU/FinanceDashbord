@@ -114,7 +114,7 @@ const userSchema = new mongoose.Schema(
     lastSiteUpdated: { type: Date, default: null },
     language: {
       type: String,
-      enum: ["en", "hi", "hing"],
+      enum: ["en", "hi", "hing" , "gu"],
       default: "en",
       required: false, // Optional - defaults to 'en' if not provided
     },
