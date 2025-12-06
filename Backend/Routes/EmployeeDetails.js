@@ -624,6 +624,167 @@ router.delete("/deleteemployee", authenticateAndTrack, async (req, res) => {
   }
 });
 
+// Bulk delete employees for a given month/year (no deletePreviousMonth option)
+router.post("/bulk-deleteemployees", authenticateAndTrack, async (req, res) => {
+  try {
+    const { empids, month, year } = req.body;
+
+    if (!Array.isArray(empids) || empids.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: "empids must be a non-empty array.",
+      });
+    }
+
+    if (!month || !year) {
+      return res.status(400).json({
+        success: false,
+        error: "Month and year are required.",
+      });
+    }
+
+    const deletedBy = req.user.name || req.user?.email || "unknown-user";
+    const deletedEmployees = [];
+    const changeTrackingResults = [];
+
+    for (const rawEmpid of empids) {
+      const empid = rawEmpid?.toString().trim();
+      if (!empid) {
+        changeTrackingResults.push({
+          empid: rawEmpid,
+          optimized: true,
+          error: "Invalid empid provided",
+        });
+        continue;
+      }
+
+      const employeeRecord = await employeeSchema.findOne({
+        empid: empid,
+        month: parseInt(month),
+        year: parseInt(year),
+      });
+
+      if (!employeeRecord) {
+        changeTrackingResults.push({
+          empid,
+          optimized: true,
+          error: `Employee ${empid} not found for ${month}/${year}.`,
+        });
+        continue;
+      }
+
+      const originalData = employeeRecord.toObject();
+
+      try {
+        const changeTrackingResult = await trackOptimizedChanges(
+          employeeRecord.siteID,
+          empid,
+          parseInt(month),
+          parseInt(year),
+          deletedBy,
+          `Employee "${employeeRecord.name}" deleted from ${month}/${year} by ${deletedBy}. Bulk delete request.`,
+          originalData,
+          {}
+        );
+
+        changeTrackingResults.push({
+          empid,
+          optimized: true,
+          changeLogEntries: changeTrackingResult.length,
+          siteID: employeeRecord.siteID,
+          month: parseInt(month),
+          year: parseInt(year),
+        });
+      } catch (trackingError) {
+        changeTrackingResults.push({
+          empid,
+          optimized: true,
+          error: trackingError.message,
+          siteID: employeeRecord.siteID,
+          month: parseInt(month),
+          year: parseInt(year),
+        });
+      }
+
+      await employeeSchema.findByIdAndDelete(employeeRecord._id);
+      deletedEmployees.push({
+        empid: employeeRecord.empid,
+        name: employeeRecord.name,
+        month: employeeRecord.month,
+        year: employeeRecord.year,
+        siteID: employeeRecord.siteID,
+      });
+
+      const recalculationResult = await handleRecalculationMarking(
+        employeeRecord.siteID,
+        empid,
+        parseInt(month),
+        parseInt(year),
+        deletedBy,
+        req.user
+      );
+
+      const lastIndex = changeTrackingResults.length - 1;
+      if (lastIndex >= 0) {
+        if (recalculationResult.success) {
+          changeTrackingResults[lastIndex].recalculationMarked =
+            recalculationResult.recalculationMarked;
+        } else {
+          changeTrackingResults[lastIndex].recalculationWarning =
+            recalculationResult.recalculationWarning;
+        }
+      }
+    }
+
+    const failedTrackings = changeTrackingResults.filter((r) => r.error);
+    const recalculationWarnings = changeTrackingResults.filter(
+      (r) => r.recalculationWarning
+    );
+
+    const response = {
+      success: true,
+      data: {
+        deletedEmployees,
+        changeTracking: changeTrackingResults,
+        deletionMetadata: {
+          empids,
+          targetMonth: parseInt(month),
+          targetYear: parseInt(year),
+          deletedBy,
+          deletionDate: new Date(),
+          totalRecordsDeleted: deletedEmployees.length,
+        },
+      },
+      message: `Processed bulk deletion for ${empids.length} employee(s). Deleted ${deletedEmployees.length}.`,
+    };
+
+    if (failedTrackings.length > 0) {
+      response.warnings = response.warnings || {};
+      response.warnings.changeTrackingIssues = {
+        message: "Some change tracking entries failed",
+        failedTrackings,
+      };
+    }
+
+    if (recalculationWarnings.length > 0) {
+      response.warnings = response.warnings || {};
+      response.warnings.recalculationIssues = {
+        message: "Some recalculation markings failed",
+        details: recalculationWarnings.map((w) => w.recalculationWarning),
+      };
+    }
+
+    return res.status(200).json(response);
+  } catch (error) {
+    console.error("❌ Error bulk deleting employees:", error);
+    return res.status(500).json({
+      success: false,
+      error: "Error bulk deleting employees.",
+      message: error.message,
+    });
+  }
+});
+
 // Import employee from previous month
 router.post("/importemployees", authenticateAndTrack, async (req, res) => {
   try {
