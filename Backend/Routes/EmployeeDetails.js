@@ -2,6 +2,7 @@ const express = require("express");
 const mongoose = require("mongoose");
 const employeeSchema = require("../models/EmployeeSchema");
 const User = require("../models/Userschema");
+const Site = require("../models/Siteschema");
 const PLAN_LIMITS = require("../config/planLimits");
 const {
   FetchlatestData,
@@ -158,29 +159,58 @@ router.post("/addemployee", authenticateAndTrack, async (req, res) => {
     // console.log(`👤 Created by: ${createdBy}`);
 
     let plan = req.user.plan || "free";
-    // get already total employees in the month
-    const totalEmployees = await employeeSchema.countDocuments({
-      siteID: siteID.trim(),
-      month: month,
-      year: year,
-    });
-
     const currentPlanLimits = PLAN_LIMITS[plan] || PLAN_LIMITS.free;
-    let maxEmployees = currentPlanLimits.maxEmployeesPerSite;
 
-    if (plan === "enterprise") {
-      maxEmployees = req.user.enterpriseLimits?.maxEmployeesPerSite || PLAN_LIMITS.enterprise.maxEmployeesPerSite;
-    }
-
-    if (totalEmployees >= maxEmployees) {
-      return res.status(403).json({
-        success: false,
-        message: `You have reached the maximum limit of ${maxEmployees} employees for this month per site. ${
-          plan === "free" || plan === "lite" || plan === "pro"
-            ? "Please upgrade your plan to add more employees."
-            : "Please contact support to increase your limit."
-        }`,
+    // Handle Business plan: total employees across ALL user's active sites
+    if (plan === "business") {
+      // Get all active sites owned by this user
+      const activeSites = await Site.find({
+        owner: req.user.id,
+        isActive: true,
+      }).select("_id");
+      
+      const activeSiteIds = activeSites.map(s => s._id);
+      
+      // Count total employees across all active sites for this month
+      const totalEmployeesAcrossSites = await employeeSchema.countDocuments({
+        siteID: { $in: activeSiteIds },
+        month: month,
+        year: year,
       });
+      
+      const maxTotalEmployees = req.user.businessLimits?.maxTotalEmployees 
+        || currentPlanLimits.maxTotalEmployees;
+      
+      if (totalEmployeesAcrossSites >= maxTotalEmployees) {
+        return res.status(403).json({
+          success: false,
+          message: `You have reached the maximum limit of ${maxTotalEmployees} total employees across all sites for this month. Please upgrade your plan or contact support to increase your limit.`,
+        });
+      }
+    } else {
+      // Existing per-site logic for other plans (free, lite, pro, premium, enterprise)
+      const totalEmployees = await employeeSchema.countDocuments({
+        siteID: siteID.trim(),
+        month: month,
+        year: year,
+      });
+
+      let maxEmployees = currentPlanLimits.maxEmployeesPerSite;
+
+      if (plan === "enterprise") {
+        maxEmployees = req.user.enterpriseLimits?.maxEmployeesPerSite || PLAN_LIMITS.enterprise.maxEmployeesPerSite;
+      }
+
+      if (totalEmployees >= maxEmployees) {
+        return res.status(403).json({
+          success: false,
+          message: `You have reached the maximum limit of ${maxEmployees} employees for this month per site. ${
+            plan === "free" || plan === "lite" || plan === "pro"
+              ? "Please upgrade your plan to add more employees."
+              : "Please contact support to increase your limit."
+          }`,
+        });
+      }
     }
 
     // Check if employee already exists for this month/year
@@ -853,28 +883,66 @@ router.post("/importemployees", authenticateAndTrack, async (req, res) => {
     const importedBy = req.user.name || req.user?.email || "unknown-user";
 
     let plan = req.user.plan || "free";
-    // get already total employees in the month
-    const totalEmployees = await employeeSchema.countDocuments({
-      siteID: siteID.trim(),
-      month: targetMonth,
-      year: targetYear,
-    });
     const currentPlanLimits = PLAN_LIMITS[plan] || PLAN_LIMITS.free;
-    let maxEmployees = currentPlanLimits.maxEmployeesPerSite;
 
-    if (plan === "enterprise") {
-      maxEmployees = req.user.enterpriseLimits?.maxEmployeesPerSite || PLAN_LIMITS.enterprise.maxEmployeesPerSite;
-    }
-
-    if (totalEmployees >= maxEmployees || employeeIds.length + totalEmployees > maxEmployees) {
-      return res.status(403).json({
-        success: false,
-        message: `You have reached the maximum limit of ${maxEmployees} employees for this month per site. ${
-          plan === "free" || plan === "lite" || plan === "pro"
-            ? "Please upgrade your plan to add more employees."
-            : "Please contact support to increase your limit."
-        }`,
+    // Handle Business plan: total employees across ALL user's active sites
+    if (plan === "business") {
+      // Get all active sites owned by this user
+      const activeSites = await Site.find({
+        owner: req.user.id,
+        isActive: true,
+      }).select("_id");
+      
+      const activeSiteIds = activeSites.map(s => s._id);
+      
+      // Count total employees across all active sites for target month
+      const totalEmployeesAcrossSites = await employeeSchema.countDocuments({
+        siteID: { $in: activeSiteIds },
+        month: targetMonth,
+        year: targetYear,
       });
+      
+      const maxTotalEmployees = req.user.businessLimits?.maxTotalEmployees 
+        || currentPlanLimits.maxTotalEmployees;
+      
+      // Check if import would exceed total limit
+      const employeesToImport = employeeIds.length || await employeeSchema.countDocuments({
+        siteID: siteID.trim(),
+        month: sourceMonth,
+        year: sourceYear,
+      });
+      
+      if (totalEmployeesAcrossSites >= maxTotalEmployees || 
+          employeesToImport + totalEmployeesAcrossSites > maxTotalEmployees) {
+        return res.status(403).json({
+          success: false,
+          message: `You have reached the maximum limit of ${maxTotalEmployees} total employees across all sites for this month. Please upgrade your plan or contact support to increase your limit.`,
+        });
+      }
+    } else {
+      // Existing per-site logic for other plans (free, lite, pro, premium, enterprise)
+      const totalEmployees = await employeeSchema.countDocuments({
+        siteID: siteID.trim(),
+        month: targetMonth,
+        year: targetYear,
+      });
+      
+      let maxEmployees = currentPlanLimits.maxEmployeesPerSite;
+
+      if (plan === "enterprise") {
+        maxEmployees = req.user.enterpriseLimits?.maxEmployeesPerSite || PLAN_LIMITS.enterprise.maxEmployeesPerSite;
+      }
+
+      if (totalEmployees >= maxEmployees || employeeIds.length + totalEmployees > maxEmployees) {
+        return res.status(403).json({
+          success: false,
+          message: `You have reached the maximum limit of ${maxEmployees} employees for this month per site. ${
+            plan === "free" || plan === "lite" || plan === "pro"
+              ? "Please upgrade your plan to add more employees."
+              : "Please contact support to increase your limit."
+          }`,
+        });
+      }
     }
 
     // console.log(

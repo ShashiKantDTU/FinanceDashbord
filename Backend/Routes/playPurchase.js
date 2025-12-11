@@ -5,6 +5,7 @@ const router = express.Router();
 const User = require("../models/Userschema");
 const Site = require("../models/Siteschema");
 const { authenticateToken } = require("../Middleware/auth");
+const { authenticateSuperAdmin } = require("../Middleware/superAdminAuth");
 const {
   sendWebhook,
   sendCancellationWebhook,
@@ -356,6 +357,14 @@ router.get("/plan", authenticateToken, async (req, res) => {
     response.limits = {
       maxActiveSites: req.user.enterpriseLimits?.maxActiveSites || 10,
       maxEmployeesPerSite: req.user.enterpriseLimits?.maxEmployeesPerSite || 100,
+    };
+  }
+
+  // Add limits for business plan (uses total employees, not per-site)
+  if (req.user.plan === "business") {
+    response.limits = {
+      maxActiveSites: req.user.businessLimits?.maxActiveSites || 10,
+      maxTotalEmployees: req.user.businessLimits?.maxTotalEmployees || 100,
     };
   }
 
@@ -1068,4 +1077,85 @@ router.post("/notifications", authenticateWebhook, async (req, res) => {
   }
 });
 
+// Admin endpoint to manually verify a purchase for a user
+router.post("/admin/manual-verify", authenticateSuperAdmin, async (req, res) => {
+  try {
+    const { userId, purchaseToken } = req.body;
+    if (!userId || !purchaseToken) {
+      return res.status(400).json({ error: "userId and purchaseToken are required" });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    const packageName = "com.sitehaazri.app";
+    const verificationResult = await verifyAndroidPurchase(
+      packageName,
+      purchaseToken,
+      `admin_manual_${userId}`
+    );
+
+    if (verificationResult.success) {
+      const billingCycle = verificationResult.originalProductId.includes("yearly")
+        ? "yearly"
+        : "monthly";
+
+      await User.updateOne(
+        { _id: user.id },
+        {
+          $set: {
+            plan: verificationResult.productId,
+            billing_cycle: billingCycle,
+            planSource: "google_play",
+            purchaseToken: purchaseToken,
+            lastPurchaseToken: user.purchaseToken || null,
+            isPaymentVerified: true,
+            isTrial: false,
+            isCancelled: false,
+            isGrace: false,
+            graceExpiresAt: null,
+            planActivatedAt: new Date(),
+          },
+          $max: {
+            planExpiresAt: verificationResult.expires,
+          },
+        }
+      );
+
+      await activateAllUserSites(user.id);
+
+      // Send webhook
+      try {
+        if (user.phoneNumber) {
+          await sendWebhook(
+            user.phoneNumber,
+            verificationResult.productId === "pro" ? 299 : 499,
+            verificationResult.expires,
+            false,
+            purchaseToken
+          );
+        }
+      } catch (e) {
+        console.error("Webhook failed:", e.message);
+      }
+
+      return res.status(200).json({
+        message: "Purchase verified and user updated successfully",
+        result: verificationResult
+      });
+    } else {
+      return res.status(400).json({ error: verificationResult.error });
+    }
+  } catch (error) {
+    console.error("Manual verification error:", error);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = router;
+// Export internal functions for scripts/testing
+router.verifyAndroidPurchase = verifyAndroidPurchase;
+router.activateAllUserSites = activateAllUserSites;
+

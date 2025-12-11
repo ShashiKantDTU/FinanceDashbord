@@ -5,29 +5,39 @@
 // Plan limits configuration
 export const PLAN_LIMITS = {
   free: {
-    maxEmployees: 20,
+    maxEmployees: 5,
     name: 'Free Plan'
   },
   pro: {
-    maxEmployees: Infinity,
+    maxEmployees: 50,
     name: 'Contractor Pro'
   },
   premium: {
-    maxEmployees: Infinity,
+    maxEmployees: 100,
     name: 'Haazri Automate'
+  },
+  enterprise: {
+    maxEmployees: 300, // Default fallback, usually overridden by custom limits
+    name: 'Enterprise'
   }
 };
 
 /**
  * Check if user can add more employees based on their plan
- * @param {string} userPlan - User's current plan ('free', 'pro', 'premium')
+ * @param {string} userPlan - User's current plan ('free', 'pro', 'premium', 'enterprise')
  * @param {number} currentEmployeeCount - Current number of employees
  * @param {number} additionalEmployees - Number of employees to add (default: 1)
+ * @param {Object} customLimits - Optional custom limits object from user profile
  * @returns {Object} - { canAdd: boolean, remainingSlots: number, isApproachingLimit: boolean }
  */
-export const checkEmployeeLimit = (userPlan = 'free', currentEmployeeCount = 0, additionalEmployees = 1) => {
+export const checkEmployeeLimit = (userPlan = 'free', currentEmployeeCount = 0, additionalEmployees = 1, customLimits = null) => {
   const plan = PLAN_LIMITS[userPlan] || PLAN_LIMITS.free;
-  const maxEmployees = plan.maxEmployees;
+  let maxEmployees = plan.maxEmployees;
+  
+  // Override with custom limits if available
+  if (customLimits && customLimits.maxEmployeesPerSite) {
+    maxEmployees = customLimits.maxEmployeesPerSite;
+  }
   
   if (maxEmployees === Infinity) {
     return {
@@ -55,10 +65,11 @@ export const checkEmployeeLimit = (userPlan = 'free', currentEmployeeCount = 0, 
  * Get subscription warning message for UI display
  * @param {string} userPlan - User's current plan
  * @param {number} currentEmployeeCount - Current number of employees
+ * @param {Object} customLimits - Optional custom limits object
  * @returns {string|null} - Warning message or null if no warning needed
  */
-export const getSubscriptionWarning = (userPlan = 'free', currentEmployeeCount = 0) => {
-  const limitCheck = checkEmployeeLimit(userPlan, currentEmployeeCount);
+export const getSubscriptionWarning = (userPlan = 'free', currentEmployeeCount = 0, customLimits = null) => {
+  const limitCheck = checkEmployeeLimit(userPlan, currentEmployeeCount, 1, customLimits);
   
   if (!limitCheck.isApproachingLimit || limitCheck.remainingSlots === Infinity) {
     return null;
@@ -76,9 +87,11 @@ export const getSubscriptionWarning = (userPlan = 'free', currentEmployeeCount =
  * @param {string} userPlan - User's current plan
  * @param {number} currentEmployeeCount - Current number of employees
  * @param {number} additionalEmployees - Number of employees to add
+ * @param {Object} customLimits - Optional custom limits object
  * @returns {boolean} - Whether to show subscription modal
  */
-export const shouldShowSubscriptionModal = (userPlan = 'free', currentEmployeeCount = 0, additionalEmployees = 1) => {
-  const limitCheck = checkEmployeeLimit(userPlan, currentEmployeeCount, additionalEmployees);
-  return !limitCheck.canAdd && userPlan === 'free';
+export const shouldShowSubscriptionModal = (userPlan = 'free', currentEmployeeCount = 0, additionalEmployees = 1, customLimits = null) => {
+  const limitCheck = checkEmployeeLimit(userPlan, currentEmployeeCount, additionalEmployees, customLimits);
+  // Show modal if they can't add, regardless of plan (unless it's infinite which is handled in checkEmployeeLimit)
+  return !limitCheck.canAdd;
 };

@@ -20,8 +20,8 @@ const PLAN_LIMITS = {
     displayName: "Haazri Automate",
   },
   business: {
-    maxSites: 10, // Example default
-    maxEmployeesPerSite: 100, // Example default
+    maxSites: 10,
+    maxTotalEmployees: 100, // Total employees across ALL sites (not per-site)
     displayName: "Business Plan",
   },
   enterprise: {
