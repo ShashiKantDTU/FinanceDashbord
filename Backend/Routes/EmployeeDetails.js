@@ -1484,6 +1484,7 @@ router.get("/allemployees", authenticateAndTrack, async (req, res) => {
 
 // This new route replaces the old "/allemployees" logic.
 // It uses a single aggregation pipeline for maximum efficiency.
+// HYBRID APPROACH: First recalculates employees that need it, then runs aggregation
 router.get(
   "/allemployees-optimized",
   authenticateAndTrack,
@@ -1501,6 +1502,40 @@ router.get(
     try {
       // Get the user's specific calculation type from the authenticated token
       const calculationType = req.user?.calculationType || "default";
+
+      // ====== PRE-CHECK: Handle employees needing recalculation ======
+      // Find employees that need recalculation before running aggregation
+      const employeesNeedingRecalc = await employeeSchema.find({
+        siteID: siteID,
+        month: parseInt(month),
+        year: parseInt(year),
+        recalculationneeded: true,
+      }).select("empid");
+
+      // If any employees need recalculation, process them first
+      if (employeesNeedingRecalc.length > 0) {
+        console.log(`🔄 Pre-processing ${employeesNeedingRecalc.length} employees needing recalculation`);
+        
+        // Process recalculations in parallel for efficiency
+        await Promise.all(
+          employeesNeedingRecalc.map(async (emp) => {
+            try {
+              await FetchlatestData(
+                siteID,
+                emp.empid,
+                parseInt(month),
+                parseInt(year),
+                req.user
+              );
+            } catch (recalcError) {
+              console.warn(`⚠️ Failed to recalculate ${emp.empid}: ${recalcError.message}`);
+              // Continue with other employees even if one fails
+            }
+          })
+        );
+        
+        console.log(`✅ Pre-processing complete for ${employeesNeedingRecalc.length} employees`);
+      }
 
       // 2. Define the Aggregation Pipeline
       // This pipeline will perform all calculations in the database.
