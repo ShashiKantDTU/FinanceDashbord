@@ -5,7 +5,7 @@ const mongoose = require('mongoose');
 const MONGODB_URI = 'mongodb://localhost:27017/finance-dashboard';
 
 // Configuration
-const SITE_ID = "6904c7970eb39a6f24ee32e9";
+const SITE_ID = "693b286ac2d34890662ee1ad";
 const CREATED_BY = "sunnypoddar1919@gmail.com";
 const START_DATE = new Date(2025, 5, 1); // June 2025
 const END_DATE = new Date(); // Today's date

@@ -1297,6 +1297,7 @@ router.get(
             // Return in the same format as before for frontend compatibility
             return {
               ...latestEmployeeData.toObject(),
+              siteName: employee.siteID?.sitename,
               totalWage: calculationResult.totalWage,
               totalPayouts: totalPayouts,
               carryForward: carryForward,

@@ -152,7 +152,7 @@ router.post("/home/addsite", authenticateAndTrack, async (req, res) => {
     // Check if user has reached the site limit based on their plan
     if (plan === "free" && userdata.site.length >= 1) {
       return res.status(403).json({
-        message: `${currentPlanLimits.displayName} has limit of ${maxSites} active site(s) only. To manage multiple sites, please upgrade your plan.`,
+        message: `Free plan has limit of 1 active site(s) only. To manage multiple sites, please upgrade your plan.`,
       });
     }
 
@@ -176,6 +176,7 @@ router.post("/home/addsite", authenticateAndTrack, async (req, res) => {
     } catch (userSaveError) {
       // If updating user fails, remove the orphaned site
       await Site.findByIdAndDelete(savedSite._id);
+      console.log(userSaveError);
       return res.status(500).json({
         message: "Error linking site to user",
         details: userSaveError.message,
@@ -187,6 +188,7 @@ router.post("/home/addsite", authenticateAndTrack, async (req, res) => {
       site: savedSite,
     });
   } catch (error) {
+    console.log(error);
     res.status(500).json({
       error: "Error creating site",
       details: error.message,
