@@ -155,7 +155,12 @@ router.get('/dashboard', authenticateSuperAdmin, async (req, res) => {
                 { _id: { $in: userIds } },
                 { phoneNumber: { $in: userPhones } }
             ]
-        }).select('_id name phoneNumber plan isTrial acquisition');
+        })
+        .select('_id name phoneNumber plan isTrial acquisition stats site')
+        .populate({
+            path: 'site',
+            select: 'sitename stats.employeeCount isActive'
+        });
         
         // Create maps for both ID and phone lookups
         const userMapById = new Map(users.map(u => [u._id.toString(), u]));
@@ -167,15 +172,35 @@ router.get('/dashboard', authenticateSuperAdmin, async (req, res) => {
             let userPlan = 'unknown';
             let isTrial = false;
             let acquisition = null;
+            let totalSites = 0;
+            let totalLaborers = 0;
+            let sites = [];
             
+            // Helper to extract stats from found user
+            const extractUserStats = (foundUser) => {
+                userName = foundUser.name || foundUser.phoneNumber;
+                userPlan = foundUser.plan || 'unknown';
+                isTrial = foundUser.isTrial || false;
+                acquisition = foundUser.acquisition || null;
+                // [Optimized] Read directly from Calculate-on-Write cache
+                totalLaborers = foundUser.stats?.totalActiveLabors || 0;
+                totalSites = foundUser.site ? foundUser.site.length : 0;
+                
+                // Map specific site counts if available
+                if (foundUser.site && foundUser.site.length > 0) {
+                    sites = foundUser.site.map(s => ({
+                        sitename: s.sitename,
+                        count: s.stats?.employeeCount || 0, // [Optimized] Cached site count
+                        isActive: s.isActive
+                    }));
+                }
+            };
+
             // Try to get user by ID first
             if (user.mainUserId) {
                 const foundUser = userMapById.get(user.mainUserId.toString());
                 if (foundUser) {
-                    userName = foundUser.name || foundUser.phoneNumber;
-                    userPlan = foundUser.plan || 'unknown';
-                    isTrial = foundUser.isTrial || false;
-                    acquisition = foundUser.acquisition || null;
+                    extractUserStats(foundUser);
                 }
             }
             
@@ -183,10 +208,7 @@ router.get('/dashboard', authenticateSuperAdmin, async (req, res) => {
             if (!userName && user._id) {
                 const foundUser = userMapByPhone.get(user._id);
                 if (foundUser) {
-                    userName = foundUser.name || foundUser.phoneNumber;
-                    userPlan = foundUser.plan || 'unknown';
-                    isTrial = foundUser.isTrial || false;
-                    acquisition = foundUser.acquisition || null;
+                    extractUserStats(foundUser);
                 }
             }
             
@@ -201,6 +223,9 @@ router.get('/dashboard', authenticateSuperAdmin, async (req, res) => {
                 plan: userPlan,
                 isTrial: isTrial,
                 acquisition: acquisition,
+                totalSites: totalSites,       // NEW: Site count
+                totalLaborers: totalLaborers, // NEW: Cached employee count
+                sites: sites,                 // NEW: Per-site breakdown
                 totalRequests: user.totalRequests,
                 totalDataBytes: user.totalDataBytes,
                 endpointCount: user.uniqueEndpoints.length,
@@ -526,7 +551,12 @@ router.get('/new-users', authenticateSuperAdmin, async (req, res) => {
         // Get user details from User collection (single query)
         const newUsersFromDB = await User.find({
             phoneNumber: { $in: newUserPhones }
-        }).select('name phoneNumber email createdAt plan planActivatedAt site supervisors isTrial acquisition');
+        })
+        .select('name phoneNumber email createdAt plan planActivatedAt site supervisors isTrial acquisition stats')
+        .populate({
+            path: 'site',
+            select: 'sitename stats.employeeCount isActive'
+        });
 
         // Create a map for quick lookup
         const userMap = new Map(newUsersFromDB.map(u => [u.phoneNumber, u]));
@@ -539,6 +569,13 @@ router.get('/new-users', authenticateSuperAdmin, async (req, res) => {
             const user = userMap.get(phone);
             const aggData = aggDataMap.get(phone);
             
+            // [Optimized] Read sites and stats from cache
+            const sites = user && user.site ? user.site.map(s => ({
+                sitename: s.sitename,
+                count: s.stats?.employeeCount || 0,
+                isActive: s.isActive
+            })) : [];
+
             return {
                 phone: phone,
                 name: user ? (user.name || phone) : phone,
@@ -550,6 +587,8 @@ router.get('/new-users', authenticateSuperAdmin, async (req, res) => {
                 registeredAt: user ? user.createdAt : null,
                 siteCount: user ? (user.site ? user.site.length : 0) : 0,
                 supervisorCount: user ? (user.supervisors ? user.supervisors.length : 0) : 0,
+                totalLaborers: user ? (user.stats?.totalActiveLabors || 0) : 0, // NEW: Cached employee count
+                sites: sites, // NEW: Per-site breakdown
                 firstApiUsage: aggData.firstTimestamp,
                 firstEndpoint: aggData.firstEndpoint,
                 firstMethod: aggData.firstMethod,

@@ -124,6 +124,12 @@ const userSchema = new mongoose.Schema(
       default: "en",
       required: false, // Optional - defaults to 'en' if not provided
     },
+    // 👇 Cached stats for Calculate-on-Write optimization
+    // These are updated when employees are added/removed, avoiding expensive aggregations on dashboard
+    stats: {
+      totalActiveLabors: { type: Number, default: 0 }, // Total employees across ALL active sites for current month
+    },
+
     // 👇 Acquisition/Attribution Tracking - How user discovered the app
     acquisition: {
       // Core fields (always present)

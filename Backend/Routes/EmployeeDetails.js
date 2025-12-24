@@ -10,7 +10,7 @@ const {
   validateBasicParams,
 } = require("../Utils/Jobs");
 const { trackOptimizedChanges } = require("../Utils/OptimizedChangeTracker");
-const { latestEmpSerialNumber } = require("../Utils/EmployeeUtils");
+const { latestEmpSerialNumber, updateEmployeeCounts } = require("../Utils/EmployeeUtils");
 const { authenticateAndTrack } = require("../Middleware/usageTracker");
 const { pendingAttendance } = require("../Utils/EmployeeUtils");
 const { markEmployeesForRecalculation } = require("../Utils/Jobs");
@@ -253,6 +253,12 @@ router.post("/addemployee", authenticateAndTrack, async (req, res) => {
     // Save the new employee
     const newEmployee = new employeeSchema(newEmployeeData);
     const savedEmployee = await newEmployee.save();
+
+    // [Calculate-on-Write] Trigger counter update for Site and User
+    // Uses setImmediate so user gets response fast, while DB updates in background
+    setImmediate(() => {
+      updateEmployeeCounts(siteID.trim(), req.user.id, 1);
+    });
 
     // console.log(`✅ Employee ${newEmpId} created successfully`);
     // Track the addition of the new employee using Optimized Change Tracker
@@ -572,6 +578,27 @@ router.delete("/deleteemployee", authenticateAndTrack, async (req, res) => {
       }
     }
 
+    // [Calculate-on-Write] Trigger counter update for Site and User
+    // For deletions, we decrement by 1 per unique employee
+    // Note: deletedEmployees represents unique employee records removed from current month context
+    if (deletedEmployees.length > 0) {
+      // Group by siteID in case of deletePreviousMonth deleting from multiple sites
+      const siteCounts = {};
+      deletedEmployees.forEach(emp => {
+        // Only count once per unique employee being deleted from current month
+        if (!siteCounts[emp.siteID]) {
+          siteCounts[emp.siteID] = 0;
+        }
+        // For deletePreviousMonth=true, we still only decrement once per unique employee
+        // since we're counting "active employees" not "total records"
+        siteCounts[emp.siteID] = 1; // Always 1 per employee
+      });
+
+      Object.entries(siteCounts).forEach(([sID, count]) => {
+        setImmediate(() => updateEmployeeCounts(sID, req.user.id, -count));
+      });
+    }
+
     // Prepare response
     const deletionSummary = {
       success: true,
@@ -770,6 +797,19 @@ router.post("/bulk-deleteemployees", authenticateAndTrack, async (req, res) => {
     const recalculationWarnings = changeTrackingResults.filter(
       (r) => r.recalculationWarning
     );
+
+    // [Calculate-on-Write] Trigger counter update for Site and User
+    // Group by siteID to make efficient bulk updates per site
+    if (deletedEmployees.length > 0) {
+      const siteCounts = {};
+      deletedEmployees.forEach(emp => {
+        siteCounts[emp.siteID] = (siteCounts[emp.siteID] || 0) + 1;
+      });
+
+      Object.entries(siteCounts).forEach(([sID, count]) => {
+        setImmediate(() => updateEmployeeCounts(sID, req.user.id, -count));
+      });
+    }
 
     const response = {
       success: true,
@@ -1141,6 +1181,14 @@ router.post("/importemployees", authenticateAndTrack, async (req, res) => {
     // console.log(
     //   `✅ Import completed: ${successfulImports.length} successful, ${failedImports.length} failed`
     // );
+
+    // [Calculate-on-Write] Trigger counter update for Site and User
+    // Increment by the total count of successfully imported employees
+    if (successfulImports.length > 0) {
+      setImmediate(() => {
+        updateEmployeeCounts(siteID.trim(), req.user.id, successfulImports.length);
+      });
+    }
 
     const response = {
       success: true,

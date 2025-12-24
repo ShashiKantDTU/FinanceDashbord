@@ -4,6 +4,7 @@ const { google } = require('googleapis');
 const { sendMonthlyReport, sendWeeklyReport } = require('../scripts/whatsappReport');
 const siteSchema = require('../models/Siteschema');
 const CronJobLog = require('../models/CronJobLogSchema');
+const { recalculateCounters } = require('../Utils/CounterRecalculator');
 
 // Configurable knobs (module-level constants)
 const EXPIRED_BATCH_SIZE = 50; // users per batch when processing expired cancellations
@@ -125,6 +126,10 @@ class CronJobService {
         // API Call Tracking: Cleanup expired users every 6 hours
         // Note: Actions are executed IMMEDIATELY when threshold is hit (not queued)
         this.scheduleJob('api-tracking-cleanup', '0 */6 * * *', this.cleanupExpiredApiTracking.bind(this));
+
+        // Employee Counter Sync: Sunday at 4 AM IST (Self-healing for Calculate-on-Write)
+        // Fixes any drift in cached Site.stats.employeeCount and User.stats.totalActiveLabors
+        this.scheduleJob('weekly-counter-sync', '0 4 * * 0', this.syncEmployeeCounters.bind(this));
 
         console.log('✅ All cron jobs initialized');
     }
@@ -1627,9 +1632,37 @@ class CronJobService {
         await this.cleanupExpiredApiTracking();
     }
 
-    
+    // ============================================
+    // EMPLOYEE COUNTER SYNC (Self-Healing)
+    // ============================================
 
+    /**
+     * Sync employee counters for Sites and Users.
+     * Fixes any drift in cached values using chained algorithm.
+     * Schedule: Sundays at 4 AM IST
+     */
+    async syncEmployeeCounters() {
+        console.log('🔄 Running weekly employee counter sync...');
+        
+        try {
+            const result = await recalculateCounters();
+            
+            if (result.success) {
+                console.log(`✅ Counter sync complete. Fixed ${result.sitesUpdated} Sites, ${result.usersUpdated} Users.`);
+            } else {
+                console.error('❌ Counter sync failed:', result.error);
+            }
+        } catch (error) {
+            console.error('❌ Error in counter sync:', error.message);
+            throw error;
+        }
+    }
 
+    // Manual trigger for counter sync
+    async manualTriggerCounterSync() {
+        console.log('🔧 Manual trigger: Employee Counter Sync');
+        await this.syncEmployeeCounters();
+    }
 }
 
 // Create singleton instance

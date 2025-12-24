@@ -14,6 +14,7 @@ The cron job system automatically handles three main scenarios:
 - **Expired Users Check**: Every hour `0 * * * *`
 - **Grace Expired Check**: Every hour `0 * * * *` 
 - **Stuck Grace Cleanup**: Daily at 2 AM `0 2 * * *`
+- **Employee Counter Sync**: Sundays at 4 AM `0 4 * * 0` (Self-healing for Calculate-on-Write)
 
 ## Key Feature: Final Verification for Grace Period
 

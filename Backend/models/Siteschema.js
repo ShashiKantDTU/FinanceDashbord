@@ -26,6 +26,11 @@ const siteSchema = new mongoose.Schema(
       type: String, // Email of creator
       required: true,
     },
+    // 👇 Cached stats for Calculate-on-Write optimization
+    // These are updated when employees are added/removed, avoiding expensive aggregations on dashboard
+    stats: {
+      employeeCount: { type: Number, default: 0 }, // Cached count of current month employees on this site
+    },
   },
   {
     timestamps: true,

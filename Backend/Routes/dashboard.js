@@ -5,6 +5,7 @@ const Employee = require("../models/EmployeeSchema");
 const { authenticateAndTrack } = require("../Middleware/usageTracker");
 const { Supervisor } = require("../models/supervisorSchema");
 const PLAN_LIMITS = require("../config/planLimits");
+const { updateEmployeeCounts } = require("../Utils/EmployeeUtils");
 // const { sendWeeklyReport } = require("../scripts/whatsappReport");
 
 const router = express.Router();
@@ -37,6 +38,7 @@ router.get("/home", authenticateAndTrack, async (req, res) => {
 });
 
 // NEW, SEPARATE ENDPOINT FOR THE MODERN DASHBOARD
+// [Calculate-on-Write] OPTIMIZED: Now uses cached counters instead of expensive aggregation
 router.get("/v2/home", authenticateAndTrack, async (req, res) => {
   try {
     const user = req.user;
@@ -46,11 +48,14 @@ router.get("/v2/home", authenticateAndTrack, async (req, res) => {
         .json({ success: false, message: "Authentication required." });
     }
 
-    // 1. Fetch the user and their site details in one go.
-    const userdata = await User.findById(user.id).populate({
-      path: "site",
-      select: "sitename createdAt isActive", // Only select fields the new UI needs.
-    });
+    // 1. Fetch the user (with stats) and their site details (with stats) in one go.
+    // [Calculate-on-Write] We now select 'stats' fields which are pre-calculated
+    const userdata = await User.findById(user.id)
+      .select("name role site stats") // Include user stats
+      .populate({
+        path: "site",
+        select: "sitename createdAt isActive stats", // Include site stats with cached employeeCount
+      });
 
     if (!userdata) {
       return res
@@ -58,52 +63,30 @@ router.get("/v2/home", authenticateAndTrack, async (req, res) => {
         .json({ success: false, message: "User not found." });
     }
 
-    // 2. Efficiently get employee counts for all sites.
-    const now = new Date();
-    const currentMonth = now.getMonth() + 1;
-    const currentYear = now.getFullYear();
-    const siteIds = userdata.site.map((s) => s._id);
+    // 2. [Calculate-on-Write] NO MORE AGGREGATION NEEDED!
+    // Employee counts are now cached in site.stats.employeeCount
+    // This reduces database load from O(N) aggregation to O(1) reads
 
-    let countMap = new Map();
-    if (siteIds.length > 0) {
-      const employeeCounts = await Employee.aggregate([
-        {
-          $match: {
-            siteID: { $in: siteIds },
-            month: currentMonth,
-            year: currentYear,
-          },
-        },
-        { $group: { _id: "$siteID", count: { $sum: 1 } } },
-      ]);
-      countMap = new Map(
-        employeeCounts.map((item) => [item._id.toString(), item.count])
-      );
-    }
-
-    // 3. Prepare the clean 'sites' array with counts included.
+    // 3. Prepare the clean 'sites' array reading counts directly from cache
     const sitesWithCounts = userdata.site.map((site) => ({
       _id: site._id,
       sitename: site.sitename,
       createdAt: site.createdAt,
       isActive: site.isActive,
-      employeeCount: countMap.get(site._id.toString()) || 0,
+      // READ DIRECTLY FROM CACHE - no more aggregation!
+      employeeCount: site.stats?.employeeCount || 0,
     }));
 
-    // 4. Calculate summary totals.
-    const totalEmployees = Array.from(countMap.values()).reduce(
-      (sum, count) => sum + count,
-      0
-    );
-
-    // 5. Construct the final, clean payload.
+    // 4. Construct the final, clean payload.
+    // [Calculate-on-Write] Total employees read directly from user stats cache
     const responsePayload = {
       userName: userdata.name,
       userRole: userdata.role,
       sites: sitesWithCounts,
       summary: {
-        totalSites: siteIds.length,
-        totalEmployees: totalEmployees,
+        totalSites: userdata.site.length,
+        // READ DIRECTLY FROM CACHE - no more aggregation!
+        totalEmployees: userdata.stats?.totalActiveLabors || 0,
       },
     };
 
@@ -239,6 +222,9 @@ router.delete("/delete-site", authenticateAndTrack, async (req, res) => {
       });
     }
 
+    // [Calculate-on-Write] Read the cached employee count BEFORE deleting the site
+    const countToRemove = site.stats?.employeeCount || 0;
+
     // Remove site from database
     await Site.findByIdAndDelete(siteId);
 
@@ -251,6 +237,15 @@ router.delete("/delete-site", authenticateAndTrack, async (req, res) => {
 
     // remove all supervisors associated with this site
     await Supervisor.deleteMany({ site: siteId });
+
+    // [Calculate-on-Write] Update User's Total Count
+    // We directly update here instead of using updateEmployeeCounts
+    // because the site is already deleted (no site counter to update)
+    if (countToRemove > 0) {
+      await User.findByIdAndUpdate(user.id, { 
+        $inc: { "stats.totalActiveLabors": -countToRemove } 
+      });
+    }
 
     res.status(200).json({
       message: "Site deleted successfully",

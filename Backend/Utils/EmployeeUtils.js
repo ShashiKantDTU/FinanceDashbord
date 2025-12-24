@@ -3,11 +3,57 @@
  *
  * This module contains utility functions for employee management.
  *
- * Remaining Legacy Functions:
+ * Functions:
  * - latestEmpSerialNumber: Used for generating new employee IDs
+ * - pendingAttendance: Get employees with pending attendance
+ * - updateEmployeeCounts: Calculate-on-Write counter updates for Site and User
  */
 
 const EmployeeSchema = require("../models/EmployeeSchema");
+const User = require("../models/Userschema");
+const Site = require("../models/Siteschema");
+
+/**
+ * Updates employee counters for both Site and User using atomic $inc operations.
+ * This is the core of the "Calculate on Write" optimization strategy.
+ * 
+ * When to call:
+ * - addemployee: change = +1
+ * - deleteemployee: change = -1 
+ * - bulk-deleteemployees: change = -N (total deleted from that site)
+ * - importemployees: change = +N (total successfully imported)
+ * - delete-site: called separately, uses the site's cached count
+ * 
+ * @param {String} siteId - The ID of the site where action happened
+ * @param {String} userId - The ID of the site owner
+ * @param {Number} change - Positive to add, negative to remove (e.g., 1, -1, -50)
+ * @returns {Promise<void>}
+ */
+const updateEmployeeCounts = async (siteId, userId, change) => {
+  if (!change || change === 0) return;
+  if (!siteId || !userId) {
+    console.warn("⚠️ updateEmployeeCounts called with missing siteId or userId");
+    return;
+  }
+
+  try {
+    // 1. Update the specific Site's cached count (atomic operation)
+    await Site.findByIdAndUpdate(siteId, { 
+      $inc: { "stats.employeeCount": change } 
+    });
+
+    // 2. Update the User's global total (atomic operation)
+    await User.findByIdAndUpdate(userId, { 
+      $inc: { "stats.totalActiveLabors": change } 
+    });
+
+    console.log(`📊 Counter updated: Site ${siteId} & User ${userId} -> ${change > 0 ? '+' : ''}${change}`);
+  } catch (error) {
+    // Log but don't throw - we don't want counter updates to block the main response
+    console.error("⚠️ Counter update failed:", error.message);
+    // Consider: Add this to a retry queue or alert monitoring system
+  }
+};
 
 /**
  * Get the latest employee serial number for generating new employee IDs
@@ -123,4 +169,5 @@ const pendingAttendance = async (date, month, year, siteID) => {
 module.exports = {
   latestEmpSerialNumber,
   pendingAttendance,
+  updateEmployeeCounts,
 };
