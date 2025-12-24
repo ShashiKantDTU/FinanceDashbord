@@ -46,6 +46,8 @@ async function verifyAndroidPurchase(packageName, purchaseToken, requestId = 'cr
                 mappedProductId = 'pro';
             } else if (lineItem.productId === 'haazri_automate') {
                 mappedProductId = 'premium';
+            } else if (lineItem.productId === 'haazri_lite' || lineItem.productId === 'lite_monthly') {
+                mappedProductId = 'lite';
             }
 
             console.log(`[${requestId}] ✅ Verification successful: ${originalProductId} → ${mappedProductId}, expires: ${lineItem.expiryTime}`);

@@ -211,71 +211,6 @@ const getUserUsageStats = async (userId, days = 30) => {
 };
 
 /**
- * Check if user has exceeded their plan limits
- */
-const checkUsageLimits = async (userId, userPlan) => {
-  try {
-    // Check if ApiUsageLog model is available
-    if (!ApiUsageLog) {
-      throw new Error('Usage tracking not available: MONGO_URI_LOGS not configured');
-    }
-
-    // Define plan limits (adjust as needed)
-    const planLimits = {
-      free: {
-        requestsPerMonth: 1000,
-        dataPerMonth: 10 * 1024 * 1024 // 10MB
-      },
-      pro: {
-        requestsPerMonth: 10000,
-        dataPerMonth: 100 * 1024 * 1024 // 100MB
-      },
-      premium: {
-        requestsPerMonth: 100000,
-        dataPerMonth: 1024 * 1024 * 1024 // 1GB
-      }
-    };
-
-    const currentMonth = new Date();
-    currentMonth.setDate(1);
-    currentMonth.setHours(0, 0, 0, 0);
-
-    const usage = await ApiUsageLog.aggregate([
-      {
-        $match: {
-          mainUserId: userId,
-          timestamp: { $gte: currentMonth }
-        }
-      },
-      {
-        $group: {
-          _id: null,
-          totalRequests: { $sum: 1 },
-          totalDataBytes: { $sum: '$responseSizeBytes' }
-        }
-      }
-    ]);
-
-    const currentUsage = usage[0] || { totalRequests: 0, totalDataBytes: 0 };
-    const limits = planLimits[userPlan] || planLimits.free;
-
-    return {
-      withinLimits: currentUsage.totalRequests <= limits.requestsPerMonth &&
-        currentUsage.totalDataBytes <= limits.dataPerMonth,
-      usage: currentUsage,
-      limits: limits,
-      percentageUsed: {
-        requests: (currentUsage.totalRequests / limits.requestsPerMonth) * 100,
-        data: (currentUsage.totalDataBytes / limits.dataPerMonth) * 100
-      }
-    };
-  } catch (error) {
-    console.error('Error checking usage limits:', error);
-    throw error;
-  }
-};
-
-/**
  * Combined middleware that does authentication first, then usage tracking
  * Use this instead of applying authenticateToken and usageTracker separately
  */
@@ -299,6 +234,5 @@ module.exports = {
   usageTracker,
   enhancedUsageTracker,
   getUserUsageStats,
-  checkUsageLimits,
   authenticateAndTrack
 };

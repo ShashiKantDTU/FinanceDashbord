@@ -6,7 +6,7 @@ const User = require('../models/Userschema');
 const Employee = require('../models/EmployeeSchema');
 const Site = require('../models/Siteschema');
 const { authenticateAndTrack } = require('../Middleware/usageTracker');
-const { getUserUsageStats, checkUsageLimits } = require('../Middleware/usageTracker');
+const { getUserUsageStats } = require('../Middleware/usageTracker');
 const { logConnection } = require('../config/logDatabase');
 const { authenticateSuperAdmin } = require('../Middleware/superAdminAuth');
 
@@ -1057,14 +1057,12 @@ router.get('/my-stats', authenticateAndTrack, async (req, res) => {
         const days = parseInt(req.query.days) || 30;
 
         const stats = await getUserUsageStats(userId, days);
-        const limits = await checkUsageLimits(userId, req.user.plan);
 
         res.json({
             success: true,
             data: {
                 period: `Last ${days} days`,
                 usage: stats,
-                limits: limits,
                 plan: req.user.plan
             }
         });

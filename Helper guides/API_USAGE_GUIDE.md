@@ -447,7 +447,7 @@ Get current user's own usage statistics.
 
 **Requires**: Regular user authentication via `authenticateAndTrack`
 
-**Response**: User's usage stats plus plan limit status
+**Response**: User's usage statistics (total requests, data transferred, unique endpoints)
 
 ---
 
@@ -619,29 +619,6 @@ Get usage statistics for a specific user.
 - `days`: Number of days to look back (default: 30)
 
 **Returns**: Aggregated stats object
-
----
-
-#### `checkUsageLimits(userId, userPlan)`
-
-Check if user has exceeded plan limits.
-
-**Plan Limits**:
-| Plan | Requests/Month | Data/Month |
-|------|----------------|------------|
-| free | 1,000 | 10 MB |
-| pro | 10,000 | 100 MB |
-| premium | 100,000 | 1 GB |
-
-**Returns**:
-```json
-{
-  "withinLimits": true,
-  "usage": { "totalRequests": 500, "totalDataBytes": 5000000 },
-  "limits": { "requestsPerMonth": 10000, "dataPerMonth": 104857600 },
-  "percentageUsed": { "requests": 5, "data": 4.76 }
-}
-```
 
 ---
 
