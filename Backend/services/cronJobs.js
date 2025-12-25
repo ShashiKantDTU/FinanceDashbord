@@ -4,7 +4,7 @@ const { google } = require('googleapis');
 const { sendMonthlyReport, sendWeeklyReport } = require('../scripts/whatsappReport');
 const siteSchema = require('../models/Siteschema');
 const CronJobLog = require('../models/CronJobLogSchema');
-const { recalculateCounters } = require('../Utils/CounterRecalculator');
+const { recalculateCounters, monthlyCounterReset } = require('../Utils/CounterRecalculator');
 
 // Configurable knobs (module-level constants)
 const EXPIRED_BATCH_SIZE = 50; // users per batch when processing expired cancellations
@@ -132,6 +132,10 @@ class CronJobService {
         // Employee Counter Sync: Sunday at 4 AM IST (Self-healing for Calculate-on-Write)
         // Fixes any drift in cached Site.stats.employeeCount and User.stats.totalActiveLabors
         this.scheduleJob('weekly-counter-sync', '0 4 * * 0', this.syncEmployeeCounters.bind(this));
+
+        // Monthly Counter Reset: 1st day of every month at 12:00 AM (midnight)
+        // Resets counters for the new month since employees need to be re-imported
+        this.scheduleJob('monthly-counter-reset', '0 0 1 * *', this.monthlyCounterReset.bind(this));
 
         console.log('✅ All cron jobs initialized');
     }
@@ -1664,6 +1668,33 @@ class CronJobService {
     async manualTriggerCounterSync() {
         console.log('🔧 Manual trigger: Employee Counter Sync');
         await this.syncEmployeeCounters();
+    }
+
+    /**
+     * Monthly counter reset - runs on 1st of each month at midnight.
+     * Resets counters for the new month.
+     */
+    async monthlyCounterReset() {
+        console.log('🗓️ Running monthly counter reset...');
+        
+        try {
+            const result = await monthlyCounterReset();
+            
+            if (result.success) {
+                console.log(`✅ Monthly reset complete. Reset ${result.sitesUpdated} Sites, ${result.usersUpdated} Users.`);
+            } else {
+                console.error('❌ Monthly reset failed:', result.error);
+            }
+        } catch (error) {
+            console.error('❌ Error in monthly counter reset:', error.message);
+            throw error;
+        }
+    }
+
+    // Manual trigger for monthly counter reset
+    async manualTriggerMonthlyReset() {
+        console.log('🔧 Manual trigger: Monthly Counter Reset');
+        await this.monthlyCounterReset();
     }
 }
 

@@ -358,14 +358,27 @@ router.get("/plan", authenticateToken, async (req, res) => {
       maxActiveSites: req.user.enterpriseLimits?.maxActiveSites || 10,
       maxEmployeesPerSite: req.user.enterpriseLimits?.maxEmployeesPerSite || 100,
     };
+    // Feature flags for enterprise
+    response.isWhatsApp = req.user.enterpriseLimits?.isWhatsApp ?? true;
+    response.isPDF = req.user.enterpriseLimits?.isPDF ?? true;
+    response.isExcel = req.user.enterpriseLimits?.isExcel ?? true;
+    response.isSupervisorAccess = req.user.enterpriseLimits?.isSupervisorAccess ?? true;
+    response.isChangeTracking = req.user.enterpriseLimits?.isChangeTracking ?? true;
   }
 
   // Add limits for business plan (uses total employees, not per-site)
   if (req.user.plan === "business") {
     response.limits = {
       maxActiveSites: req.user.businessLimits?.maxActiveSites || 10,
-      maxTotalEmployees: req.user.businessLimits?.maxTotalEmployees || 100,
+      maxGlobalEmployees: req.user.businessLimits?.maxTotalEmployees || 100,
+      currentTotalEmployees: req.user.stats?.totalActiveLabors || 0, // From Calculate-on-Write cache
     };
+    // Feature flags for business
+    response.isWhatsApp = req.user.businessLimits?.isWhatsApp ?? true;
+    response.isPDF = req.user.businessLimits?.isPDF ?? true;
+    response.isExcel = req.user.businessLimits?.isExcel ?? true;
+    response.isSupervisorAccess = req.user.businessLimits?.isSupervisorAccess ?? true;
+    response.isChangeTracking = req.user.businessLimits?.isChangeTracking ?? true;
   }
 
   // Only include isTrial, isCancelled, isGrace, and purchaseToken for normal users, not supervisors

@@ -45,12 +45,24 @@ const userSchema = new mongoose.Schema(
     enterpriseLimits: {
       maxActiveSites: { type: Number, default: 10 }, // Custom limit for active sites
       maxEmployeesPerSite: { type: Number, default: 100 }, // Custom limit for employees per site
+      // Feature flags
+      isWhatsApp: { type: Boolean, default: true },
+      isPDF: { type: Boolean, default: true },
+      isExcel: { type: Boolean, default: true },
+      isSupervisorAccess: { type: Boolean, default: true },
+      isChangeTracking: { type: Boolean, default: true },
     },
     // 👇 Business Custom Plan Limits (only used when plan === 'business')
     // Business plan uses TOTAL employees across all sites, not per-site limits
     businessLimits: {
       maxActiveSites: { type: Number, default: 10 }, // Custom limit for active sites
       maxTotalEmployees: { type: Number, default: 100 }, // Total employees across ALL active sites
+      // Feature flags
+      isWhatsApp: { type: Boolean, default: true },
+      isPDF: { type: Boolean, default: true },
+      isExcel: { type: Boolean, default: true },
+      isSupervisorAccess: { type: Boolean, default: true },
+      isChangeTracking: { type: Boolean, default: true },
     },
     isTrial: { type: Boolean, default: false },
     isCancelled: { type: Boolean, default: false },

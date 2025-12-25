@@ -5,7 +5,7 @@ const cronJobLogSchema = new mongoose.Schema({
     jobName: {
         type: String,
         required: true,
-        enum: ['weekly-week1', 'weekly-week2', 'weekly-week3', 'weekly-week4', 'weekly-feb28', 'monthly', 'weekly-counter-sync']
+        enum: ['weekly-week1', 'weekly-week2', 'weekly-week3', 'weekly-week4', 'weekly-feb28', 'monthly', 'weekly-counter-sync', 'monthly-counter-reset']
     },
     executionDate: {
         type: Date,

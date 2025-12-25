@@ -87,6 +87,7 @@ const authenticateToken = async (req, res, next) => {
                     req.user.purchaseToken = user.purchaseToken || null;
                     req.user.enterpriseLimits = user.enterpriseLimits; // Add enterprise limits
                     req.user.businessLimits = user.businessLimits; // Add business limits
+                    req.user.stats = user.stats; // Add Calculate-on-Write cached stats
                     req.user.whatsAppReportsEnabled = user.whatsAppReportsEnabled || false;
                     req.user.whatsAppReportPhone = user.whatsAppReportPhone || null;
                 } else {

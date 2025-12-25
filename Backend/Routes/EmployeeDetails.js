@@ -10,7 +10,7 @@ const {
   validateBasicParams,
 } = require("../Utils/Jobs");
 const { trackOptimizedChanges } = require("../Utils/OptimizedChangeTracker");
-const { latestEmpSerialNumber, updateEmployeeCounts } = require("../Utils/EmployeeUtils");
+const { latestEmpSerialNumber, updateEmployeeCounts, isCurrentMonth } = require("../Utils/EmployeeUtils");
 const { authenticateAndTrack } = require("../Middleware/usageTracker");
 const { pendingAttendance } = require("../Utils/EmployeeUtils");
 const { markEmployeesForRecalculation } = require("../Utils/Jobs");
@@ -255,10 +255,12 @@ router.post("/addemployee", authenticateAndTrack, async (req, res) => {
     const savedEmployee = await newEmployee.save();
 
     // [Calculate-on-Write] Trigger counter update for Site and User
-    // Uses setImmediate so user gets response fast, while DB updates in background
-    setImmediate(() => {
-      updateEmployeeCounts(siteID.trim(), req.user.id, 1);
-    });
+    // ONLY update counters if adding to current month (counters track current month employees)
+    if (isCurrentMonth(month, year)) {
+      setImmediate(() => {
+        updateEmployeeCounts(siteID.trim(), req.user.id, 1);
+      });
+    }
 
     // console.log(`✅ Employee ${newEmpId} created successfully`);
     // Track the addition of the new employee using Optimized Change Tracker
@@ -579,19 +581,15 @@ router.delete("/deleteemployee", authenticateAndTrack, async (req, res) => {
     }
 
     // [Calculate-on-Write] Trigger counter update for Site and User
-    // For deletions, we decrement by 1 per unique employee
-    // Note: deletedEmployees represents unique employee records removed from current month context
-    if (deletedEmployees.length > 0) {
+    // ONLY update counters if deleting from current month
+    if (deletedEmployees.length > 0 && isCurrentMonth(month, year)) {
       // Group by siteID in case of deletePreviousMonth deleting from multiple sites
       const siteCounts = {};
       deletedEmployees.forEach(emp => {
-        // Only count once per unique employee being deleted from current month
         if (!siteCounts[emp.siteID]) {
           siteCounts[emp.siteID] = 0;
         }
-        // For deletePreviousMonth=true, we still only decrement once per unique employee
-        // since we're counting "active employees" not "total records"
-        siteCounts[emp.siteID] = 1; // Always 1 per employee
+        siteCounts[emp.siteID] = 1; // 1 per employee
       });
 
       Object.entries(siteCounts).forEach(([sID, count]) => {
@@ -799,8 +797,8 @@ router.post("/bulk-deleteemployees", authenticateAndTrack, async (req, res) => {
     );
 
     // [Calculate-on-Write] Trigger counter update for Site and User
-    // Group by siteID to make efficient bulk updates per site
-    if (deletedEmployees.length > 0) {
+    // ONLY update counters if bulk deleting from current month
+    if (deletedEmployees.length > 0 && isCurrentMonth(month, year)) {
       const siteCounts = {};
       deletedEmployees.forEach(emp => {
         siteCounts[emp.siteID] = (siteCounts[emp.siteID] || 0) + 1;
@@ -1183,8 +1181,8 @@ router.post("/importemployees", authenticateAndTrack, async (req, res) => {
     // );
 
     // [Calculate-on-Write] Trigger counter update for Site and User
-    // Increment by the total count of successfully imported employees
-    if (successfulImports.length > 0) {
+    // ONLY update counters if importing to current month
+    if (successfulImports.length > 0 && isCurrentMonth(targetMonth, targetYear)) {
       setImmediate(() => {
         updateEmployeeCounts(siteID.trim(), req.user.id, successfulImports.length);
       });
@@ -2111,6 +2109,7 @@ router.get("/allemployeelist", authenticateAndTrack, async (req, res) => {
     return res.status(200).json({
       success: true,
       data: employeeList,
+      currentTotalEmployees: req.user.stats.totalEmployees,  // NEW: Total employees across ALL sites for this user
       message: `Fetched employee list for ${month}/${year} at site ${siteID}`,
     });
   } catch (error) {

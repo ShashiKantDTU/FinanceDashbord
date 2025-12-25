@@ -241,7 +241,8 @@ router.delete("/delete-site", authenticateAndTrack, async (req, res) => {
     // [Calculate-on-Write] Update User's Total Count
     // We directly update here instead of using updateEmployeeCounts
     // because the site is already deleted (no site counter to update)
-    if (countToRemove > 0) {
+    // ONLY decrement if the site was active (counters only track active sites)
+    if (countToRemove > 0 && site.isActive) {
       await User.findByIdAndUpdate(user.id, { 
         $inc: { "stats.totalActiveLabors": -countToRemove } 
       });

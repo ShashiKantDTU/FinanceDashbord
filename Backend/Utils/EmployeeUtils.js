@@ -14,6 +14,20 @@ const User = require("../models/Userschema");
 const Site = require("../models/Siteschema");
 
 /**
+ * Check if the given month/year matches the current month/year.
+ * Used to ensure counter updates only apply to current month employees.
+ * @param {number} month - Month to check (1-12)
+ * @param {number} year - Year to check
+ * @returns {boolean} True if it's the current month
+ */
+const isCurrentMonth = (month, year) => {
+    const now = new Date();
+    const currentMonth = now.getMonth() + 1; // getMonth() is 0-indexed
+    const currentYear = now.getFullYear();
+    return parseInt(month) === currentMonth && parseInt(year) === currentYear;
+};
+
+/**
  * Updates employee counters for both Site and User using atomic $inc operations.
  * This is the core of the "Calculate on Write" optimization strategy.
  * 
@@ -170,4 +184,5 @@ module.exports = {
   latestEmpSerialNumber,
   pendingAttendance,
   updateEmployeeCounts,
+  isCurrentMonth,
 };

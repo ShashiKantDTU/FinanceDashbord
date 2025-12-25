@@ -20,9 +20,10 @@ const CronJobLog = require('../models/CronJobLogSchema');
  * Recalculates all cached employee counters for Sites and Users.
  * Uses cursor-based streaming and bulkWrite for efficiency.
  * 
+ * @param {string} jobName - Optional job name for logging (default: 'weekly-counter-sync')
  * @returns {Promise<{success: boolean, sitesUpdated: number, usersUpdated: number}>}
  */
-const recalculateCounters = async () => {
+const recalculateCounters = async (jobName = 'weekly-counter-sync') => {
     console.time('⏱️ CounterRecalculation');
     const now = new Date();
     const currentMonth = now.getMonth() + 1;
@@ -121,7 +122,7 @@ const recalculateCounters = async () => {
         
         // Log to existing CronJobLog collection
         await CronJobLog.create({
-            jobName: 'weekly-counter-sync',
+            jobName: jobName,
             executionDate: now,
             status: 'completed',
             metadata: {
@@ -139,7 +140,7 @@ const recalculateCounters = async () => {
         
         // Log failure
         await CronJobLog.create({
-            jobName: 'weekly-counter-sync',
+            jobName: jobName,
             executionDate: now,
             status: 'failed',
             failures: [{ error: error.message, timestamp: new Date() }]
@@ -149,4 +150,15 @@ const recalculateCounters = async () => {
     }
 };
 
-module.exports = { recalculateCounters };
+/**
+ * Monthly counter reset - runs on 1st of each month at midnight.
+ * Recalculates all counters for the new month (which will be 0 or near-0
+ * since users haven't imported employees for the new month yet).
+ */
+const monthlyCounterReset = async () => {
+    console.log('🗓️ Monthly Counter Reset: New month started, recalculating counters...');
+    return await recalculateCounters('monthly-counter-reset');
+};
+
+module.exports = { recalculateCounters, monthlyCounterReset };
+
