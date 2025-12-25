@@ -75,6 +75,9 @@ app.use(cors(corsOptions));
 // Special middleware for Pub/Sub webhook - must come before express.json()
 app.use('/api/play-purchase/notifications', express.raw({ type: 'application/json' }));
 
+// Special middleware for Razorpay webhook - must come before express.json()
+app.use('/api/razorpay/webhook', express.raw({ type: 'application/json' }));
+
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
@@ -88,6 +91,7 @@ const employeeRoutes = require('./Routes/EmployeeDetails');
 const changeTrackingRoutes = require('./Routes/changeTracking');
 const detailedChangeTrackingRoutes = require('./Routes/detailedChangeTracking');
 const playPurchaseRoutes = require('./Routes/playPurchase');
+const razorpayPurchaseRoutes = require('./Routes/razorpayPurchase');
 const siteFinancialRoutes = require('./Routes/SiteFinancials');
 const usageRoutes = require('./Routes/usage');
 const superAdminAuthRoutes = require('./Routes/superAdminAuth');
@@ -127,6 +131,7 @@ app.use('/api/employee', employeeRoutes);
 app.use('/api/change-tracking', changeTrackingRoutes);
 app.use('/api/detailed-change-tracking', detailedChangeTrackingRoutes);
 app.use('/api/play-purchase', playPurchaseRoutes);
+app.use('/api/razorpay', razorpayPurchaseRoutes);
 app.use('/api/financials', siteFinancialRoutes);
 app.use('/api/usage', usageRoutes);
 app.use('/api/super-admin', superAdminAuthRoutes);

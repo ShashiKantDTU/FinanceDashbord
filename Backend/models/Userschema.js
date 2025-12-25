@@ -73,10 +73,18 @@ const userSchema = new mongoose.Schema(
     isPaymentVerified: { type: Boolean, default: false },
     planSource: {
       type: String,
-      enum: ["google_play", "app_store", "web", "manual"],
+      enum: ["google_play", "app_store", "web", "web_razorpay", "manual", "free"],
       default: null,
     },
     purchaseToken: { type: String, default: null },
+    // 👇 Razorpay subscription details (only used when planSource === 'web_razorpay')
+    razorpayDetails: {
+      customerId: { type: String, default: null },       // Razorpay customer ID (cust_...)
+      subscriptionId: { type: String, default: null },   // Razorpay subscription ID (sub_...)
+      planId: { type: String, default: null },           // Razorpay plan ID (plan_...)
+      status: { type: String, default: null },           // "active", "created", "authenticated", etc.
+      nextBillDate: { type: Date, default: null },       // Next billing date from Razorpay
+    },
     // Store the last purchase token for renewal verification
     lastPurchaseToken: { type: String, default: null },
     planHistory: {
