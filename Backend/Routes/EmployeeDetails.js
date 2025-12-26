@@ -1868,13 +1868,13 @@ router.get(
 
 
     if (role === "supervisor") {
-      const supervisorsite = req.user.site[0]?.toString().trim();
-      if (supervisorsite !== siteID) {
-        return res.status(403).json({
-          success: false,
-          error: "Forbidden. You do not have access to this site.",
-        });
-      }
+      // const supervisorsite = req.user.site[0]?.toString().trim();
+      // if (supervisorsite !== siteID) {
+      //   return res.status(403).json({
+      //     success: false,
+      //     error: "Forbidden. You do not have access to this site.",
+      //   });
+      // }
       // list of all employees with pending attendance for the given date, month, year and siteID
       // console.log(
       //   `🔍 Fetching employees with pending attendance for ${date}/${month}/${year} at site ${siteID}`
@@ -2109,7 +2109,47 @@ router.get("/allemployeelist", authenticateAndTrack, async (req, res) => {
     return res.status(200).json({
       success: true,
       data: employeeList,
-      currentTotalEmployees: req.user.stats.totalEmployees,  // NEW: Total employees across ALL sites for this user
+      currentTotalEmployees: req.user.stats?.totalEmployees || 0,  // NEW: Total employees across ALL sites for this user
+      message: `Fetched employee list for ${month}/${year} at site ${siteID}`,
+    });
+  } catch (error) {
+    console.error("❌ Error fetching employee list:", error);
+    return res.status(500).json({
+      success: false,
+      error: "Error fetching employee list.",
+      message: error.message,
+    });
+  }
+});
+
+
+// Fetch all employee list for a specific month and year
+router.get("/allemployeelistmobile", authenticateAndTrack, async (req, res) => {
+  const { month, year, siteID } = req.query;
+
+  // Validate input parameters
+  if (!month || !year || !siteID) {
+    return res.status(400).json({
+      success: false,
+      error: "Missing required parameters.",
+      message: "Please provide month, year, and siteID.",
+    });
+  }
+
+  try {
+    // Fetch employee list from the database
+    const employeeList = await employeeSchema
+      .find({
+        month: parseInt(month),
+        year: parseInt(year),
+        siteID: siteID.trim(),
+      })
+      .select("empid name month year siteID");
+
+    return res.status(200).json({
+      success: true,
+      data: employeeList,
+      currentTotalEmployees: req.user.stats?.totalEmployees || 0,  // NEW: Total employees across ALL sites for this user
       message: `Fetched employee list for ${month}/${year} at site ${siteID}`,
     });
   } catch (error) {

@@ -600,15 +600,24 @@ router.post("/login", async (req, res) => {
             site: existingSupervisor.site,
           });
 
-          // Get site name from Site model
-          const site = await Site.findById(existingSupervisor.site);
-          if (!site) {
+          // Get all sites assigned to the supervisor
+          const supervisorSites = await Site.find({ 
+            _id: { $in: existingSupervisor.site } 
+          }).select('_id sitename isActive');
+          
+          if (!supervisorSites || supervisorSites.length === 0) {
             return res.status(404).json({ message: "Contact your contractor" });
           }
 
+          // Build sites array with siteId, siteName, isActive
+          const sitesArray = supervisorSites.map(site => ({
+            siteId: site._id,
+            siteName: site.sitename,
+            isActive: site.isActive
+          }));
 
-          // console.log("Supervisor login successful:", existingSupervisor.site[0].toString());
-
+          // Get first site for legacy response fields (backward compatibility)
+          const primarySite = supervisorSites[0];
 
           res.status(200).json({
             message: "Login successful",
@@ -617,10 +626,12 @@ router.post("/login", async (req, res) => {
               id: existingSupervisor._id,
               name: existingSupervisor.profileName,
               role: "Supervisor",
+              sites: sitesArray,
+              // Legacy fields for backward compatibility
               siteid: existingSupervisor.site[0],
-              siteName: site.sitename,
-              isActive: site.isActive,
-              siteStatus: site.isActive ? "Active" : "Inactive",
+              siteName: primarySite.sitename,
+              isActive: primarySite.isActive,
+              siteStatus: primarySite.isActive ? "Active" : "Inactive",
               language: existingSupervisor.language || 'en'
             },
           });
@@ -765,13 +776,45 @@ router.get("/profile/:siteId?", authenticateToken, async (req, res) => {
         .select("-__v") // Exclude version key
         .lean();
 
-      // Add supervisors to user object without circular references
+      // Get all site IDs from all supervisors
+      const allSiteIds = supervisors.flatMap(sup => sup.site || []);
+      const uniqueSiteIds = [...new Set(allSiteIds.map(id => id.toString()))];
+      
+      // Fetch all sites at once
+      const allSites = await Site.find({ _id: { $in: uniqueSiteIds } })
+        .select('_id sitename isActive')
+        .lean();
+      
+      // Create a map for quick lookup
+      const siteMap = {};
+      allSites.forEach(site => {
+        siteMap[site._id.toString()] = {
+          siteId: site._id,
+          siteName: site.sitename,
+          isActive: site.isActive
+        };
+      });
+
+      // Add supervisors to user object with sites array
       const userWithSupervisors = {
         ...user,
-        supervisors: supervisors.map(supervisor => ({
-          ...supervisor,
-          owner: user._id // Keep owner reference as ID only, not full object
-        }))
+        supervisors: supervisors.map(supervisor => {
+          // Build sites array for this supervisor
+          const supervisorSiteIds = supervisor.site || [];
+          const sitesArray = supervisorSiteIds
+            .map(siteId => siteMap[siteId.toString()])
+            .filter(Boolean);
+          
+          return {
+            ...supervisor,
+            owner: user._id, // Keep owner reference as ID only, not full object
+            sites: sitesArray,
+            // Legacy fields for backward compatibility (use first site)
+            loginId: supervisor.userId,
+            name: supervisor.profileName,
+            isActive: supervisor.status === 'active'
+          };
+        })
       };
 
       res.status(200).json({
@@ -798,13 +841,45 @@ router.get("/profile/:siteId?", authenticateToken, async (req, res) => {
         .select("-__v") // Exclude version key
         .lean();
 
-      // Add supervisors to user object without circular references
+      // Get all site IDs from all supervisors
+      const allSiteIds = supervisors.flatMap(sup => sup.site || []);
+      const uniqueSiteIds = [...new Set(allSiteIds.map(id => id.toString()))];
+      
+      // Fetch all sites at once
+      const allSites = await Site.find({ _id: { $in: uniqueSiteIds } })
+        .select('_id sitename isActive')
+        .lean();
+      
+      // Create a map for quick lookup
+      const siteMap = {};
+      allSites.forEach(site => {
+        siteMap[site._id.toString()] = {
+          siteId: site._id,
+          siteName: site.sitename,
+          isActive: site.isActive
+        };
+      });
+
+      // Add supervisors to user object with sites array
       const userWithSupervisors = {
         ...user,
-        supervisors: supervisors.map(supervisor => ({
-          ...supervisor,
-          owner: user._id // Keep owner reference as ID only, not full object
-        }))
+        supervisors: supervisors.map(supervisor => {
+          // Build sites array for this supervisor
+          const supervisorSiteIds = supervisor.site || [];
+          const sitesArray = supervisorSiteIds
+            .map(siteId => siteMap[siteId.toString()])
+            .filter(Boolean);
+          
+          return {
+            ...supervisor,
+            owner: user._id, // Keep owner reference as ID only, not full object
+            sites: sitesArray,
+            // Legacy fields for backward compatibility
+            loginId: supervisor.userId,
+            name: supervisor.profileName,
+            isActive: supervisor.status === 'active'
+          };
+        })
       };
 
       res.status(200).json({
@@ -911,6 +986,52 @@ router.get("/verify", authenticateToken, async (req, res) => {
 });
 
 
+// Get assigned sites for supervisor
+// This endpoint returns all sites assigned to the authenticated supervisor
+router.get("/supervisor/assigned-sites", authenticateToken, async (req, res) => {
+  try {
+    // Check if user is authenticated and is a Supervisor
+    if (!req.user || !req.user.id) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    if (req.user.role !== "Supervisor") {
+      return res.status(403).json({ message: "This endpoint is only for supervisors" });
+    }
+
+    // Find the supervisor by ID
+    const supervisor = await Supervisor.findById(req.user.id);
+    if (!supervisor) {
+      return res.status(404).json({ message: "Supervisor not found" });
+    }
+
+    // Check if supervisor is active
+    if (supervisor.status !== "active") {
+      return res.status(403).json({ message: "Supervisor account is inactive" });
+    }
+
+    // Get all sites assigned to the supervisor
+    const supervisorSites = await Site.find({
+      _id: { $in: supervisor.site }
+    }).select('_id sitename isActive');
+
+    // Build sites array with siteId, siteName, isActive
+    const sites = supervisorSites.map(site => ({
+      siteId: site._id,
+      siteName: site.sitename,
+      isActive: site.isActive
+    }));
+
+    res.status(200).json({
+      sites: sites
+    });
+
+  } catch (error) {
+    console.error("Error fetching supervisor assigned sites:", error);
+    res.status(500).json({ message: "Error fetching assigned sites", error: error.message });
+  }
+});
+
 
 //  supervisor credentials route
 router.post("/supervisor-credentials/create", authenticateToken, async (req, res) => {
@@ -924,20 +1045,35 @@ router.post("/supervisor-credentials/create", authenticateToken, async (req, res
     ) {
       return res.status(401).json({ message: "Unauthorized" });
     }
+    
     // Check if supervisor name is provided
-    if (!req.body.name || req.body.name.trim() === "" || !req.body.siteId) {
+    if (!req.body.name || req.body.name.trim() === "") {
       return res
         .status(400)
-        .json({ message: "Supervisor name and site ID are required" });
+        .json({ message: "Supervisor name is required" });
+    }
+
+    // Support both siteIds (array) and siteId (single) for backward compatibility
+    let siteIds = [];
+    if (req.body.siteIds && Array.isArray(req.body.siteIds) && req.body.siteIds.length > 0) {
+      siteIds = req.body.siteIds;
+    } else if (req.body.siteId) {
+      siteIds = [req.body.siteId];
+    } else {
+      return res
+        .status(400)
+        .json({ message: "At least one site ID is required (use siteIds array or siteId)" });
     }
 
     const supervisorName = req.body.name;
-    const siteId = req.body.siteId;
 
-    // Check if siteId is valid
-    const site = await Site.findById(siteId);
-    if (!site) {
-      return res.status(404).json({ message: "Site not found" });
+    // Validate all site IDs exist
+    const sites = await Site.find({ _id: { $in: siteIds } }).select('_id sitename isActive');
+    if (!sites || sites.length === 0) {
+      return res.status(404).json({ message: "No valid sites found" });
+    }
+    if (sites.length !== siteIds.length) {
+      return res.status(404).json({ message: "One or more site IDs are invalid" });
     }
 
     // Find user by ID
@@ -949,13 +1085,13 @@ router.post("/supervisor-credentials/create", authenticateToken, async (req, res
     // Generate supervisor credentials
     const credentials = await generateSupervisorCredentials(supervisorName);
 
-    // add the supervisor to database
+    // add the supervisor to database with all sites
     const newSupervisor = new Supervisor({
       userId: credentials.username,
       password: credentials.password,
       profileName: supervisorName,
       createdBy: user.name,
-      site: siteId,
+      site: siteIds,
       owner: user
     });
 
@@ -965,13 +1101,24 @@ router.post("/supervisor-credentials/create", authenticateToken, async (req, res
     user.supervisors.push(newSupervisor);
     await user.save();
 
-    // Create a clean supervisor object without circular references for response
+    // Build sites array for response
+    const sitesArray = sites.map(site => ({
+      siteId: site._id,
+      siteName: site.sitename,
+      isActive: site.isActive
+    }));
+
+    // Create response with new format
     const supervisorResponse = {
       _id: newSupervisor._id,
       userId: newSupervisor.userId,
+      loginId: newSupervisor.userId,
+      name: newSupervisor.profileName,
       password: newSupervisor.password,
       profileName: newSupervisor.profileName,
       createdBy: newSupervisor.createdBy,
+      sites: sitesArray,
+      // Legacy field for backward compatibility
       site: newSupervisor.site,
       status: newSupervisor.status,
       createdAt: newSupervisor.createdAt,
@@ -979,6 +1126,7 @@ router.post("/supervisor-credentials/create", authenticateToken, async (req, res
     };
 
     res.status(201).json({
+      success: true,
       message: "Supervisor credentials created successfully",
       supervisor: supervisorResponse,
     });
@@ -986,9 +1134,109 @@ router.post("/supervisor-credentials/create", authenticateToken, async (req, res
     console.error("Error fetching supervisor credentials:", error);
     res
       .status(500)
-      .json({ message: "Error fetching supervisor credentials", error });
+      .json({ success: false, message: "Error fetching supervisor credentials", error });
   }
 }
+);
+
+// Update supervisor sites route
+// This route allows an admin user to update the sites assigned to a supervisor
+router.put(
+  "/supervisor-credentials/update-sites",
+  authenticateToken,
+  async (req, res) => {
+    try {
+      // Check if user is authenticated
+      if (
+        !req.user ||
+        !req.user.id ||
+        !req.user.role ||
+        req.user.role !== "Admin"
+      ) {
+        return res.status(401).json({ success: false, message: "Unauthorized" });
+      }
+
+      // Validate request body
+      const userId = req.body.userId;
+      const siteIds = req.body.siteIds;
+
+      if (!userId) {
+        return res.status(400).json({ success: false, message: "Supervisor userId is required" });
+      }
+
+      if (!siteIds || !Array.isArray(siteIds) || siteIds.length === 0) {
+        return res.status(400).json({ success: false, message: "siteIds array is required and must not be empty" });
+      }
+
+      // Find supervisor by userId
+      const supervisor = await Supervisor.findOne({ userId });
+      if (!supervisor) {
+        return res.status(404).json({ success: false, message: "Supervisor not found" });
+      }
+
+      // Find the user to check if they have permission to modify this supervisor
+      const user = await User.findById(req.user.id);
+      if (!user) {
+        return res.status(404).json({ success: false, message: "User not found" });
+      }
+
+      // Check if Admin has permission to modify this supervisor
+      const hasPermission = user.supervisors.some(
+        (sup) => sup._id.toString() === supervisor._id.toString()
+      );
+      if (!hasPermission) {
+        return res.status(403).json({
+          success: false,
+          message: "Forbidden - You don't have permission to modify this supervisor",
+        });
+      }
+
+      // Validate all site IDs exist and belong to this admin
+      const sites = await Site.find({ 
+        _id: { $in: siteIds },
+        owner: req.user.id
+      }).select('_id sitename isActive');
+
+      if (!sites || sites.length === 0) {
+        return res.status(404).json({ success: false, message: "No valid sites found" });
+      }
+
+      if (sites.length !== siteIds.length) {
+        return res.status(400).json({ 
+          success: false, 
+          message: "One or more site IDs are invalid or don't belong to you" 
+        });
+      }
+
+      // Update supervisor's sites
+      supervisor.site = siteIds;
+      await supervisor.save();
+
+      // Build sites array for response
+      const sitesArray = sites.map(site => ({
+        siteId: site._id,
+        siteName: site.sitename,
+        isActive: site.isActive
+      }));
+
+      res.status(200).json({
+        success: true,
+        message: "Supervisor sites updated successfully",
+        supervisor: {
+          userId: supervisor.userId,
+          name: supervisor.profileName,
+          sites: sitesArray
+        }
+      });
+    } catch (error) {
+      console.error("Error updating supervisor sites:", error);
+      res.status(500).json({
+        success: false,
+        message: "Error updating supervisor sites",
+        error: process.env.NODE_ENV === "development" ? error.message : undefined,
+      });
+    }
+  }
 );
 
 // add a detailed comment to explain the delete route explaining how to use it in frontend
