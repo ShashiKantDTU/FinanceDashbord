@@ -158,7 +158,7 @@ router.post("/otp/send", async (req, res) => {
     });
 
     } catch (error) {
-        console.error("Error sending OTP:", error);
+        console.error(`❌ [POST /otp/send] Phone: ${req.body.phoneNumber} - Error sending OTP:`, error);
         res.status(500).json({ message: "Error sending OTP", error: error.message });
     }
 });
@@ -250,7 +250,7 @@ router.post("/otp/verify", async (req, res) => {
     })
 
     } catch (error) {
-        console.error("Error verifying OTP:", error);
+        console.error(`❌ [POST /otp/verify] Phone: ${req.body.phoneNumber} - Error verifying OTP:`, error);
         res.status(500).json({ message: "Error verifying OTP", error: error.message });
     }
 });
@@ -299,7 +299,7 @@ router.post("/otp/resend", async (req, res) => {
         });
 
     } catch (error) {
-        console.error("Error resending OTP:", error);
+        console.error(`❌ [POST /otp/resend] Phone: ${req.body.phoneNumber} - Error resending OTP:`, error);
         res.status(500).json({ message: "Error resending OTP", error: error.message });
     }
 });

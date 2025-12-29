@@ -28,17 +28,39 @@ async function patchEmployeeAttendance(siteID, month, updates, user) {
     const bulkWriteOps = [];
     let dayUpdated = null; // Assuming all updates in a patch are for the same day
 
+    // Track what kinds of fields we updated in this batch (for logging)
+    let includesAttendanceUpdate = false;
+    let includesNotesUpdate = false;
+
     for (const update of updates) {
-        const { employeeID, day, newValue } = update;
+        const { employeeID, day, newValue, note } = update;
         if (!dayUpdated) dayUpdated = day; // Capture the day being updated
         const arrayIndex = day - 1;
 
-        bulkWriteOps.push({
-            updateOne: {
-                filter: { siteID, empid: employeeID, year, month: monthNum },
-                update: { $set: { [`attendance.${arrayIndex}`]: newValue } }
-            }
-        });
+        const setFields = {};
+
+        // Attendance update (backward compatible)
+        if (newValue !== undefined) {
+            includesAttendanceUpdate = true;
+            setFields[`attendance.${arrayIndex}`] = newValue;
+        }
+
+        // Notes update (new feature)
+        // Setting note to empty string "" is allowed (effectively clears it)
+        if (note !== undefined) {
+            includesNotesUpdate = true;
+            setFields[`notes.${arrayIndex}`] = note;
+        }
+
+        // Only push an operation if there's something to update
+        if (Object.keys(setFields).length > 0) {
+            bulkWriteOps.push({
+                updateOne: {
+                    filter: { siteID, empid: employeeID, year, month: monthNum },
+                    update: { $set: setFields }
+                }
+            });
+        }
     }
 
     // --- NEW AGGREGATED LOGGING LOGIC ---
@@ -54,36 +76,50 @@ async function patchEmployeeAttendance(siteID, month, updates, user) {
         }); // Example output: "4 Aug 2025, 5:45 pm"
 
         const displayDate = dayUpdated ? `${dayUpdated}/${monthNum}/${year}` : `${monthNum}/${year}`;
-        const displayMessage = `${updatedBy} marked attendance for ${updates.length} employees on ${displayDate}.`;
+
+        const displayMessageParts = [];
+        if (includesAttendanceUpdate) displayMessageParts.push('attendance');
+        if (includesNotesUpdate) displayMessageParts.push('notes');
+        const displayWhat = displayMessageParts.length > 0 ? displayMessageParts.join(' and ') : 'attendance';
+
+        const displayMessage = `${updatedBy} updated ${displayWhat} for ${updates.length} employees on ${displayDate}.`;
+
+        const fieldsUpdated = [
+            includesAttendanceUpdate ? 'attendance' : null,
+            includesNotesUpdate ? 'notes' : null
+        ].filter(Boolean);
 
         aggregatedLogEntry = {
             siteID: siteID,
             employeeID: `${updates.length} employees`, // Frontend compatibility for batch updates
             month: monthNum,
             year: year,
+            // IMPORTANT: OptimizedChangeTracking schema restricts `field` enum.
+            // Notes are tracked as part of attendance-related edits for compatibility.
             field: 'attendance',
             fieldDisplayName: 'Attendance',
             fieldType: 'array_string',
             changeType: 'modified', // Using 'modified' as it fits the schema
-            changeDescription: `Attendance marked for ${updates.length} employees on ${displayDate}`,
+            changeDescription: `${fieldsUpdated.join(' & ')} updated for ${updates.length} employees on ${displayDate}`,
             changeData: {
                 employeeCount: updates.length,
                 employeeIds: employeeIds, // Log all affected employee IDs for reference
-                dayUpdated: dayUpdated
+                dayUpdated: dayUpdated,
+                fieldsUpdated: fieldsUpdated
             },
             changedBy: updatedBy,
             // UPDATED REMARK
-            remark: `Attendance updated for multiple employees on ${formattedTimestamp}`,
+            remark: `${fieldsUpdated.join(' & ')} updated for multiple employees on ${formattedTimestamp}`,
             timestamp: now, // The main timestamp field should still be a proper Date object
             metadata: {
                 displayMessage: displayMessage, // The display message is already clean.
-                isAttendanceChange: true,
+                isAttendanceChange: includesAttendanceUpdate || includesNotesUpdate,
                 isPaymentChange: false,
                 isRateChange: false,
                 updateType: 'attendance-only', // This update type is in the schema
                 complexity: 'high', // All bulk updates can be considered high complexity
-                totalFieldsUpdated: 1,
-                fieldsUpdated: 'attendance'
+                totalFieldsUpdated: fieldsUpdated.length || 1,
+                fieldsUpdated: fieldsUpdated.join(',') || 'attendance'
             }
         };
     }
@@ -400,6 +436,11 @@ router.put('/employee/mobapi/attendance/update', authenticateAndTrack, async (re
 
         const displayMessage = `Attendance Added by ${req.user.name || req.user.email || 'unknown-user'} for employee Name ${employee.name} & employeeId ${employeeId}  on ${date.date}/${date.month}/${date.year} marked as ${attendance} at ${istTime}`;
 
+        // Parse month and year from the date object for change tracking
+        const currentMonth = parseInt(date.month);
+        const currentYear = parseInt(date.year);
+        const currentDate = parseInt(date.date);
+
         // Record and save the change in the Detailed change tracking system
         try {
             const changeRecord = {
@@ -538,6 +579,12 @@ router.put('/employee/:employeeID/update', authenticateAndTrack, async (req, res
 
         // Preprocess update data to ensure consistency
         const processedUpdateData = { ...updateData };
+
+        // Map camelCase overtimeRate to snake_case overtime_rate if present
+        if (processedUpdateData.overtimeRate !== undefined) {
+            processedUpdateData.overtime_rate = processedUpdateData.overtimeRate;
+            delete processedUpdateData.overtimeRate;
+        }
 
         // Add createdBy to additional_req_pays if missing (for schema consistency)
         if (processedUpdateData.additional_req_pays && Array.isArray(processedUpdateData.additional_req_pays)) {
@@ -783,19 +830,33 @@ router.put('/attendance/patch-update', authenticateAndTrack, async (req, res) =>
             });
         }
 
-        // Validate updates array
+        // Validate updates array (backward compatible: allow attendance-only, note-only, or both)
         for (const update of updates) {
-            if (!update.employeeID || !update.day || update.newValue === undefined) {
+            // 1) Check identifiers
+            if (!update.employeeID || !update.day) {
                 return res.status(400).json({
                     success: false,
-                    message: 'Each update must have employeeID, day, and newValue fields'
+                    message: 'Each update must have employeeID and day'
                 });
             }
 
+            // 2) Check range
             if (update.day < 1 || update.day > 31) {
                 return res.status(400).json({
                     success: false,
                     message: 'Day must be between 1 and 31'
+                });
+            }
+
+            // 3) Smart validation: at least one field present (newValue or note)
+            // We check for undefined because 0 can be a valid attendance value.
+            const hasValue = update.newValue !== undefined;
+            const hasNote = update.note !== undefined;
+
+            if (!hasValue && !hasNote) {
+                return res.status(400).json({
+                    success: false,
+                    message: `Update for Employee ${update.employeeID} Day ${update.day} contains no data (neither newValue nor note)`
                 });
             }
         }
@@ -998,7 +1059,7 @@ router.put('/attendance/updateattendance', authenticateAndTrack, async (req, res
         });
 
     } catch (error) {
-        console.error('❌ Error in bulk attendance update:', error);
+        console.error(`❌ [POST /bulk-attendance] User: ${req.user?.email || req.user?.id} - Error in bulk attendance update:`, error);
         return res.status(500).json({
             success: false,
             message: 'Failed to update attendance. Please try again.',

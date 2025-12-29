@@ -169,9 +169,23 @@ const calculateAttendanceDate = (index, month, year) => {
 };
 
 /**
+ * Helper function to check if an attendance value is meaningful (not null/undefined/empty)
+ * @param {*} value - The attendance value to check
+ * @returns {Boolean} True if the value is meaningful
+ */
+const isValidAttendanceValue = (value) => {
+    // Only track valid attendance values like "P", "A", "P5", "A10", etc.
+    return value !== null && value !== undefined && value !== '' && typeof value === 'string';
+};
+
+/**
  * Compare arrays of strings (for attendance) with detailed change tracking and attendance decoding
  * Handles attendance arrays like ["P", "P20", "A", "A23"] where P/A = Present/Absent and numbers = overtime
  * Enhanced to detect position-based changes (A to P at same position) with exact date calculation
+ * 
+ * OPTIMIZATION: Only tracks meaningful attendance changes (ignores null/empty values)
+ * to prevent excessive logs when attendance arrays contain unset days.
+ * 
  * @param {Array} oldArray - Original array
  * @param {Array} newArray - Updated array
  * @param {Number} month - Month for date calculation (optional)
@@ -181,81 +195,78 @@ const calculateAttendanceDate = (index, month, year) => {
 const compareStringArrays = (oldArray = [], newArray = [], month = null, year = null) => {
     const detailedChanges = [];
     
-    // Method 1: Position-based comparison (for when array lengths are same)
-    if (oldArray.length === newArray.length) {
-        for (let i = 0; i < oldArray.length; i++) {
-            const oldValue = oldArray[i];
-            const newValue = newArray[i];
-            
-            if (oldValue !== newValue) {
-                const oldDecoded = decodeAttendanceValue(oldValue);
-                const newDecoded = decodeAttendanceValue(newValue);
-                
-                // Calculate the exact date for this attendance change
-                const dateInfo = month && year ? calculateAttendanceDate(i, month, year) : null;
-                
-                detailedChanges.push({
-                    changeType: 'modified',
-                    attendanceValue: newValue,
-                    decoded: newDecoded,
-                    from: oldDecoded.display,
-                    to: newDecoded.display,
-                    position: i,
-                    dateInfo: dateInfo,
-                    description: dateInfo && dateInfo.isValid 
-                        ? `Attendance changed on ${dateInfo.dateString} (${dateInfo.dayName}): ${oldDecoded.display} (${oldValue}) → ${newDecoded.display} (${newValue})`
-                        : `Attendance changed at position ${i + 1}: ${oldDecoded.display} (${oldValue}) → ${newDecoded.display} (${newValue})`
-                });
-            }
-        }
-    }
+    // Get the maximum length to compare all positions
+    const maxLength = Math.max(oldArray.length, newArray.length);
     
-    // Method 2: Set-based comparison (for different length arrays or when position-based didn't find changes)
-    if (detailedChanges.length === 0 || oldArray.length !== newArray.length) {
-        const oldSet = new Set(oldArray);
-        const newSet = new Set(newArray);
+    // Track changes by position - this handles both same-length and different-length arrays
+    // and avoids duplicate logging of the same value at different positions
+    for (let i = 0; i < maxLength; i++) {
+        const oldValue = i < oldArray.length ? oldArray[i] : null;
+        const newValue = i < newArray.length ? newArray[i] : null;
         
-        // Track added attendance values
-        const added = newArray.filter(item => !oldSet.has(item));
-        added.forEach((attendanceValue, index) => {
-            const decoded = decodeAttendanceValue(attendanceValue);
-            const position = newArray.indexOf(attendanceValue);
-            const dateInfo = month && year ? calculateAttendanceDate(position, month, year) : null;
+        // Skip if both values are the same (no change at this position)
+        if (oldValue === newValue) continue;
+        
+        // Skip if both values are "empty" (null/undefined/empty string transitions don't matter)
+        const oldIsValid = isValidAttendanceValue(oldValue);
+        const newIsValid = isValidAttendanceValue(newValue);
+        
+        // Skip tracking if both are invalid (e.g., null -> undefined, "" -> null)
+        if (!oldIsValid && !newIsValid) continue;
+        
+        // Calculate the exact date for this attendance change
+        const dateInfo = month && year ? calculateAttendanceDate(i, month, year) : null;
+        
+        if (oldIsValid && newIsValid) {
+            // MODIFIED: Both old and new are valid values
+            const oldDecoded = decodeAttendanceValue(oldValue);
+            const newDecoded = decodeAttendanceValue(newValue);
+            
+            detailedChanges.push({
+                changeType: 'modified',
+                attendanceValue: newValue,
+                decoded: newDecoded,
+                from: oldDecoded.display,
+                to: newDecoded.display,
+                position: i,
+                dateInfo: dateInfo,
+                description: dateInfo && dateInfo.isValid 
+                    ? `Attendance changed on ${dateInfo.dateString} (${dateInfo.dayName}): ${oldDecoded.display} (${oldValue}) → ${newDecoded.display} (${newValue})`
+                    : `Attendance changed at position ${i + 1}: ${oldDecoded.display} (${oldValue}) → ${newDecoded.display} (${newValue})`
+            });
+        } else if (!oldIsValid && newIsValid) {
+            // ADDED: From empty/null to valid value
+            const newDecoded = decodeAttendanceValue(newValue);
             
             detailedChanges.push({
                 changeType: 'added',
-                attendanceValue: attendanceValue,
-                decoded: decoded,
+                attendanceValue: newValue,
+                decoded: newDecoded,
                 from: null,
-                to: decoded.display,
-                position: position,
+                to: newDecoded.display,
+                position: i,
                 dateInfo: dateInfo,
                 description: dateInfo && dateInfo.isValid
-                    ? `Attendance added on ${dateInfo.dateString} (${dateInfo.dayName}): ${decoded.display} (${attendanceValue})`
-                    : `Attendance added: ${decoded.display} (${attendanceValue}) at position ${position + 1}`
+                    ? `Attendance added on ${dateInfo.dateString} (${dateInfo.dayName}): ${newDecoded.display} (${newValue})`
+                    : `Attendance added: ${newDecoded.display} (${newValue}) at position ${i + 1}`
             });
-        });
-        
-        // Track removed attendance values
-        const removed = oldArray.filter(item => !newSet.has(item));
-        removed.forEach((attendanceValue, index) => {
-            const decoded = decodeAttendanceValue(attendanceValue);
-            const position = oldArray.indexOf(attendanceValue);
-            const dateInfo = month && year ? calculateAttendanceDate(position, month, year) : null;
+        } else if (oldIsValid && !newIsValid) {
+            // REMOVED: From valid value to empty/null
+            const oldDecoded = decodeAttendanceValue(oldValue);
             
             detailedChanges.push({
                 changeType: 'removed',
-                attendanceValue: attendanceValue,
-                decoded: decoded,
-                from: decoded.display,
+                attendanceValue: oldValue,
+                decoded: oldDecoded,
+                from: oldDecoded.display,
                 to: null,
-                position: position,
+                position: i,
                 dateInfo: dateInfo,
                 description: dateInfo && dateInfo.isValid
-                    ? `Attendance removed from ${dateInfo.dateString} (${dateInfo.dayName}): ${decoded.display} (${attendanceValue})`
-                    : `Attendance removed: ${decoded.display} (${attendanceValue}) from position ${position + 1}`
+                    ? `Attendance removed from ${dateInfo.dateString} (${dateInfo.dayName}): ${oldDecoded.display} (${oldValue})`
+                    : `Attendance removed: ${oldDecoded.display} (${oldValue}) from position ${i + 1}`
             });
-        });
+        }
     }
     
     return {
@@ -584,8 +595,100 @@ const trackOptimizedChanges = async (siteID, employeeID, month, year, changedBy,
             'attendance': { type: 'array_string', displayName: 'Attendance' },
             'payouts': { type: 'array_object', displayName: 'Payouts' },
             'additional_req_pays': { type: 'array_object', displayName: 'Bonus' },
-            'rate': { type: 'number', displayName: 'Daily Rate' }
+            'rate': { type: 'number', displayName: 'Daily Rate' },
+            'overtime_rate': { type: 'number', displayName: 'Overtime Rate' }
         };
+        
+        // Check if this is a deletion (newData is empty or has no critical fields)
+        const isEmployeeDeletion = !newData || Object.keys(newData).length === 0 || 
+            (newData.rate === undefined && newData.attendance === undefined && 
+             newData.payouts === undefined && newData.additional_req_pays === undefined);
+        
+        // Check if this is a new employee creation (oldData is empty)
+        const isEmployeeCreation = !oldData || Object.keys(oldData).length === 0 ||
+            (oldData.rate === undefined && oldData.attendance === undefined &&
+             oldData.payouts === undefined && oldData.additional_req_pays === undefined);
+        
+        // For employee deletion, create a single consolidated log entry instead of multiple entries
+        if (isEmployeeDeletion && oldData && Object.keys(oldData).length > 0) {
+            const deletionSummary = [];
+            
+            // Summarize what was deleted
+            if (oldData.rate && oldData.rate > 0) {
+                deletionSummary.push(`rate: ₹${oldData.rate.toLocaleString('en-IN')}`);
+            }
+            if (oldData.attendance && Array.isArray(oldData.attendance)) {
+                const validAttendance = oldData.attendance.filter(a => isValidAttendanceValue(a));
+                if (validAttendance.length > 0) {
+                    deletionSummary.push(`${validAttendance.length} attendance records`);
+                }
+            }
+            if (oldData.payouts && Array.isArray(oldData.payouts) && oldData.payouts.length > 0) {
+                const totalPayouts = oldData.payouts.reduce((sum, p) => sum + (p.value || 0), 0);
+                deletionSummary.push(`${oldData.payouts.length} payouts (₹${totalPayouts.toLocaleString('en-IN')})`);
+            }
+            if (oldData.additional_req_pays && Array.isArray(oldData.additional_req_pays) && oldData.additional_req_pays.length > 0) {
+                const totalBonus = oldData.additional_req_pays.reduce((sum, p) => sum + (p.value || 0), 0);
+                deletionSummary.push(`${oldData.additional_req_pays.length} bonus entries (₹${totalBonus.toLocaleString('en-IN')})`);
+            }
+            
+            // Create single consolidated deletion log
+            const timeStr = timestamp.toLocaleString('en-IN', { 
+                timeZone: 'Asia/Kolkata',
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: true
+            });
+            
+            const deletionLogEntry = {
+                siteID,
+                employeeID,
+                month,
+                year,
+                field: 'rate', // Using 'rate' as primary field for deletion tracking
+                fieldDisplayName: 'Employee Record',
+                fieldType: 'number',
+                changeType: 'removed',
+                changeDescription: `Employee record deleted. Data cleared: ${deletionSummary.join(', ') || 'No data'}`,
+                changeData: {
+                    from: oldData,
+                    to: null,
+                    deletedData: {
+                        rate: oldData.rate || 0,
+                        attendanceCount: oldData.attendance ? oldData.attendance.filter(a => isValidAttendanceValue(a)).length : 0,
+                        payoutsCount: oldData.payouts ? oldData.payouts.length : 0,
+                        bonusCount: oldData.additional_req_pays ? oldData.additional_req_pays.length : 0
+                    }
+                },
+                changedBy,
+                remark,
+                timestamp,
+                metadata: {
+                    displayMessage: `${changedBy} deleted ${employeeID}'s record for ${month}/${year}. Cleared: ${deletionSummary.join(', ') || 'empty record'} at ${timeStr}`,
+                    isAttendanceChange: false,
+                    isPaymentChange: false,
+                    isRateChange: false,
+                    isDeletion: true,
+                    updateType: 'comprehensive', // Use 'comprehensive' since deletion affects all fields
+                    complexity: 'simple',
+                    totalFieldsUpdated: deletionSummary.length,
+                    fieldsUpdated: 'employee_record'
+                }
+            };
+            
+            changeLogEntries.push(deletionLogEntry);
+            
+            // Save and return early for deletions
+            if (changeLogEntries.length > 0) {
+                await ChangeTracking.insertMany(changeLogEntries);
+            }
+            
+            return changeLogEntries;
+        }
         
         // Pre-analyze what types of changes are happening for optimization
         const changeAnalysis = analyzeChangeTypes(oldData, newData, criticalFields);
@@ -776,7 +879,7 @@ const generateDisplayMessage = (fieldDisplayName, detailedChange, employeeID, mo
                 : ` at position ${(detailedChange.position || 0) + 1}`;
             return `${changedBy} changed ${employeeID}'s attendance from ${detailedChange.from} to ${detailedChange.to}${dateStr} at ${timeStr}`;
         }
-    } else if (fieldDisplayName === 'Daily Rate') {
+    } else if (fieldDisplayName === 'Daily Rate' || fieldDisplayName === 'Overtime Rate') {
         // Rate change messages with amount and percentage details
         if (detailedChange.changeType === 'modified') {
             const difference = detailedChange.difference || 0;
@@ -785,7 +888,10 @@ const generateDisplayMessage = (fieldDisplayName, detailedChange, employeeID, mo
             const amountStr = `₹${Math.abs(difference).toLocaleString('en-IN')}`;
             const percentageStr = percentageChange !== 'N/A' ? ` (${Math.abs(parseFloat(percentageChange))}%)` : '';
             
-            return `${changedBy} ${changeDirection} ${employeeID}'s daily rate from ₹${detailedChange.from.toLocaleString('en-IN')} to ₹${detailedChange.to.toLocaleString('en-IN')} by ${amountStr}${percentageStr} for ${month}/${year} at ${timeStr}`;
+            const fromVal = (detailedChange.from || 0).toLocaleString('en-IN');
+            const toVal = (detailedChange.to || 0).toLocaleString('en-IN');
+            
+            return `${changedBy} ${changeDirection} ${employeeID}'s ${fieldDisplayName.toLowerCase()} from ₹${fromVal} to ₹${toVal} by ${amountStr}${percentageStr} for ${month}/${year} at ${timeStr}`;
         }
     } else {
         // Payment change messages with enhanced from/to details
@@ -996,12 +1102,16 @@ const updateEmployeeDataOptimized = async (siteID, employeeID, month, year, upda
             attendance: currentEmployee.attendance || [],
             payouts: currentEmployee.payouts || [],
             additional_req_pays: currentEmployee.additional_req_pays || [],
-            rate: currentEmployee.rate || 0
+            rate: currentEmployee.rate || 0,
+            overtime_rate: currentEmployee.overtime_rate || 0
         };
         
         // Apply updates
         Object.keys(updateData).forEach(key => {
-            if (updateData[key] !== undefined && updateData[key] !== null) {
+            // Allow null for non-array fields to support clearing values (like overtime_rate)
+            // But skip null for array fields (attendance, payouts, etc.) as they should be empty arrays [] instead
+            const isArrayField = Array.isArray(currentEmployee[key]);
+            if (updateData[key] !== undefined && (updateData[key] !== null || !isArrayField)) {
                 currentEmployee[key] = updateData[key];
             }
         });
@@ -1011,7 +1121,8 @@ const updateEmployeeDataOptimized = async (siteID, employeeID, month, year, upda
             attendance: currentEmployee.attendance || [],
             payouts: currentEmployee.payouts || [],
             additional_req_pays: currentEmployee.additional_req_pays || [],
-            rate: currentEmployee.rate || 0
+            rate: currentEmployee.rate || 0,
+            overtime_rate: currentEmployee.overtime_rate || 0
         };
         
         // Save the updated employee

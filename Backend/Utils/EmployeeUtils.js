@@ -115,11 +115,14 @@ const latestEmpSerialNumber = async () => {
  */
 const pendingAttendance = async (date, month, year, siteID) => {
   try {
+    // Fetch only required fields for this flow (includes `notes` for the new notes feature)
+    // NOTE: We intentionally do NOT use `.lean()` here because this function may `save()` documents
+    // when it auto-fills missing attendance days.
     const employees = await EmployeeSchema.find({
       month: parseInt(month),
       year: parseInt(year),
       siteID: siteID.trim(),
-    });
+    }).select("name empid attendance notes");
 
     const modifiedEmployees = [];
     const pendingEmployees = [];
@@ -170,9 +173,15 @@ const pendingAttendance = async (date, month, year, siteID) => {
       console.log(`ℹ️ No employees required attendance updates for ${date}/${month}/${year}`);
     }
 
+    // Ensure Map fields like `notes` serialize correctly for JSON responses
+    const sanitize = (list) =>
+      list
+        .filter((emp) => emp !== undefined)
+        .map((emp) => (typeof emp?.toObject === "function" ? emp.toObject({ getters: true }) : emp));
+
     return {
-      pendingEmployees: pendingEmployees.filter(emp => emp !== undefined),
-      markedEmployees: markedEmployees.filter(emp => emp !== undefined),
+      pendingEmployees: sanitize(pendingEmployees),
+      markedEmployees: sanitize(markedEmployees),
     };
   } catch (error) {
     console.error("Error fetching pending attendance:", error);

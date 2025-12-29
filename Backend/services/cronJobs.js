@@ -95,6 +95,12 @@ class CronJobService {
 
     // Initialize all cron jobs
     init() {
+        // Prevent automatic cron jobs in development mode
+        if (process.env.NODE_ENV === 'development') {
+            console.log('⚠️  Cron jobs are disabled in development mode (automatic scheduling skipped)');
+            return;
+        }
+
         console.log('🕐 Initializing cron jobs...');
 
         // Run expired trial cleanup every 4 hours starting at midnight (12 AM, 4 AM, 8 AM, 12 PM, 4 PM, 8 PM)

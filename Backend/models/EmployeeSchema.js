@@ -17,9 +17,24 @@ const employeeSchema = new mongoose.Schema({
         required: true,
         min: 0
     },
+    overtime_rate: {
+        type: Number,
+        default: 0,
+        min: 0
+    },
+    label: {
+        type: String,
+        trim: true,
+        default: null
+    },
     month: {
         type: Number,
         required: true,
+    },
+    notes: {
+        type: Map,     // Allows dynamic keys (e.g., "0", "5", "30")
+        of: String,    // Enforces that the values are Strings
+        default: {}    // Default to an empty object
     },
     year: {
         type: Number,

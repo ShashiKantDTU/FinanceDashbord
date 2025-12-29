@@ -45,23 +45,54 @@ const calculateEmployeeData = (employee, userdata) => {
 
     // Process attendance data (no change to this logic)
     const { totalDays, totalOvertime } = processAttendanceData(employee.attendance);
-    let totalAttendance;
-
-    if (userdata && userdata.calculationType === 'special') {
-        const overtimeDays = Math.floor(totalOvertime / 8) + ((totalOvertime % 8) / 10);
-        totalAttendance = totalDays + overtimeDays;
-    } else {
-        totalAttendance = totalDays + (totalOvertime / 8);
-    }
-
+    
     // --- Precision Fix: Perform wage and balance calculations as integers ---
 
     // Convert rate and carry-forward amount to integers
     const rateInpaise = Math.round((employee.rate || 0) * PRECISION);
     const carryForwardInpaise = employee.carry_forwarded ? Math.round((employee.carry_forwarded.value || 0) * PRECISION) : 0;
 
-    // Calculate total wage using the integer rate. Round the result to maintain integer precision.
-    const totalWageInpaise = Math.round(rateInpaise * totalAttendance);
+    // Check if overtime_rate is set and valid (> 0)
+    const hasOvertimeRate = employee.overtime_rate !== undefined && 
+                           employee.overtime_rate !== null && 
+                           employee.overtime_rate > 0;
+    const overtimeRateInpaise = hasOvertimeRate ? Math.round(employee.overtime_rate * PRECISION) : 0;
+
+    let totalWageInpaise;
+    let regularWageInpaise;
+    let overtimePayInpaise;
+    let totalAttendance;
+    let overtimeDays;
+    let calculationMethod;
+
+    if (userdata && userdata.calculationType === 'special') {
+        // --- SPECIAL USER CALCULATION (unchanged) ---
+        // Special users: overtime converted to days using custom formula
+        overtimeDays = Math.floor(totalOvertime / 8) + ((totalOvertime % 8) / 10);
+        totalAttendance = totalDays + overtimeDays;
+        totalWageInpaise = Math.round(rateInpaise * totalAttendance);
+        regularWageInpaise = totalWageInpaise; // All wage is calculated together for special users
+        overtimePayInpaise = 0; // Not separated for special users
+        calculationMethod = 'special';
+    } else if (hasOvertimeRate) {
+        // --- NEW OVERTIME RATE CALCULATION ---
+        // When overtime_rate is set: Regular Wage + Overtime Pay (separate)
+        regularWageInpaise = Math.round(rateInpaise * totalDays);
+        overtimePayInpaise = Math.round(overtimeRateInpaise * totalOvertime);
+        totalWageInpaise = regularWageInpaise + overtimePayInpaise;
+        totalAttendance = totalDays; // Only days count for attendance when using overtime_rate
+        overtimeDays = 0; // Overtime is paid separately, not converted to days
+        calculationMethod = 'overtime_rate';
+    } else {
+        // --- DEFAULT/OLD CALCULATION (fallback) ---
+        // When overtime_rate is 0/null/undefined: convert overtime hours to equivalent days
+        overtimeDays = totalOvertime / 8;
+        totalAttendance = totalDays + overtimeDays;
+        totalWageInpaise = Math.round(rateInpaise * totalAttendance);
+        regularWageInpaise = totalWageInpaise; // All wage calculated together
+        overtimePayInpaise = 0; // Not separated in old formula
+        calculationMethod = 'default';
+    }
 
     // Calculate final closing balance using only integers
     const closingBalanceInpaise = totalWageInpaise - totalAdvancesInpaise + totalAdditionalReqPaysInpaise + carryForwardInpaise;
@@ -80,20 +111,20 @@ const calculateEmployeeData = (employee, userdata) => {
     updatedEmployee.wage = finalTotalWage;
     updatedEmployee.closing_balance = finalClosingBalance;
 
-    // Calculate overtime days for metadata (no change to this logic)
-    const overtimeDays = userdata && userdata.calculationType === 'special'
-        ? Math.floor(totalOvertime / 8) + ((totalOvertime % 8) / 10)
-        : totalOvertime / 8;
-
     // Add calculation metadata for reference
     updatedEmployee._calculationData = {
-        totalAdvances: totalAdvancesInpaise / PRECISION, // Convert back for logging
-        totalAdditionalReqPays: totalAdditionalReqPaysInpaise / PRECISION, // Convert back for logging
+        totalAdvances: totalAdvancesInpaise / PRECISION,
+        totalAdditionalReqPays: totalAdditionalReqPaysInpaise / PRECISION,
         totalAttendance,
         totalDays,
         totalOvertime,
         overtimeDays,
-        calculationMethod: userdata && userdata.calculationType === 'special' ? 'special' : 'default',
+        calculationMethod,
+        // New fields for overtime rate calculation
+        regularWage: regularWageInpaise / PRECISION,
+        overtimePay: overtimePayInpaise / PRECISION,
+        overtimeRate: hasOvertimeRate ? employee.overtime_rate : null,
+        hasOvertimeRate,
         calculatedAt: new Date()
     };
 

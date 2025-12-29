@@ -102,6 +102,7 @@ const servicesRoutes = require('./Routes/services');
 const internalApiRequests = require('./Routes/internalApiRequests');
 const apiTrackingManagementRoutes = require('./Routes/apiTrackingManagement');
 const configRoutes = require('./Routes/config');
+const labelsRoutes = require('./Routes/labels');
 // const optimizedEmployeeRoutes = require('./Routes/optimizedEmployeeRoutes');
 
 // Import cron job service
@@ -143,6 +144,7 @@ app.use('/api/services', servicesRoutes);
 app.use('/api/internal', internalApiRequests);
 app.use('/api/super-admin/api-tracking', apiTrackingManagementRoutes);
 app.use('/api/config', configRoutes);
+app.use('/api/labels', labelsRoutes);
 
 
 // Basic route

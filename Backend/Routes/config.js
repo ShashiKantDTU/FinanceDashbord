@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const PLAN_LIMITS = require("../config/planLimits");
+const PRICING_CONFIG = require("../config/pricingConfig");
 
 // GET /api/config/plans
 router.get("/plans", (req, res) => {
@@ -23,6 +24,16 @@ router.get("/plans", (req, res) => {
     res.status(200).json(response);
   } catch (error) {
     console.error("Error fetching plan config:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// GET /api/config/priceconfig
+router.get("/priceconfig", (req, res) => {
+  try {
+    res.status(200).json(PRICING_CONFIG);
+  } catch (error) {
+    console.error("Error fetching pricing config:", error);
     res.status(500).json({ error: "Internal server error" });
   }
 });

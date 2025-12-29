@@ -1,5 +1,20 @@
 const mongoose = require("mongoose");
 
+// Sub-schema for custom labels
+const labelSchema = new mongoose.Schema({
+  name: {
+    type: String,
+    required: true,
+    trim: true,
+    maxlength: 30
+  },
+  color: {
+    type: String,
+    default: '#3b82f6', // Default blue if none provided
+    match: /^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/ // Validates HEX codes
+  }
+});
+
 const userSchema = new mongoose.Schema(
   {
     name: { type: String, required: false, trim: true },
@@ -148,6 +163,12 @@ const userSchema = new mongoose.Schema(
     // These are updated when employees are added/removed, avoiding expensive aggregations on dashboard
     stats: {
       totalActiveLabors: { type: Number, default: 0 }, // Total employees across ALL active sites for current month
+    },
+
+    // 👇 Custom labels for categorizing employees
+    customLabels: {
+      type: [labelSchema],
+      default: []
     },
 
     // 👇 Acquisition/Attribution Tracking - How user discovered the app

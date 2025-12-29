@@ -48,6 +48,7 @@ const authenticateToken = async (req, res, next) => {
             req.user.planExpiresAt = user.planExpiresAt
             req.user.planActivatedAt = user.planActivatedAt
             req.user.billing_cycle = user.billing_cycle
+            req.user.planSource = user.planSource || 'google_play'
             req.user.enterpriseLimits = user.enterpriseLimits; // Add enterprise limits for supervisors
             req.user.businessLimits = user.businessLimits; // Add business limits for supervisors
             // Note: isTrial and isCancelled are NOT set for supervisors as they're not needed
@@ -78,6 +79,7 @@ const authenticateToken = async (req, res, next) => {
                     req.user.name = user.name;
                     req.user.phoneNumber = user.phoneNumber;  // Add phone number for webhooks
                     req.user.plan = user.plan || 'free';
+                    req.user.planSource = user.planSource || (req.user.plan === 'free' || req.user.plan === 'lite' || req.user.plan === 'pro' || req.user.plan === 'premium' ? 'google_play' : 'manual');
                     req.user.planExpiresAt = user.planExpiresAt;
                     req.user.planActivatedAt = user.planActivatedAt;
                     req.user.billing_cycle = user.billing_cycle;
@@ -211,6 +213,55 @@ const authorizeRole = (roles) => {
     };
 };
 
+// Hindi (Devanagari) to English transliteration map
+const hindiToEnglishMap = {
+    // Vowels
+    'अ': 'a', 'आ': 'aa', 'इ': 'i', 'ई': 'ee', 'उ': 'u', 'ऊ': 'oo',
+    'ए': 'e', 'ऐ': 'ai', 'ओ': 'o', 'औ': 'au', 'ऋ': 'ri',
+    // Vowel marks (matras)
+    'ा': 'a', 'ि': 'i', 'ी': 'ee', 'ु': 'u', 'ू': 'oo',
+    'े': 'e', 'ै': 'ai', 'ो': 'o', 'ौ': 'au', 'ृ': 'ri',
+    // Consonants
+    'क': 'k', 'ख': 'kh', 'ग': 'g', 'घ': 'gh', 'ङ': 'ng',
+    'च': 'ch', 'छ': 'chh', 'ज': 'j', 'झ': 'jh', 'ञ': 'ny',
+    'ट': 't', 'ठ': 'th', 'ड': 'd', 'ढ': 'dh', 'ण': 'n',
+    'त': 't', 'थ': 'th', 'द': 'd', 'ध': 'dh', 'न': 'n',
+    'प': 'p', 'फ': 'ph', 'ब': 'b', 'भ': 'bh', 'म': 'm',
+    'य': 'y', 'र': 'r', 'ल': 'l', 'व': 'v', 'w': 'w',
+    'श': 'sh', 'ष': 'sh', 'स': 's', 'ह': 'h',
+    // Special characters
+    'क्ष': 'ksh', 'त्र': 'tr', 'ज्ञ': 'gy',
+    // Nukta consonants
+    'क़': 'q', 'ख़': 'kh', 'ग़': 'gh', 'ज़': 'z', 'ड़': 'r', 'ढ़': 'rh', 'फ़': 'f',
+    // Halant (removes inherent 'a' vowel)
+    '्': '',
+    // Anusvara and Chandrabindu (nasal sounds)
+    'ं': 'n', 'ँ': 'n',
+    // Visarga
+    'ः': 'h',
+    // Numbers
+    '०': '0', '१': '1', '२': '2', '३': '3', '४': '4',
+    '५': '5', '६': '6', '७': '7', '८': '8', '९': '9'
+};
+
+// Function to transliterate Hindi text to English
+const transliterateHindiToEnglish = (text) => {
+    if (!text) return '';
+    
+    let result = '';
+    for (let i = 0; i < text.length; i++) {
+        const char = text[i];
+        if (hindiToEnglishMap[char] !== undefined) {
+            result += hindiToEnglishMap[char];
+        } else if (/[a-zA-Z0-9]/.test(char)) {
+            // Keep English letters and numbers as-is
+            result += char.toLowerCase();
+        }
+        // Skip any other characters (spaces, special chars, etc.)
+    }
+    return result;
+};
+
 // Helper function to generate Supervisor credentials
 const generateSupervisorCredentials = async (name) => {
     try {
@@ -219,8 +270,16 @@ const generateSupervisorCredentials = async (name) => {
             throw new Error('Name is required and must be a string');
         }
 
-        // Generate a clean name for username generation
-        const cleanName = name.toLowerCase().replace(/\s+/g, '').replace(/[^a-z0-9]/g, '');
+        // First transliterate Hindi characters to English, then clean
+        const transliteratedName = transliterateHindiToEnglish(name);
+        
+        // Generate a clean name for username generation (remove spaces and non-alphanumeric)
+        let cleanName = transliteratedName.toLowerCase().replace(/\s+/g, '').replace(/[^a-z0-9]/g, '');
+        
+        // Fallback: If cleanName is still empty, generate a unique identifier
+        if (!cleanName || cleanName.length === 0) {
+            cleanName = 'supervisor' + Date.now().toString(36);
+        }
 
         // Get the next serial number for unique username generation based on clean name
         const serial = await fetchLatestSupervisorSerial(cleanName);

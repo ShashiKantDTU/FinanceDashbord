@@ -5,6 +5,10 @@ const SitePayment = require("../models/SitePaymentSchema");
 const Employee = require("../models/EmployeeSchema");
 const Site = require("../models/Siteschema");
 const { authenticateAndTrack } = require("../Middleware/usageTracker");
+const { 
+    calculateEmployeeData, 
+    CorrectAllEmployeeData 
+} = require("../Utils/Jobs");
 const router = express.Router();
 
 // POST /expenses - Add a new site expense
@@ -178,9 +182,6 @@ router.get("/sites/:siteID/financial-summary", authenticateAndTrack, async (req,
         const parsedMonth = parseInt(month);
         const parsedYear = parseInt(year);
 
-        // Calculation type for overtime handling (kept consistent with /allemployees-optimized)
-        const calculationType = req.user?.calculationType || 'default';
-
         // Validate month and year ranges
         if (parsedMonth < 1 || parsedMonth > 12) {
             return res.status(400).json({
@@ -200,170 +201,109 @@ router.get("/sites/:siteID/financial-summary", authenticateAndTrack, async (req,
         const startDate = new Date(parsedYear, parsedMonth - 1, 1);
         const endDate = new Date(parsedYear, parsedMonth, 1);
 
-        // Execute all queries in parallel for maximum efficiency
-        // Note: All collections use ObjectId for siteID, so we use siteObjectId consistently
+        // Step 1: Ensure all employee data is up-to-date by triggering recalculation if needed
+        // This uses the existing CorrectAllEmployeeData function from Jobs.js
+        await CorrectAllEmployeeData(siteID, null, null, null, null, req.user);
+
+        // Step 2: Execute all queries in parallel for maximum efficiency
         const [
-            advancesResult,
             expensesResult,
             paymentsResult,
             expenseBreakdown,
             expenseDetails,
             paymentDetails,
-            employeeCount,
-            employeeBreakdown
+            employees
         ] = await Promise.all([
-            // 1. Get Total Advances from Employees (using ObjectId)
-            Employee.aggregate([
-                { $match: { siteID: siteObjectId, month: parsedMonth, year: parsedYear } },
-                { $unwind: { path: "$payouts", preserveNullAndEmptyArrays: true } },
-                { $group: { _id: null, total: { $sum: { $ifNull: ["$payouts.value", 0] } } } }
-            ]),
-
-            // 2. Get Total Expenses from SiteExpenses (using ObjectId)
+            // 1. Get Total Expenses from SiteExpenses
             SiteExpense.aggregate([
                 { $match: { siteID: siteObjectId, date: { $gte: startDate, $lt: endDate } } },
                 { $group: { _id: null, total: { $sum: "$value" } } }
             ]),
 
-            // 3. Get Total Payments from SitePayments (using ObjectId)
+            // 2. Get Total Payments from SitePayments
             SitePayment.aggregate([
                 { $match: { siteID: siteObjectId, date: { $gte: startDate, $lt: endDate } } },
                 { $group: { _id: null, total: { $sum: "$value" } } }
             ]),
 
-            // 4. Get expense breakdown by category (using ObjectId)
+            // 3. Get expense breakdown by category
             SiteExpense.aggregate([
                 { $match: { siteID: siteObjectId, date: { $gte: startDate, $lt: endDate } } },
                 { $group: { _id: "$category", total: { $sum: "$value" }, count: { $sum: 1 } } },
                 { $sort: { total: -1 } }
             ]),
 
-            // 5. Get expense details (using ObjectId)
+            // 4. Get expense details
             SiteExpense.find({
                 siteID: siteObjectId,
                 date: { $gte: startDate, $lt: endDate }
             }).sort({ date: -1 }),
 
-            // 6. Get recent payments (using ObjectId)
+            // 5. Get recent payments
             SitePayment.find({
                 siteID: siteObjectId,
                 date: { $gte: startDate, $lt: endDate }
             }).sort({ date: -1 }).limit(10),
 
-            // 7. Get employee count for the month (using ObjectId)
-            Employee.countDocuments({
+            // 6. Get all employees for the month (raw data, will be processed with calculateEmployeeData)
+            Employee.find({
                 siteID: siteObjectId,
                 month: parsedMonth,
                 year: parsedYear
-            }),
-
-            // 8. Get detailed employee breakdown with individual advances and computed totalWage (consistent with /allemployees-optimized)
-            Employee.aggregate([
-                { $match: { siteID: siteObjectId, month: parsedMonth, year: parsedYear } },
-                {
-                    $addFields: {
-                        totalPayouts: { $sum: "$payouts.value" },
-                        totalAdditionalReqPays: { $sum: "$additional_req_pays.value" },
-                        carryForward: { $ifNull: ["$carry_forwarded.value", 0] },
-                        totalDays: {
-                            $size: {
-                                $filter: {
-                                    input: "$attendance",
-                                    as: "att",
-                                    cond: { $regexMatch: { input: "$$att", regex: /^P/ } }
-                                }
-                            }
-                        },
-                        totalovertime: {
-                            $sum: {
-                                $map: {
-                                    input: "$attendance",
-                                    as: "att",
-                                    in: {
-                                        $let: {
-                                            vars: {
-                                                overtimeStr: { $arrayElemAt: [ { $regexFindAll: { input: "$$att", regex: /\d+/ } }, 0 ] }
-                                            },
-                                            in: { $ifNull: [ { $toInt: "$$overtimeStr.match" }, 0 ] }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                },
-                {
-                    $addFields: {
-                        overtimeDays: {
-                            $cond: {
-                                if: { $eq: [ calculationType, 'special' ] },
-                                then: {
-                                    $add: [
-                                        { $floor: { $divide: ["$totalovertime", 8] } },
-                                        { $divide: [ { $mod: ["$totalovertime", 8] }, 10 ] }
-                                    ]
-                                },
-                                else: { $divide: ["$totalovertime", 8] }
-                            }
-                        }
-                    }
-                },
-                {
-                    $addFields: {
-                        totalAttendance: { $add: ["$totalDays", "$overtimeDays"] },
-                        totalWage: { $multiply: ["$rate", { $add: ["$totalDays", "$overtimeDays"] }] },
-                        closing_balance: {
-                            $subtract: [
-                                { $add: [ { $multiply: ["$rate", { $add: ["$totalDays", "$overtimeDays"] }] }, "$totalAdditionalReqPays", "$carryForward" ] },
-                                "$totalPayouts"
-                            ]
-                        }
-                    }
-                },
-                {
-                    $project: {
-                        empid: 1,
-                        name: 1,
-                        rate: 1,
-                        wage: 1,
-                        month: 1,
-                        year: 1,
-                        siteID: 1,
-                        carry_forwarded: 1,
-                        payouts: {
-                            $map: {
-                                input: "$payouts",
-                                as: "payout",
-                                in: { value: "$$payout.value", remark: "$$payout.remark", date: "$$payout.date" }
-                            }
-                        },
-                        payoutCount: { $size: { $ifNull: ["$payouts", []] } },
-                        totalAdvances: "$totalPayouts",
-                        totalWage: 1,
-                        totalAttendance: 1,
-                        totalDays: 1,
-                        totalovertime: 1,
-                        overtimeDays: 1,
-                        totalAdditionalReqPays: 1,
-                        carryForward: 1,
-                        closing_balance: 1
-                    }
-                },
-                { $sort: { totalWage: -1 } }
-            ])
+            })
         ]);
 
-        // Extract totals from aggregation results, defaulting to 0 if no data exists
-        const advances = advancesResult[0]?.total || 0;
+        // Step 3: Process each employee using the existing calculateEmployeeData function
+        // This ensures consistent calculations across all endpoints
+        const employeeBreakdown = employees.map(employee => {
+            // Use the same calculation function as other endpoints
+            const calculated = calculateEmployeeData(employee, req.user);
+            const calcData = calculated._calculationData || {};
+
+            // Build employee breakdown object
+            return {
+                empid: employee.empid,
+                name: employee.name,
+                label: employee.label || null,
+                rate: employee.rate,
+                month: employee.month,
+                year: employee.year,
+                siteID: employee.siteID,
+                carry_forwarded: employee.carry_forwarded,
+                payouts: (employee.payouts || []).map(p => ({
+                    value: p.value,
+                    remark: p.remark,
+                    date: p.date
+                })),
+                payoutCount: (employee.payouts || []).length,
+                totalAdvances: calcData.totalAdvances || 0,
+                totalWage: calculated.wage,
+                totalAttendance: calcData.totalAttendance || 0,
+                totalDays: calcData.totalDays || 0,
+                totalovertime: calcData.totalOvertime || 0,
+                overtimeDays: calcData.overtimeDays || 0,
+                totalAdditionalReqPays: calcData.totalAdditionalReqPays || 0,
+                carryForward: employee.carry_forwarded?.value || 0,
+                closing_balance: calculated.closing_balance
+            };
+        });
+
+        // Sort by totalWage descending
+        employeeBreakdown.sort((a, b) => (b.totalWage || 0) - (a.totalWage || 0));
+
+        // Step 4: Calculate summary totals
         const expenses = expensesResult[0]?.total || 0;
         const payments = paymentsResult[0]?.total || 0;
-        // Compute total wages across all employees (sum of computed totalWage)
-        const wages = Array.isArray(employeeBreakdown)
-            ? employeeBreakdown.reduce((sum, emp) => sum + (emp.totalWage || 0), 0)
-            : 0;
-    // Use wages (gross payment) + expenses for total costs as per new requirement
-    const totalCosts = wages + expenses;
-    const finalProfit = payments - totalCosts;
+        
+        // Sum of all employee advances (payouts)
+        const advances = employeeBreakdown.reduce((sum, emp) => sum + (emp.totalAdvances || 0), 0);
+        
+        // Sum of all employee wages
+        const wages = employeeBreakdown.reduce((sum, emp) => sum + (emp.totalWage || 0), 0);
+        
+        // Total costs = wages + site expenses
+        const totalCosts = wages + expenses;
+        const finalProfit = payments - totalCosts;
 
         // Construct the summary object
         const summary = {
@@ -385,14 +325,13 @@ router.get("/sites/:siteID/financial-summary", authenticateAndTrack, async (req,
                         expenseDetails: expenseDetails
                     },
                     recentPayments: paymentDetails,
-                    employeeCount: employeeCount,
+                    employeeCount: employees.length,
                     employeeBreakdown: employeeBreakdown
                 },
                 metadata: {
                     siteID: siteID,
                     month: parsedMonth,
                     year: parsedYear,
-                    calculationType,
                     dateRange: {
                         start: startDate,
                         end: endDate

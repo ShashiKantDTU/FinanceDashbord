@@ -45,7 +45,7 @@ const OptimizedChangeTrackingSchema = new mongoose.Schema({
     field: {
         type: String,
         required: true,
-        enum: ['attendance', 'payouts', 'additional_req_pays', 'rate'],
+        enum: ['attendance', 'payouts', 'additional_req_pays', 'rate', 'overtime_rate'],
         index: true
     },
     fieldDisplayName: {

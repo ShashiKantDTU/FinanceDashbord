@@ -10,7 +10,11 @@ const {
   validateBasicParams,
 } = require("../Utils/Jobs");
 const { trackOptimizedChanges } = require("../Utils/OptimizedChangeTracker");
-const { latestEmpSerialNumber, updateEmployeeCounts, isCurrentMonth } = require("../Utils/EmployeeUtils");
+const {
+  latestEmpSerialNumber,
+  updateEmployeeCounts,
+  isCurrentMonth,
+} = require("../Utils/EmployeeUtils");
 const { authenticateAndTrack } = require("../Middleware/usageTracker");
 const { pendingAttendance } = require("../Utils/EmployeeUtils");
 const { markEmployeesForRecalculation } = require("../Utils/Jobs");
@@ -113,7 +117,7 @@ router.post("/addemployee", authenticateAndTrack, async (req, res) => {
   try {
     // console.log("📝 Creating new employee:", req.body);
 
-    const { name, siteID, wage: rate, month, year } = req.body;
+    const { name, siteID, wage: rate, month, year, overtime_rate, label } = req.body;
     // If month and year are not provided, use current month/year
     // Validate required fields
     if (!name || name.trim() === "") {
@@ -168,19 +172,20 @@ router.post("/addemployee", authenticateAndTrack, async (req, res) => {
         owner: req.user.id,
         isActive: true,
       }).select("_id");
-      
-      const activeSiteIds = activeSites.map(s => s._id);
-      
+
+      const activeSiteIds = activeSites.map((s) => s._id);
+
       // Count total employees across all active sites for this month
       const totalEmployeesAcrossSites = await employeeSchema.countDocuments({
         siteID: { $in: activeSiteIds },
         month: month,
         year: year,
       });
-      
-      const maxTotalEmployees = req.user.businessLimits?.maxTotalEmployees 
-        || currentPlanLimits.maxTotalEmployees;
-      
+
+      const maxTotalEmployees =
+        req.user.businessLimits?.maxTotalEmployees ||
+        currentPlanLimits.maxTotalEmployees;
+
       if (totalEmployeesAcrossSites >= maxTotalEmployees) {
         return res.status(403).json({
           success: false,
@@ -198,7 +203,9 @@ router.post("/addemployee", authenticateAndTrack, async (req, res) => {
       let maxEmployees = currentPlanLimits.maxEmployeesPerSite;
 
       if (plan === "enterprise") {
-        maxEmployees = req.user.enterpriseLimits?.maxEmployeesPerSite || PLAN_LIMITS.enterprise.maxEmployeesPerSite;
+        maxEmployees =
+          req.user.enterpriseLimits?.maxEmployeesPerSite ||
+          PLAN_LIMITS.enterprise.maxEmployeesPerSite;
       }
 
       if (totalEmployees >= maxEmployees) {
@@ -232,6 +239,7 @@ router.post("/addemployee", authenticateAndTrack, async (req, res) => {
       name: name.trim(),
       empid: newEmpId,
       rate: parseFloat(rate),
+      label: label || null,
       month: month,
       year: year,
       siteID: siteID.trim(),
@@ -249,6 +257,15 @@ router.post("/addemployee", authenticateAndTrack, async (req, res) => {
       attendanceHistory: {},
       recalculationneeded: false,
     };
+
+    // Add overtime_rate only if provided in the request
+    if (
+      overtime_rate !== undefined &&
+      overtime_rate !== null &&
+      overtime_rate !== ""
+    ) {
+      newEmployeeData.overtime_rate = parseFloat(overtime_rate);
+    }
 
     // Save the new employee
     const newEmployee = new employeeSchema(newEmployeeData);
@@ -326,7 +343,7 @@ router.post("/addemployee", authenticateAndTrack, async (req, res) => {
       });
     }
   } catch (error) {
-    console.error("❌ Error creating employee:", error);
+    console.error(`❌ [POST /addemployee] User: ${req.user?.email || req.user?.id} - Error creating employee:`, error);
 
     // Handle specific MongoDB errors
     if (error.code === 11000) {
@@ -585,7 +602,7 @@ router.delete("/deleteemployee", authenticateAndTrack, async (req, res) => {
     if (deletedEmployees.length > 0 && isCurrentMonth(month, year)) {
       // Group by siteID in case of deletePreviousMonth deleting from multiple sites
       const siteCounts = {};
-      deletedEmployees.forEach(emp => {
+      deletedEmployees.forEach((emp) => {
         if (!siteCounts[emp.siteID]) {
           siteCounts[emp.siteID] = 0;
         }
@@ -800,7 +817,7 @@ router.post("/bulk-deleteemployees", authenticateAndTrack, async (req, res) => {
     // ONLY update counters if bulk deleting from current month
     if (deletedEmployees.length > 0 && isCurrentMonth(month, year)) {
       const siteCounts = {};
-      deletedEmployees.forEach(emp => {
+      deletedEmployees.forEach((emp) => {
         siteCounts[emp.siteID] = (siteCounts[emp.siteID] || 0) + 1;
       });
 
@@ -930,28 +947,33 @@ router.post("/importemployees", authenticateAndTrack, async (req, res) => {
         owner: req.user.id,
         isActive: true,
       }).select("_id");
-      
-      const activeSiteIds = activeSites.map(s => s._id);
-      
+
+      const activeSiteIds = activeSites.map((s) => s._id);
+
       // Count total employees across all active sites for target month
       const totalEmployeesAcrossSites = await employeeSchema.countDocuments({
         siteID: { $in: activeSiteIds },
         month: targetMonth,
         year: targetYear,
       });
-      
-      const maxTotalEmployees = req.user.businessLimits?.maxTotalEmployees 
-        || currentPlanLimits.maxTotalEmployees;
-      
+
+      const maxTotalEmployees =
+        req.user.businessLimits?.maxTotalEmployees ||
+        currentPlanLimits.maxTotalEmployees;
+
       // Check if import would exceed total limit
-      const employeesToImport = employeeIds.length || await employeeSchema.countDocuments({
-        siteID: siteID.trim(),
-        month: sourceMonth,
-        year: sourceYear,
-      });
-      
-      if (totalEmployeesAcrossSites >= maxTotalEmployees || 
-          employeesToImport + totalEmployeesAcrossSites > maxTotalEmployees) {
+      const employeesToImport =
+        employeeIds.length ||
+        (await employeeSchema.countDocuments({
+          siteID: siteID.trim(),
+          month: sourceMonth,
+          year: sourceYear,
+        }));
+
+      if (
+        totalEmployeesAcrossSites >= maxTotalEmployees ||
+        employeesToImport + totalEmployeesAcrossSites > maxTotalEmployees
+      ) {
         return res.status(403).json({
           success: false,
           message: `You have reached the maximum limit of ${maxTotalEmployees} total employees across all sites for this month. Please upgrade your plan or contact support to increase your limit.`,
@@ -964,14 +986,19 @@ router.post("/importemployees", authenticateAndTrack, async (req, res) => {
         month: targetMonth,
         year: targetYear,
       });
-      
+
       let maxEmployees = currentPlanLimits.maxEmployeesPerSite;
 
       if (plan === "enterprise") {
-        maxEmployees = req.user.enterpriseLimits?.maxEmployeesPerSite || PLAN_LIMITS.enterprise.maxEmployeesPerSite;
+        maxEmployees =
+          req.user.enterpriseLimits?.maxEmployeesPerSite ||
+          PLAN_LIMITS.enterprise.maxEmployeesPerSite;
       }
 
-      if (totalEmployees >= maxEmployees || employeeIds.length + totalEmployees > maxEmployees) {
+      if (
+        totalEmployees >= maxEmployees ||
+        employeeIds.length + totalEmployees > maxEmployees
+      ) {
         return res.status(403).json({
           success: false,
           message: `You have reached the maximum limit of ${maxEmployees} employees for this month per site. ${
@@ -1066,6 +1093,7 @@ router.post("/importemployees", authenticateAndTrack, async (req, res) => {
           name: sourceEmployee.name,
           empid: sourceEmployee.empid, // Preserve the same employee ID
           rate: sourceEmployee.rate, // Keep the same rate
+          label: sourceEmployee.label || null,
           month: parseInt(targetMonth),
           year: parseInt(targetYear),
           siteID: sourceEmployee.siteID,
@@ -1090,7 +1118,16 @@ router.post("/importemployees", authenticateAndTrack, async (req, res) => {
           attendanceHistory: {},
           recalculationneeded: false,
         };
-
+        // Add overtime_rate only if provided in the request
+        if (
+          sourceEmployee.overtime_rate !== undefined &&
+          sourceEmployee.overtime_rate !== null &&
+          sourceEmployee.overtime_rate !== ""
+        ) {
+          newEmployeeData.overtime_rate = parseFloat(
+            sourceEmployee.overtime_rate
+          );
+        }
         // Create and save new employee record
         const newEmployee = new employeeSchema(newEmployeeData);
         const savedEmployee = await newEmployee.save();
@@ -1182,9 +1219,16 @@ router.post("/importemployees", authenticateAndTrack, async (req, res) => {
 
     // [Calculate-on-Write] Trigger counter update for Site and User
     // ONLY update counters if importing to current month
-    if (successfulImports.length > 0 && isCurrentMonth(targetMonth, targetYear)) {
+    if (
+      successfulImports.length > 0 &&
+      isCurrentMonth(targetMonth, targetYear)
+    ) {
       setImmediate(() => {
-        updateEmployeeCounts(siteID.trim(), req.user.id, successfulImports.length);
+        updateEmployeeCounts(
+          siteID.trim(),
+          req.user.id,
+          successfulImports.length
+        );
       });
     }
 
@@ -1240,7 +1284,7 @@ router.post("/importemployees", authenticateAndTrack, async (req, res) => {
 
     return res.status(201).json(response);
   } catch (error) {
-    console.error("❌ Error importing employees:", error);
+    console.error(`❌ [POST /importemployees] User: ${req.user?.email || req.user?.id} - Error importing employees:`, error);
 
     return res.status(500).json({
       success: false,
@@ -1552,17 +1596,21 @@ router.get(
 
       // ====== PRE-CHECK: Handle employees needing recalculation ======
       // Find employees that need recalculation before running aggregation
-      const employeesNeedingRecalc = await employeeSchema.find({
-        siteID: siteID,
-        month: parseInt(month),
-        year: parseInt(year),
-        recalculationneeded: true,
-      }).select("empid");
+      const employeesNeedingRecalc = await employeeSchema
+        .find({
+          siteID: siteID,
+          month: parseInt(month),
+          year: parseInt(year),
+          recalculationneeded: true,
+        })
+        .select("empid");
 
       // If any employees need recalculation, process them first
       if (employeesNeedingRecalc.length > 0) {
-        console.log(`🔄 Pre-processing ${employeesNeedingRecalc.length} employees needing recalculation`);
-        
+        console.log(
+          `🔄 Pre-processing ${employeesNeedingRecalc.length} employees needing recalculation`
+        );
+
         // Process recalculations in parallel for efficiency
         await Promise.all(
           employeesNeedingRecalc.map(async (emp) => {
@@ -1575,13 +1623,17 @@ router.get(
                 req.user
               );
             } catch (recalcError) {
-              console.warn(`⚠️ Failed to recalculate ${emp.empid}: ${recalcError.message}`);
+              console.warn(
+                `⚠️ Failed to recalculate ${emp.empid}: ${recalcError.message}`
+              );
               // Continue with other employees even if one fails
             }
           })
         );
-        
-        console.log(`✅ Pre-processing complete for ${employeesNeedingRecalc.length} employees`);
+
+        console.log(
+          `✅ Pre-processing complete for ${employeesNeedingRecalc.length} employees`
+        );
       }
 
       // 2. Define the Aggregation Pipeline
@@ -1767,7 +1819,160 @@ router.get(
   }
 );
 
-// Route to get employee with pending attendance on a specific date
+// OPTIMIZED V2 Endpoint: Get employees with pending/marked attendance for a SPECIFIC DATE
+// GET /api/employee/employeewithpendingattendance/v2
+router.get(
+  "/employeewithpendingattendance/v2",
+  authenticateAndTrack,
+  async (req, res) => {
+    try {
+      // 1. Validate Inputs
+      const { date, month, year, siteID } = req.query;
+
+      if (!date || !month || !year || !siteID) {
+        return res.status(400).json({
+          success: false,
+          error: "Missing required fields: date, month, year, siteID",
+        });
+      }
+
+      const dayNum = parseInt(date);
+      const monthNum = parseInt(month);
+      const yearNum = parseInt(year);
+
+      if (isNaN(dayNum) || isNaN(monthNum) || isNaN(yearNum)) {
+        return res.status(400).json({
+          success: false,
+          error: "Invalid date format",
+        });
+      }
+
+      // 2. Validate Access / Role (Mirroring existing security logic)
+      const role = req.user?.role?.toLowerCase();
+
+      // Date Validation Logic (Keeping your existing "Last 3 Days" rule)
+      if (role !== "admin") {
+        const now = new Date();
+        const nowIST = new Date(
+          now.toLocaleString("en-US", { timeZone: "Asia/Kolkata" })
+        );
+
+        // Generate valid dates (Today, Yesterday, Day Before)
+        const validDates = [];
+        for (let i = 0; i < 3; i++) {
+          const d = new Date(nowIST);
+          d.setDate(nowIST.getDate() - i);
+          validDates.push(
+            `${d.getDate()}-${d.getMonth() + 1}-${d.getFullYear()}`
+          );
+        }
+
+        const requestDateKey = `${dayNum}-${monthNum}-${yearNum}`;
+        const isValidDate = validDates.includes(requestDateKey);
+
+        if (!isValidDate) {
+          return res.status(400).json({
+            success: false,
+            error:
+              "Attendance can only be viewed/marked for the last three days.",
+            validDates,
+          });
+        }
+      }
+
+      // 3. Admin Site Access Check
+      if (role === "admin") {
+        const hasAccess = await User.exists({
+          _id: req.user.id,
+          site: new mongoose.Types.ObjectId(siteID),
+        });
+        if (!hasAccess) {
+          return res.status(403).json({
+            success: false,
+            error: "Forbidden. No access to this site.",
+          });
+        }
+      }
+
+      // 4. THE OPTIMIZATION: Specific Projection
+      // Array index is 0-based (Day 1 = Index 0)
+      const arrayIndex = dayNum - 1;
+
+      const employees = await employeeSchema
+        .find(
+          {
+            siteID: siteID,
+            month: monthNum,
+            year: yearNum,
+          },
+          {
+            // PROJECTION: Fetch ONLY what we need
+            name: 1,
+            empid: 1,
+            // Use $slice to get ONLY the attendance value for this specific day
+            attendance: { $slice: [arrayIndex, 1] },
+            // Fetch ONLY the note for this specific day key
+            [`notes.${arrayIndex}`]: 1,
+          }
+        )
+        .lean();
+
+      // 5. Process & Separate Data
+      const pendingEmployees = [];
+      const markedEmployees = [];
+
+      for (const emp of employees) {
+        // Attendance comes as an array of 1 element due to $slice, or empty if index out of bounds
+        const status =
+          emp.attendance && emp.attendance.length > 0
+            ? emp.attendance[0]
+            : null;
+
+        // Notes come as nested object { notes: { "26": "Value" } }
+        // We safely access it using the index key
+        const note = (emp.notes && emp.notes[arrayIndex.toString()]) || "";
+
+        const simplifiedEmp = {
+          empid: emp.empid,
+          name: emp.name,
+          attendance: status, // Single value (e.g., "P", "A", "P1") or null
+          note: note, // Single string
+        };
+
+        // Logic: If status exists and is not null/empty, it's marked
+        if (status !== null && status !== undefined && status !== "") {
+          markedEmployees.push(simplifiedEmp);
+        } else {
+          pendingEmployees.push(simplifiedEmp);
+        }
+      }
+
+      // 6. Send Response
+      return res.status(200).json({
+        success: true,
+        data: {
+          pendingEmployees,
+          markedEmployees,
+          meta: {
+            date: dayNum,
+            month: monthNum,
+            year: yearNum,
+            count: employees.length,
+          },
+        },
+      });
+    } catch (error) {
+      console.error("❌ Error in V2 pending attendance:", error);
+      return res.status(500).json({
+        success: false,
+        error: "Internal Server Error",
+        message: error.message,
+      });
+    }
+  }
+);
+
+// Deprecated: Route to get employee with pending attendance on a specific date
 router.get(
   "/employeewithpendingattendance",
   authenticateAndTrack,
@@ -1865,8 +2070,6 @@ router.get(
       });
     }
 
-
-
     if (role === "supervisor") {
       // const supervisorsite = req.user.site[0]?.toString().trim();
       // if (supervisorsite !== siteID) {
@@ -1942,7 +2145,6 @@ router.get(
 );
 
 // Get all a single employee's details
-
 // Get available employees for import from specific month/year
 router.get("/availableforimport", authenticateAndTrack, async (req, res) => {
   try {
@@ -2104,12 +2306,12 @@ router.get("/allemployeelist", authenticateAndTrack, async (req, res) => {
         year: parseInt(year),
         siteID: siteID.trim(),
       })
-      .select("empid name month year siteID payouts");
+      .select("empid name month year siteID payouts label");
 
     return res.status(200).json({
       success: true,
       data: employeeList,
-      currentTotalEmployees: req.user.stats?.totalEmployees || 0,  // NEW: Total employees across ALL sites for this user
+      currentTotalEmployees: req.user.stats?.totalEmployees || 0, // NEW: Total employees across ALL sites for this user
       message: `Fetched employee list for ${month}/${year} at site ${siteID}`,
     });
   } catch (error) {
@@ -2121,7 +2323,6 @@ router.get("/allemployeelist", authenticateAndTrack, async (req, res) => {
     });
   }
 });
-
 
 // Fetch all employee list for a specific month and year
 router.get("/allemployeelistmobile", authenticateAndTrack, async (req, res) => {
@@ -2144,12 +2345,12 @@ router.get("/allemployeelistmobile", authenticateAndTrack, async (req, res) => {
         year: parseInt(year),
         siteID: siteID.trim(),
       })
-      .select("empid name month year siteID");
+      .select("empid name month year siteID label");
 
     return res.status(200).json({
       success: true,
       data: employeeList,
-      currentTotalEmployees: req.user.stats?.totalEmployees || 0,  // NEW: Total employees across ALL sites for this user
+      currentTotalEmployees: req.user.stats?.totalEmployees || 0, // NEW: Total employees across ALL sites for this user
       message: `Fetched employee list for ${month}/${year} at site ${siteID}`,
     });
   } catch (error) {
@@ -2238,7 +2439,6 @@ router.get(
       //   "Step 1 out of 2: Fetched latest employee data:",
       //   latestEmployeeData
       // );
-
       // Calculate additional data using Jobs utility
       const calculationResult = calculateEmployeeData(
         latestEmployeeData,
@@ -2246,8 +2446,18 @@ router.get(
       );
 
       // Extract calculation fields from _calculationData
-      const { totalAttendance, totalDays, totalOvertime, overtimeDays } =
-        calculationResult._calculationData || {};
+      const {
+        totalAttendance,
+        totalDays,
+        totalOvertime,
+        overtimeDays,
+        // New overtime calculation fields
+        regularWage,
+        overtimePay,
+        overtimeRate,
+        hasOvertimeRate,
+        calculationMethod,
+      } = calculationResult._calculationData || {};
 
       // Get additional fields for frontend compatibility
       const totalAdditionalReqPays =
@@ -2265,21 +2475,45 @@ router.get(
       console.timeEnd("Calculating employee data");
       // Return all employees (including zero balance)
 
-      return res.status(200).json({
-        ...latestEmployeeData.toObject(),
-        totalWage: calculationResult.totalWage,
+      const finalResponse = {
+        ...latestEmployeeData.toObject({ getters: true, flattenMaps: true }),
+        // Core wage fields (backward compatible)
+        wage: calculationResult.wage,
+        totalWage: calculationResult.wage, // Alias for backward compatibility
         totalPayouts: totalPayouts,
         carryForward: carryForward,
         closing_balance: calculationResult.closing_balance,
+        
+        // Attendance fields (backward compatible)
         totalAttendance: totalAttendance,
         totalDays: totalDays,
         totalovertime: totalOvertime,
         overtimeDays: overtimeDays,
         totalAdditionalReqPays: totalAdditionalReqPays,
+        
+        // NEW: Overtime calculation breakdown fields
+        // These help frontend display detailed wage breakdown
+        calculationBreakdown: {
+          regularWage: regularWage || calculationResult.wage, // Base wage from daily rate × days
+          overtimePay: overtimePay || 0,                      // Overtime compensation (overtime_rate × hours)
+          overtimeRate: overtimeRate,                          // The hourly overtime rate used (null if not set)
+          hasOvertimeRate: hasOvertimeRate || false,          // Whether separate overtime rate was used
+          calculationMethod: calculationMethod || 'default',  // 'special', 'overtime_rate', or 'default'
+          // Formula explanation for frontend display
+          formula: hasOvertimeRate 
+            ? 'wage = (rate × totalDays) + (overtime_rate × totalOvertime)'
+            : calculationMethod === 'special'
+              ? 'wage = rate × (totalDays + floor(OT/8) + (OT%8)/10)'
+              : 'wage = rate × (totalDays + totalOvertime/8)',
+        },
+        
         // Additional status fields
         hasPendingPayouts: calculationResult.closing_balance !== 0,
         needsRecalculation: latestEmployeeData.recalculationneeded || false,
-      });
+      };
+      // console.log('lastest employee data response: ', JSON.stringify(latestEmployeeData, null, 2));
+      // console.log('Final employee response: ', JSON.stringify(finalResponse, null, 2));
+      return res.status(200).json(finalResponse);
     } catch (employeeError) {
       console.warn(
         `⚠️  Error processing employee ${empid}: ${employeeError.message}`
