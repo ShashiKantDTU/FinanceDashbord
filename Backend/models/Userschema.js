@@ -168,7 +168,11 @@ const userSchema = new mongoose.Schema(
     // 👇 Custom labels for categorizing employees
     customLabels: {
       type: [labelSchema],
-      default: []
+      default: [
+        { name: "Foreman", color: "#06b6d4" },
+        { name: "Mason", color: "#ef4444" },
+        { name: "Helper", color: "#a855f7" }
+      ]
     },
 
     // 👇 Acquisition/Attribution Tracking - How user discovered the app
