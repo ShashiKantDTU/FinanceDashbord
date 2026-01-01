@@ -197,9 +197,18 @@ router.get("/sites/:siteID/financial-summary", authenticateAndTrack, async (req,
             });
         }
 
-        // Create date range for the specified month
-        const startDate = new Date(parsedYear, parsedMonth - 1, 1);
-        const endDate = new Date(parsedYear, parsedMonth, 1);
+        // FIX: Calculate Date Ranges based on IST (UTC+5:30)
+        // 1. Create the base UTC date for the 1st of the month
+        const startBase = Date.UTC(parsedYear, parsedMonth - 1, 1);
+        const endBase = Date.UTC(parsedYear, parsedMonth, 1); // 1st of next month
+
+        // 2. Subtract 5.5 hours (in milliseconds) to align with IST midnight
+        const istOffset = 5.5 * 60 * 60 * 1000;
+
+        const startDate = new Date(startBase - istOffset);
+        const endDate = new Date(endBase - istOffset);
+
+        console.log("Querying Range (UTC):", startDate, "to", endDate);
 
         // Step 1: Ensure all employee data is up-to-date by triggering recalculation if needed
         // This uses the existing CorrectAllEmployeeData function from Jobs.js
@@ -372,8 +381,14 @@ router.get("/sites/:siteID/expenses", authenticateAndTrack, async (req, res) => 
         if (month && year) {
             const parsedMonth = parseInt(month);
             const parsedYear = parseInt(year);
-            const startDate = new Date(parsedYear, parsedMonth - 1, 1);
-            const endDate = new Date(parsedYear, parsedMonth, 1);
+            // FIX: Calculate Date Ranges based on IST (UTC+5:30)
+            const startBase = Date.UTC(parsedYear, parsedMonth - 1, 1);
+            const endBase = Date.UTC(parsedYear, parsedMonth, 1);
+            const istOffset = 5.5 * 60 * 60 * 1000;
+
+            const startDate = new Date(startBase - istOffset);
+            const endDate = new Date(endBase - istOffset);
+            
             query.date = { $gte: startDate, $lt: endDate };
         }
 
@@ -437,8 +452,14 @@ router.get("/sites/:siteID/payments", authenticateAndTrack, async (req, res) => 
         if (month && year) {
             const parsedMonth = parseInt(month);
             const parsedYear = parseInt(year);
-            const startDate = new Date(parsedYear, parsedMonth - 1, 1);
-            const endDate = new Date(parsedYear, parsedMonth, 1);
+            // FIX: Calculate Date Ranges based on IST (UTC+5:30)
+            const startBase = Date.UTC(parsedYear, parsedMonth - 1, 1);
+            const endBase = Date.UTC(parsedYear, parsedMonth, 1);
+            const istOffset = 5.5 * 60 * 60 * 1000;
+
+            const startDate = new Date(startBase - istOffset);
+            const endDate = new Date(endBase - istOffset);
+            
             query.date = { $gte: startDate, $lt: endDate };
         }
 
