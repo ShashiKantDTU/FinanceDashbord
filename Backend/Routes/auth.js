@@ -32,6 +32,42 @@ const generateOtp = () => {
     return { otp, ttl };
 };
 
+// --- Trial Expiry Helper Function ---
+// Calculates if trial ends on 30th of current month or next, based on registration date (16th cutoff)
+const getTrialExpiryDate = () => {
+    const today = new Date();
+    const day = today.getDate();
+    const month = today.getMonth(); // 0-11
+    const year = today.getFullYear();
+    
+    let targetYear = year;
+    let targetMonth = month;
+    
+    // If < 16th, trial ends current month. Else next month.
+    if (day >= 16) {
+        targetMonth = month + 1;
+        if (targetMonth > 11) {
+            targetMonth = 0;
+            targetYear = year + 1;
+        }
+    }
+    
+    // Determine target day (30th, unless Feb)
+    let targetDay = 30;
+    
+    // Check if target month is Feb (1)
+    if (targetMonth === 1) {
+        // Last day of Feb
+        targetDay = new Date(targetYear, targetMonth + 1, 0).getDate();
+    }
+    
+    // Set expiry date to end of that day
+    const expiryDate = new Date(targetYear, targetMonth, targetDay);
+    expiryDate.setHours(23, 59, 59, 999);
+    
+    return expiryDate;
+};
+
 // --- OTP Rate Limiting Config ---
 const OTP_TTL_SECONDS = 600; // align with generateOtp
 const OTP_COOLDOWN_SECONDS = 60; // minimum gap between sends for same number
@@ -198,9 +234,8 @@ router.post("/otp/verify", async (req, res) => {
 
     if (!user) {
       // Create user if doesn't exist (auto-registration)
-      // Grant 5-day pro trial to new users
-      const trialExpiryDate = new Date();
-      trialExpiryDate.setDate(trialExpiryDate.getDate() + 5);
+      // Grant trial till 30th of current/next month
+      const trialExpiryDate = getTrialExpiryDate();
       const name = phoneNumber;
       
       // Process acquisition data (handles Meta decryption if present)
@@ -368,9 +403,8 @@ router.post("/otplogin", async (req, res) => {
 
     if (!user) {
       // Create user if doesn't exist (auto-registration)
-      // Grant 5-day pro trial to new users
-      const trialExpiryDate = new Date();
-      trialExpiryDate.setDate(trialExpiryDate.getDate() + 5);
+      // Grant trial till 30th of current/next month
+      const trialExpiryDate = getTrialExpiryDate();
 
       // Process acquisition data (handles Meta decryption if present)
       const acquisitionData = processAcquisition(acquisition);
@@ -483,9 +517,8 @@ router.post("/truecallerlogin", async (req, res) => {
 
     if (!user) {
       // Create user if doesn't exist (auto-registration)
-      // Grant 5-day pro trial to new users
-      const trialExpiryDate = new Date();
-      trialExpiryDate.setDate(trialExpiryDate.getDate() + 5);
+      // Grant trial till 30th of current/next month
+      const trialExpiryDate = getTrialExpiryDate();
       const name = verifiedUserData.given_name + " " + verifiedUserData.family_name || phoneNumber;
       
       // Process acquisition data (handles Meta decryption if present)
