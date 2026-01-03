@@ -31,6 +31,7 @@ const monthlyTests = require('./tests/monthly-report-tests');
 const weeklyTests = require('./tests/weekly-report-tests');
 const templateTests = require('./tests/template-validation-tests');
 const onboardingTests = require('./tests/integrations/test-onboarding-template');
+const otpTests = require('./tests/integrations/test-whatsapp-otp');
 
 // ANSI color codes for pretty output
 const colors = {
@@ -67,8 +68,9 @@ function displayMenu() {
     console.log('  7. Test Excel Generation Only');
     console.log('  8. Test S3 Upload');
     console.log('');
-    console.log(colors.bright + '📱 ONBOARDING TEMPLATES' + colors.reset);
+    console.log(colors.bright + '📱 ONBOARDING & AUTH TEMPLATES' + colors.reset);
     console.log('  14. Test Onboarding Template (onbordingv2en)');
+    console.log('  15. Test WhatsApp OTP (auth template)');
     console.log('');
     console.log(colors.bright + '⚙️  CONFIGURATION' + colors.reset);
     console.log('  9. View Current Test Configuration');
@@ -203,6 +205,26 @@ async function runTest(testNumber) {
                 } else {
                     console.log(colors.bright + '\n📤 Sending to default phone...\n' + colors.reset);
                     result = await onboardingTests.testOnboardingTemplate();
+                }
+                break;
+                
+            case '15':
+                console.log(colors.bright + '\n🔐 WhatsApp OTP Test\n' + colors.reset);
+                console.log('Options:');
+                console.log('  a. Send test OTP to default phone');
+                console.log('  b. Send test OTP to custom phone\n');
+                const otpChoice = await getUserInput('Select (a/b): ');
+                
+                const testOtp = otpTests.generateTestOtp();
+                console.log(`\n🔢 Generated OTP: ${testOtp}`);
+                
+                if (otpChoice.toLowerCase() === 'b') {
+                    const customPhone = await getUserInput('Enter phone number (e.g. 919876543210): ');
+                    console.log(colors.bright + `\n📤 Sending OTP to ${customPhone}...\n` + colors.reset);
+                    result = await otpTests.testWhatsAppOtp(customPhone, testOtp);
+                } else {
+                    console.log(colors.bright + '\n📤 Sending OTP to default phone...\n' + colors.reset);
+                    result = await otpTests.testWhatsAppOtp(undefined, testOtp);
                 }
                 break;
                 
@@ -347,7 +369,7 @@ async function interactiveMode() {
     
     while (running) {
         displayMenu();
-        const choice = await getUserInput(colors.bright + 'Select an option (0-14): ' + colors.reset);
+        const choice = await getUserInput(colors.bright + 'Select an option (0-15): ' + colors.reset);
         
         if (choice === '0') {
             console.log('\n' + colors.cyan + '👋 Goodbye!' + colors.reset + '\n');
@@ -398,7 +420,8 @@ async function commandLineMode() {
         '--all-template': '11',
         '--all-custom': '12',
         '--all': '13',
-        '--onboarding': '14'
+        '--onboarding': '14',
+        '--otp': '15'
     };
     
     const testNumber = commandMap[command];

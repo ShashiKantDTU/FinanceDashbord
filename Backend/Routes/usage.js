@@ -325,6 +325,132 @@ router.get('/dashboard', authenticateSuperAdmin, async (req, res) => {
     }
 });
 
+// GET /api/usage/paid-users
+// NEW: Returns all paid users (plan !== 'free' and isTrial === false)
+// with the SAME user object shape as /api/usage/dashboard.
+// Query params: period (today, yesterday, week, month, 3months) and custom date range (startDate, endDate)
+router.get('/paid-users', authenticateSuperAdmin, async (req, res) => {
+    try {
+        // Check if logging database is configured
+        if (!ApiUsageLog) {
+            return res.status(503).json({
+                success: false,
+                message: 'Usage tracking not available: Logging database not configured'
+            });
+        }
+
+        // Support both period and custom date range
+        const period = req.query.period || 'week';
+        const customStartDate = req.query.startDate;
+        const customEndDate = req.query.endDate;
+        const { startDate, endDate } = getDateRange(period, customStartDate, customEndDate);
+
+        // Step 1: Fetch all paid users from main DB
+        const paidUsers = await User.find({
+            plan: { $ne: 'free' },
+            isTrial: false,
+        })
+            .select('_id name phoneNumber plan isTrial acquisition stats site')
+            .populate({
+                path: 'site',
+                select: 'sitename stats.employeeCount isActive'
+            });
+
+        const paidUserIds = paidUsers.map(u => u._id).filter(Boolean);
+        const paidUserPhones = paidUsers.map(u => u.phoneNumber).filter(Boolean);
+
+        // Step 2: Aggregate usage stats for these paid users in the period
+        // Note: ApiUsageLog lives in logging DB, so we only aggregate there.
+        const usageStats = await ApiUsageLog.aggregate([
+            {
+                $match: {
+                    timestamp: { $gte: startDate, $lte: endDate },
+                    $or: [
+                        { mainUserId: { $in: paidUserIds } },
+                        { userPhone: { $in: paidUserPhones } },
+                    ]
+                }
+            },
+            {
+                $group: {
+                    _id: '$userPhone',
+                    totalRequests: { $sum: 1 },
+                    totalDataBytes: { $sum: '$responseSizeBytes' },
+                    uniqueEndpoints: { $addToSet: '$endpoint' },
+                    activeDaysSet: {
+                        $addToSet: {
+                            $dateToString: {
+                                format: '%Y-%m-%d',
+                                date: '$timestamp'
+                            }
+                        }
+                    }
+                }
+            },
+            {
+                $addFields: {
+                    activeDays: { $size: '$activeDaysSet' },
+                    endpointCount: { $size: '$uniqueEndpoints' }
+                }
+            }
+        ]);
+
+        const usageByPhone = new Map(usageStats.map(s => [s._id, s]));
+
+        // Step 3: Build response users list in the same format as /api/usage/dashboard
+        const users = paidUsers.map((u) => {
+            const phone = u.phoneNumber;
+            const usage = phone ? usageByPhone.get(phone) : null;
+
+            const sites = (u.site && u.site.length > 0)
+                ? u.site.map(s => ({
+                    sitename: s.sitename,
+                    count: s.stats?.employeeCount || 0,
+                    isActive: s.isActive
+                }))
+                : [];
+
+            return {
+                phone: phone,
+                name: u.name || phone,
+                plan: u.plan || 'unknown',
+                isTrial: u.isTrial || false,
+                acquisition: u.acquisition || null,
+                totalSites: u.site ? u.site.length : 0,
+                totalLaborers: u.stats?.totalActiveLabors || 0,
+                sites: sites,
+                totalRequests: usage ? usage.totalRequests : 0,
+                totalDataBytes: usage ? usage.totalDataBytes : 0,
+                endpointCount: usage ? (usage.endpointCount || (usage.uniqueEndpoints ? usage.uniqueEndpoints.length : 0)) : 0,
+                activeDays: usage ? (usage.activeDays || 0) : 0
+            };
+        });
+
+        // Optional: keep output order similar to dashboard (highest usage first)
+        users.sort((a, b) => (b.totalRequests || 0) - (a.totalRequests || 0));
+
+        res.json({
+            success: true,
+            period: {
+                type: period,
+                startDate,
+                endDate
+            },
+            summary: {
+                totalPaidUsers: users.length,
+                paidUsersWithUsageInPeriod: users.filter(u => (u.totalRequests || 0) > 0).length
+            },
+            users
+        });
+    } catch (error) {
+        console.error('Error fetching paid users usage data:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Internal server error'
+        });
+    }
+});
+
 // GET /api/usage/user-endpoint-analytics
 // NEW: Shows which endpoints each user accessed with detailed timing
 // Perfect for understanding user behavior and endpoint usage patterns
