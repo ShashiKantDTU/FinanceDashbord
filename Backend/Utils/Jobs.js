@@ -493,9 +493,9 @@ const updateEmployeeCalculations = async (employeeRecord, previousBalance, origi
  * Check if we should process the next month (not in future)
  */
 const shouldProcessNextMonth = (currentMonth, currentYear) => {
-    const now = new Date();
-    const thisMonth = now.getMonth() + 1; // getMonth() returns 0-11
-    const thisYear = now.getFullYear();
+    // Use centralized timezone utility for consistent IST handling
+    const { getCurrentMonthYear } = require('./dateUtils');
+    const { month: thisMonth, year: thisYear } = getCurrentMonthYear();
 
     return currentYear < thisYear || (currentYear === thisYear && currentMonth < thisMonth);
 };

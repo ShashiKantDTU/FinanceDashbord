@@ -25,9 +25,11 @@ const CronJobLog = require('../models/CronJobLogSchema');
  */
 const recalculateCounters = async (jobName = 'weekly-counter-sync') => {
     console.time('⏱️ CounterRecalculation');
-    const now = new Date();
-    const currentMonth = now.getMonth() + 1;
-    const currentYear = now.getFullYear();
+    
+    // Use centralized timezone utility for consistent IST handling
+    const { getCurrentMonthYear } = require('./dateUtils');
+    const { month: currentMonth, year: currentYear } = getCurrentMonthYear();
+    
     let sitesUpdated = 0;
     let usersUpdated = 0;
 

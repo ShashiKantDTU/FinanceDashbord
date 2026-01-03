@@ -48,9 +48,9 @@ const handleRecalculationMarking = async (
     }
 
     // Only mark future months if the next month is not in the future
-    const currentDate = new Date();
-    const currentMonth = currentDate.getMonth() + 1;
-    const currentYear = currentDate.getFullYear();
+    // Use centralized timezone utility for consistent IST handling
+    const { getCurrentMonthYear } = require('../Utils/dateUtils');
+    const { month: currentMonth, year: currentYear } = getCurrentMonthYear();
 
     // Check if there are any future months to mark
     if (
@@ -2379,9 +2379,9 @@ router.get(
     // Check subscription-based time restrictions for free plan users
     const userPlan = req.user.plan || "free";
     if (userPlan === "free") {
-      const currentDate = new Date();
-      const currentMonth = currentDate.getMonth() + 1; // Convert to 1-12
-      const currentYear = currentDate.getFullYear();
+      // Use centralized timezone utility for consistent IST handling
+      const { getCurrentMonthYear } = require('../Utils/dateUtils');
+      const { month: currentMonth, year: currentYear } = getCurrentMonthYear();
 
       const requestedMonth = parseInt(month);
       const requestedYear = parseInt(year);

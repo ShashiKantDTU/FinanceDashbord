@@ -219,6 +219,10 @@ mongoose.connect(mongoURI).then(async () => {
 
     // Initialize cron jobs after server starts
     cronJobService.init();
+    
+    // Timezone verification - log timezone info at startup
+    const { logTimezoneInfo } = require('./Utils/dateUtils');
+    logTimezoneInfo();
   });
 }).catch(err => {
   console.error('Error connecting to MongoDB:', err);

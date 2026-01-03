@@ -13,19 +13,11 @@ const EmployeeSchema = require("../models/EmployeeSchema");
 const User = require("../models/Userschema");
 const Site = require("../models/Siteschema");
 
-/**
- * Check if the given month/year matches the current month/year.
- * Used to ensure counter updates only apply to current month employees.
- * @param {number} month - Month to check (1-12)
- * @param {number} year - Year to check
- * @returns {boolean} True if it's the current month
- */
-const isCurrentMonth = (month, year) => {
-    const now = new Date();
-    const currentMonth = now.getMonth() + 1; // getMonth() is 0-indexed
-    const currentYear = now.getFullYear();
-    return parseInt(month) === currentMonth && parseInt(year) === currentYear;
-};
+// Import centralized timezone utilities
+const { isCurrentMonth } = require('./dateUtils');
+
+// Re-export isCurrentMonth for backward compatibility
+// (other modules may already be importing from EmployeeUtils)
 
 /**
  * Updates employee counters for both Site and User using atomic $inc operations.

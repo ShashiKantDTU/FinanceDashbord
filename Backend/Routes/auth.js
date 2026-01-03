@@ -35,7 +35,9 @@ const generateOtp = () => {
 // --- Trial Expiry Helper Function ---
 // Calculates if trial ends on 30th of current month or next, based on registration date (16th cutoff)
 const getTrialExpiryDate = () => {
-    const today = new Date();
+    // Use centralized timezone utility for consistent IST handling
+    const { getAppDate } = require('../Utils/dateUtils');
+    const today = getAppDate();
     const day = today.getDate();
     const month = today.getMonth(); // 0-11
     const year = today.getFullYear();

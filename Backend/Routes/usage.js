@@ -30,7 +30,9 @@ const getDateRange = (period, customStartDate = null, customEndDate = null) => {
     }
 
     // Otherwise use predefined periods
-    const now = new Date();
+    // Use centralized timezone utility for consistent IST handling
+    const { getAppDate } = require('../Utils/dateUtils');
+    const now = getAppDate();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     let startDate, endDate;
 
