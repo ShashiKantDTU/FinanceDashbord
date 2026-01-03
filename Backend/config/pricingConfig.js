@@ -1,6 +1,6 @@
 const PRICING_CONFIG = {
   // 1. BASE COSTS (To ensure minimum plan value)
-  BASE_FEE: 49, // Starts the plan at a premium level immediately
+  BASE_FEE: 10, // Starts the plan at a premium level immediately
 
   // 2. VOLUME COSTS
   COST_PER_EMPLOYEE: 1.5, // ₹1.5 per laborer
