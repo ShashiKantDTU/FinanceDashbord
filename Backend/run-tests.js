@@ -30,6 +30,7 @@ const {
 const monthlyTests = require('./tests/monthly-report-tests');
 const weeklyTests = require('./tests/weekly-report-tests');
 const templateTests = require('./tests/template-validation-tests');
+const onboardingTests = require('./tests/integrations/test-onboarding-template');
 
 // ANSI color codes for pretty output
 const colors = {
@@ -65,6 +66,9 @@ function displayMenu() {
     console.log('  6. Test PDF Generation Only');
     console.log('  7. Test Excel Generation Only');
     console.log('  8. Test S3 Upload');
+    console.log('');
+    console.log(colors.bright + '📱 ONBOARDING TEMPLATES' + colors.reset);
+    console.log('  14. Test Onboarding Template (onbordingv2en)');
     console.log('');
     console.log(colors.bright + '⚙️  CONFIGURATION' + colors.reset);
     console.log('  9. View Current Test Configuration');
@@ -179,6 +183,27 @@ async function runTest(testNumber) {
             case '13':
                 console.log(colors.bright + '\n🚀 Running: Complete Test Suite\n' + colors.reset);
                 result = await runCompleteTestSuite();
+                break;
+                
+            case '14':
+                console.log(colors.bright + '\n📱 Onboarding Template Test\n' + colors.reset);
+                console.log('Options:');
+                console.log('  a. Validate config only (no message sent)');
+                console.log('  b. Send test message to default phone');
+                console.log('  c. Send test message to custom phone\n');
+                const onboardingChoice = await getUserInput('Select (a/b/c): ');
+                
+                if (onboardingChoice.toLowerCase() === 'a') {
+                    console.log(colors.bright + '\n🔍 Validating Onboarding Config...\n' + colors.reset);
+                    result = await onboardingTests.testOnboardingConfigOnly();
+                } else if (onboardingChoice.toLowerCase() === 'c') {
+                    const customPhone = await getUserInput('Enter phone number (e.g. 919876543210): ');
+                    console.log(colors.bright + `\n📤 Sending to ${customPhone}...\n` + colors.reset);
+                    result = await onboardingTests.testOnboardingTemplate(customPhone);
+                } else {
+                    console.log(colors.bright + '\n📤 Sending to default phone...\n' + colors.reset);
+                    result = await onboardingTests.testOnboardingTemplate();
+                }
                 break;
                 
             default:
@@ -322,7 +347,7 @@ async function interactiveMode() {
     
     while (running) {
         displayMenu();
-        const choice = await getUserInput(colors.bright + 'Select an option (0-13): ' + colors.reset);
+        const choice = await getUserInput(colors.bright + 'Select an option (0-14): ' + colors.reset);
         
         if (choice === '0') {
             console.log('\n' + colors.cyan + '👋 Goodbye!' + colors.reset + '\n');
@@ -372,7 +397,8 @@ async function commandLineMode() {
         '--config': '9',
         '--all-template': '11',
         '--all-custom': '12',
-        '--all': '13'
+        '--all': '13',
+        '--onboarding': '14'
     };
     
     const testNumber = commandMap[command];

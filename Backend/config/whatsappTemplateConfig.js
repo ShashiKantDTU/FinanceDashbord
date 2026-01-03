@@ -10,35 +10,32 @@
 module.exports = {
     // Template names mapped to user language preferences
     TEMPLATE_NAMES: {
-        'en': 'onboardingv1_en',      // English content, English language code
-        'hi': 'onboardingv1_hi',      // Hindi content (देवनागरी), English language code
-        'hing': 'onboardingv1_hing'   // Hinglish content (Romanized), Hindi language code
+        'en': 'onbordingv2en',       // English content, English language code
+        'hi': 'onbordingv2hi',       // Hindi content (v2 - no variables)
+        'hing': 'onbordingv2en'      // Hinglish uses English v2 template
     },
 
     // WhatsApp Media IDs for videos (uploaded to WhatsApp servers)
-    // Media ID: 1157558846315275
-    // Source: https://www.sitehaazri.in/intro.mp4
-    // Size: 14.6 MB, MIME: video/mp4
-    // Uploaded: 2025-01-21
-    // 
-    // To upload a new video: node test-upload-video.js
+    // Source: https://www.sitehaazri.in/payouts.mp4
+    // Uploaded: 2026-01-03 (expires 2026-02-02)
+    // To upload a new video: node scripts/upload-onboarding-video.js
     VIDEO_MEDIA_IDS: {
-        'en': '1893835704679398',
-        'hi': '1157558846315274',
-        'hing': '1280273577182728'
+        'en': '1765821630747079',
+        'hi': '1206458394917474',
+        'hing': '1451951366557838'
     },
 
     // Fallback: Direct video URLs (not recommended, may cause delivery issues)
     VIDEO_URLS: {
-        'en': 'https://www.sitehaazri.in/intro.mp4',
-        'hi': 'https://www.sitehaazri.in/intro.mp4',
-        'hing': 'https://www.sitehaazri.in/intro.mp4'
+        'en': 'https://www.sitehaazri.in/payouts.mp4',
+        'hi': 'https://www.sitehaazri.in/payouts.mp4',
+        'hing': 'https://www.sitehaazri.in/payouts.mp4'
     },
 
     // Default fallback values
     DEFAULT_LANGUAGE: 'en',
-    DEFAULT_VIDEO_MEDIA_ID: '1893835704679398',
-    DEFAULT_VIDEO_URL: 'https://www.sitehaazri.in/intro.mp4',
+    DEFAULT_VIDEO_MEDIA_ID: '1765821630747079',
+    DEFAULT_VIDEO_URL: 'https://www.sitehaazri.in/payouts.mp4',
 
     /**
      * Get template name for a given language

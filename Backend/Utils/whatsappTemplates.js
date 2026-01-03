@@ -79,16 +79,22 @@ async function sendOnboardingTemplate(rawPhoneNumber, userName = 'User', languag
     });
   }
 
-  // Add body component with user name parameter
-  components.push({
-    type: "body",
-    parameters: [
-      {
-        type: "text",
-        text: userName, // Replaces {{1}} in template body
-      },
-    ],
-  });
+  // Add body component with user name parameter ONLY for v1 templates
+  // v2 templates (onbordingv2en) have no body variables - only video header
+  const isV2Template = templateName.includes('v2');
+  
+  if (!isV2Template) {
+    // v1 templates use {{1}} for userName
+    components.push({
+      type: "body",
+      parameters: [
+        {
+          type: "text",
+          text: userName, // Replaces {{1}} in template body
+        },
+      ],
+    });
+  }
 
   const body = {
     messaging_product: "whatsapp",
@@ -98,7 +104,7 @@ async function sendOnboardingTemplate(rawPhoneNumber, userName = 'User', languag
       name: templateName,
       language: {
         // Corrected mapping based on actual Meta template configuration:
-        // 'en' → 'en' (onboardingv1_en uses English)
+        // 'en' → 'en' (onbordingv2en uses English)
         // 'hi' → 'en' (onboardingv1_hi uses English, NOT Hindi - Meta mistake)
         // 'hing' → 'hi' (onboardingv1_hing uses Hindi)
         code: language === 'hing' ? 'hi' : 'en',

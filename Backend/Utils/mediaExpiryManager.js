@@ -26,26 +26,26 @@ async function getMediaStorage() {
       lastUpdated: new Date().toISOString(),
       media: {
         'en': {
-          id: process.env.WHATSAPP_VIDEO_MEDIA_ID_EN || '1157558846315275',
-          uploadedAt: '2025-01-21T00:00:00.000Z',
-          expiresAt: '2025-02-20T00:00:00.000Z',
-          sourceUrl: 'https://www.sitehaazri.in/intro.mp4',
+          id: process.env.WHATSAPP_VIDEO_MEDIA_ID_EN || '1765821630747079',
+          uploadedAt: '2026-01-03T00:00:00.000Z',
+          expiresAt: '2026-02-02T00:00:00.000Z',
+          sourceUrl: 'https://www.sitehaazri.in/payouts.mp4',
           mediaType: 'video/mp4',
           usageCount: 0
         },
         'hi': {
-          id: process.env.WHATSAPP_VIDEO_MEDIA_ID_HI || '1157558846315275',
-          uploadedAt: '2025-01-21T00:00:00.000Z',
-          expiresAt: '2025-02-20T00:00:00.000Z',
-          sourceUrl: 'https://www.sitehaazri.in/intro.mp4',
+          id: process.env.WHATSAPP_VIDEO_MEDIA_ID_HI || '1206458394917474',
+          uploadedAt: '2026-01-03T00:00:00.000Z',
+          expiresAt: '2026-02-02T00:00:00.000Z',
+          sourceUrl: 'https://www.sitehaazri.in/payouts.mp4',
           mediaType: 'video/mp4',
           usageCount: 0
         },
         'hing': {
-          id: process.env.WHATSAPP_VIDEO_MEDIA_ID_HING || '1157558846315275',
-          uploadedAt: '2025-01-21T00:00:00.000Z',
-          expiresAt: '2025-02-20T00:00:00.000Z',
-          sourceUrl: 'https://www.sitehaazri.in/intro.mp4',
+          id: process.env.WHATSAPP_VIDEO_MEDIA_ID_HING || '1451951366557838',
+          uploadedAt: '2026-01-03T00:00:00.000Z',
+          expiresAt: '2026-02-02T00:00:00.000Z',
+          sourceUrl: 'https://www.sitehaazri.in/payouts.mp4',
           mediaType: 'video/mp4',
           usageCount: 0
         }
