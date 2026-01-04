@@ -121,7 +121,7 @@ async function verifyAndroidPurchase(
       packageName: packageName,
       token: purchaseToken,
     });
-
+    console.log('acknowledge state',response.data.acknowledgementState);
     // Check for valid subscription states (active or in grace period)
     if (
       response.data &&
@@ -138,7 +138,10 @@ async function verifyAndroidPurchase(
         mappedProductId = "pro";
       } else if (lineItem.productId === "haazri_automate") {
         mappedProductId = "premium";
-      } else if (lineItem.productId === "haazri_lite" || lineItem.productId === "lite_monthly") {
+      } else if (
+        lineItem.productId === "haazri_lite" ||
+        lineItem.productId === "lite_monthly"
+      ) {
         mappedProductId = "lite";
       }
 
@@ -160,6 +163,8 @@ async function verifyAndroidPurchase(
           : null,
         regionCode: response.data.regionCode || null,
         subscriptionId: response.data.subscriptionId || null,
+        acknowledgementState: response.data.acknowledgementState || null,
+        externalAccountIdentifiers: response.data.externalAccountIdentifiers || null
       };
     } else {
       console.log(
@@ -196,6 +201,52 @@ async function verifyAndroidPurchase(
   }
 }
 
+// Server-side acknowledgement function to finish the transaction
+async function acknowledgeAndroidPurchase(packageName, subscriptionId, purchaseToken, requestId = "unknown") {
+  try {
+    const serviceAccountCredentials = JSON.parse(process.env.PLAY_BILLING_SERVICE_KEY);
+    const auth = new google.auth.GoogleAuth({
+      credentials: serviceAccountCredentials,
+      scopes: ["https://www.googleapis.com/auth/androidpublisher"],
+    });
+
+    const androidpublisher = google.androidpublisher({
+      version: "v3",
+      auth: auth,
+    });
+
+    console.log(`[${requestId}] Checking acknowledgement status for ${subscriptionId}...`);
+
+    // 1. Check if already acknowledged (Avoid errors)
+    const getResponse = await androidpublisher.purchases.subscriptions.get({
+      packageName,
+      subscriptionId,
+      token: purchaseToken,
+    });
+
+    if (getResponse.data.acknowledgementState === 1) {
+      console.log(`[${requestId}] ✅ Purchase already acknowledged by Google.`);
+      return true;
+    }
+
+    // 2. Acknowledge
+    await androidpublisher.purchases.subscriptions.acknowledge({
+      packageName,
+      subscriptionId,
+      token: purchaseToken,
+      requestBody: {
+        developerPayload: "server_webhook_acknowledgement",
+      },
+    });
+
+    console.log(`[${requestId}] ✅ Successfully acknowledged purchase on server.`);
+    return true;
+  } catch (error) {
+    console.error(`[${requestId}] ❌ Failed to acknowledge purchase:`, error.message);
+    return false;
+  }
+}
+
 // Purchase verification endpoint (READ-ONLY)
 // This endpoint only verifies the purchase with Google but does NOT update the database
 // The webhook handles all database updates to prevent race conditions
@@ -211,7 +262,7 @@ router.post("/verify-android-purchase", authenticateToken, async (req, res) => {
     if (!user) {
       return res.status(400).json({ error: "User is not authenticated." });
     }
-
+    
     // --- NEW LOGIC: CHECK FIRST ---
     // Check if the webhook has already processed this exact token.
     if (
@@ -240,8 +291,19 @@ router.post("/verify-android-purchase", authenticateToken, async (req, res) => {
       purchaseToken,
       `frontend_${user.id}`
     );
+    
+    console.log("Verification result:", verificationResult);
 
     if (verificationResult.success) {
+
+      if (verificationResult.acknowledgementState === 'ACKNOWLEDGEMENT_STATE_ACKNOWLEDGED') {
+        return res.status(400).json({ error: "Purchase has already been acknowledged." });
+      }
+      if (verificationResult.externalAccountIdentifiers.obfuscatedExternalProfileId !== req.user.id) {
+        console.log(`Purchase token does not belong to the authenticated user. Expected: ${req.user.id}, Received: ${verificationResult.externalAccountIdentifiers.obfuscatedExternalProfileId}`);
+        return res.status(400).json({ error: "Purchase token does not belong to the authenticated user." });
+      }
+
       // Determine billing cycle from the original product ID (more reliable)
       const billingCycle = verificationResult.originalProductId.includes(
         "yearly"
@@ -282,26 +344,25 @@ router.post("/verify-android-purchase", authenticateToken, async (req, res) => {
       );
 
       try {
-
         // Validate phone number before sending webhook
         isUpgrade = false; // Disable upgrade detection for now
         if (!user.phoneNumber) {
           console.error(
-        `User ${user._id} has no phone number, cannot send webhook`
+            `User ${user._id} has no phone number, cannot send webhook`
           );
         } else {
           await sendWebhook(
-        user.phoneNumber,
-        verificationResult.productId === "pro" ? 299 : 499,
-        verificationResult.expires,
-        isUpgrade,
-        purchaseToken // Add purchaseToken for idempotency
+            user.phoneNumber,
+            verificationResult.productId === "pro" ? 299 : 499,
+            verificationResult.expires,
+            isUpgrade,
+            purchaseToken // Add purchaseToken for idempotency
           );
           console.log(
-        `✅ Payment webhook sent (isUpgrade: ${isUpgrade}, token: ${purchaseToken?.substring(
-          0,
-          20
-        )}...)`
+            `✅ Payment webhook sent (isUpgrade: ${isUpgrade}, token: ${purchaseToken?.substring(
+              0,
+              20
+            )}...)`
           );
         }
       } catch (webhookError) {
@@ -356,14 +417,17 @@ router.get("/plan", authenticateToken, async (req, res) => {
   if (req.user.plan === "enterprise") {
     response.limits = {
       maxActiveSites: req.user.enterpriseLimits?.maxActiveSites || 10,
-      maxEmployeesPerSite: req.user.enterpriseLimits?.maxEmployeesPerSite || 100,
+      maxEmployeesPerSite:
+        req.user.enterpriseLimits?.maxEmployeesPerSite || 100,
     };
     // Feature flags for enterprise
     response.isWhatsApp = req.user.enterpriseLimits?.isWhatsApp ?? true;
     response.isPDF = req.user.enterpriseLimits?.isPDF ?? true;
     response.isExcel = req.user.enterpriseLimits?.isExcel ?? true;
-    response.isSupervisorAccess = req.user.enterpriseLimits?.isSupervisorAccess ?? true;
-    response.isChangeTracking = req.user.enterpriseLimits?.isChangeTracking ?? true;
+    response.isSupervisorAccess =
+      req.user.enterpriseLimits?.isSupervisorAccess ?? true;
+    response.isChangeTracking =
+      req.user.enterpriseLimits?.isChangeTracking ?? true;
   }
 
   // Add limits for business plan (uses total employees, not per-site)
@@ -377,8 +441,10 @@ router.get("/plan", authenticateToken, async (req, res) => {
     response.isWhatsApp = req.user.businessLimits?.isWhatsApp ?? true;
     response.isPDF = req.user.businessLimits?.isPDF ?? true;
     response.isExcel = req.user.businessLimits?.isExcel ?? true;
-    response.isSupervisorAccess = req.user.businessLimits?.isSupervisorAccess ?? true;
-    response.isChangeTracking = req.user.businessLimits?.isChangeTracking ?? true;
+    response.isSupervisorAccess =
+      req.user.businessLimits?.isSupervisorAccess ?? true;
+    response.isChangeTracking =
+      req.user.businessLimits?.isChangeTracking ?? true;
   }
 
   // Only include isTrial, isCancelled, isGrace, and purchaseToken for normal users, not supervisors
@@ -486,7 +552,8 @@ async function updateUserSubscription(
   user,
   notification,
   notificationType,
-  requestId = "unknown"
+  requestId = "unknown",
+  preVerification = null // Optional: Pass verification result to avoid redundant API calls
 ) {
   try {
     let updateData = {};
@@ -499,11 +566,15 @@ async function updateUserSubscription(
       case 2: // SUBSCRIPTION_RENEWED
       case 7: // SUBSCRIPTION_RESTARTED
       case 1: // SUBSCRIPTION_RECOVERED
-        const verification = await verifyAndroidPurchase(
-          "com.sitehaazri.app",
-          notification.purchaseToken,
-          requestId
-        );
+        // USE THE PASSED DATA IF AVAILABLE, OTHERWISE CALL GOOGLE
+        let verification = preVerification;
+        if (!verification) {
+          verification = await verifyAndroidPurchase(
+            "com.sitehaazri.app",
+            notification.purchaseToken,
+            requestId
+          );
+        }
         if (verification.success) {
           // Determine billing cycle from the Product ID (more reliable than date calculation)
           const billingCycle = verification.originalProductId.includes("yearly")
@@ -1004,6 +1075,7 @@ router.post("/notifications", authenticateWebhook, async (req, res) => {
       const subscription = notificationData.subscriptionNotification;
       const notificationType = subscription.notificationType;
       const purchaseToken = subscription.purchaseToken;
+      const packageName = "com.sitehaazri.app";
 
       console.log(
         `[${requestId}] 📱 Subscription ${getNotificationTypeName(
@@ -1011,22 +1083,104 @@ router.post("/notifications", authenticateWebhook, async (req, res) => {
         )} for token: ${purchaseToken?.substring(0, 20)}...`
       );
 
-      const user = await findUserByPurchaseToken(purchaseToken, requestId);
+      // 1. Try finding user by Token (Existing logic)
+      let user = await findUserByPurchaseToken(purchaseToken, requestId);
+      let originalProductId = null; // We need this for acknowledgement later
+      let googleVerificationResult = null; // Store verification to pass to updateUserSubscription (avoid double API calls)
+
+      // 2. NEW LOGIC: If user NOT found, ask Google who owns this token
+      if (!user) {
+        console.log(
+          `[${requestId}] 🔍 Token not in DB. Querying Google to find Owner (AccountIdentifiers)...`
+        );
+
+        // Check verification to get profile ID
+        googleVerificationResult = await verifyAndroidPurchase(
+          packageName,
+          purchaseToken,
+          requestId
+        );
+
+        if (googleVerificationResult.success) {
+          originalProductId = googleVerificationResult.originalProductId; // Capture ID for acknowledgement
+
+          // CHECK EXTERNAL ID
+          const associatedUserId =
+            googleVerificationResult.externalAccountIdentifiers?.obfuscatedExternalProfileId;
+
+          if (associatedUserId) {
+            console.log(
+              `[${requestId}] 🆔 Google says this belongs to User ID: ${associatedUserId}`
+            );
+            user = await User.findById(associatedUserId);
+            if (user) {
+              console.log(
+                `[${requestId}] ✅ User recovered via AccountIdentifiers!`
+              );
+            } else {
+              console.log(
+                `[${requestId}] ❌ User ID from Google (${associatedUserId}) not found in MongoDB.`
+              );
+            }
+          } else {
+            console.log(
+              `[${requestId}] ⚠️ No obfuscatedExternalProfileId found in Google response.`
+            );
+          }
+        } else {
+          console.log(
+            `[${requestId}] ❌ Failed to verify token with Google during lookup.`
+          );
+        }
+      } else {
+        // If user WAS found in DB, we still need the product ID for acknowledgement
+        // Verify to get the latest 'originalProductId' and fresh data
+        googleVerificationResult = await verifyAndroidPurchase(
+          packageName,
+          purchaseToken,
+          requestId
+        );
+        if (googleVerificationResult.success) {
+          originalProductId = googleVerificationResult.originalProductId;
+        }
+      }
+
+      // 3. If we still don't have a user, we can't process it
       if (!user) {
         return res.status(200).json({
-          message: "No user found for purchase token",
-          acknowledged: true,
+          message:
+            "No user found for purchase token (even after Google Lookup)",
+          acknowledged: true, // Return 200 to stop Pub/Sub retries
           requestId: requestId,
           notificationType: notificationType,
         });
       }
 
+      // 4. Update the User (Existing logic)
+      // Pass googleVerificationResult to avoid redundant Google API calls
       const updateResult = await updateUserSubscription(
         user,
         subscription,
         notificationType,
-        requestId
+        requestId,
+        googleVerificationResult // Pass verification result to avoid double API call
       );
+
+      // 5. NEW: SERVER-SIDE ACKNOWLEDGEMENT
+      // If the update was successful (and it was a purchase/renewal), finish the transaction
+      if (updateResult.success && originalProductId) {
+        const isActiveState = [4, 2, 7, 1].includes(notificationType); // Purchased, Renewed, Restarted, Recovered
+
+        if (isActiveState) {
+          await acknowledgeAndroidPurchase(
+            packageName,
+            originalProductId,
+            purchaseToken,
+            requestId
+          );
+        }
+      }
+
       console.log(
         `[${requestId}] ${updateResult.success ? "✅" : "❌"} ${
           updateResult.message
@@ -1091,84 +1245,91 @@ router.post("/notifications", authenticateWebhook, async (req, res) => {
 });
 
 // Admin endpoint to manually verify a purchase for a user
-router.post("/admin/manual-verify", authenticateSuperAdmin, async (req, res) => {
-  try {
-    const { userId, purchaseToken } = req.body;
-    if (!userId || !purchaseToken) {
-      return res.status(400).json({ error: "userId and purchaseToken are required" });
-    }
-
-    const user = await User.findById(userId);
-    if (!user) {
-      return res.status(404).json({ error: "User not found" });
-    }
-
-    const packageName = "com.sitehaazri.app";
-    const verificationResult = await verifyAndroidPurchase(
-      packageName,
-      purchaseToken,
-      `admin_manual_${userId}`
-    );
-
-    if (verificationResult.success) {
-      const billingCycle = verificationResult.originalProductId.includes("yearly")
-        ? "yearly"
-        : "monthly";
-
-      await User.updateOne(
-        { _id: user.id },
-        {
-          $set: {
-            plan: verificationResult.productId,
-            billing_cycle: billingCycle,
-            planSource: "google_play",
-            purchaseToken: purchaseToken,
-            lastPurchaseToken: user.purchaseToken || null,
-            isPaymentVerified: true,
-            isTrial: false,
-            isCancelled: false,
-            isGrace: false,
-            graceExpiresAt: null,
-            planActivatedAt: new Date(),
-          },
-          $max: {
-            planExpiresAt: verificationResult.expires,
-          },
-        }
-      );
-
-      await activateAllUserSites(user.id);
-
-      // Send webhook
-      try {
-        if (user.phoneNumber) {
-          await sendWebhook(
-            user.phoneNumber,
-            verificationResult.productId === "pro" ? 299 : 499,
-            verificationResult.expires,
-            false,
-            purchaseToken
-          );
-        }
-      } catch (e) {
-        console.error("Webhook failed:", e.message);
+router.post(
+  "/admin/manual-verify",
+  authenticateSuperAdmin,
+  async (req, res) => {
+    try {
+      const { userId, purchaseToken } = req.body;
+      if (!userId || !purchaseToken) {
+        return res
+          .status(400)
+          .json({ error: "userId and purchaseToken are required" });
       }
 
-      return res.status(200).json({
-        message: "Purchase verified and user updated successfully",
-        result: verificationResult
-      });
-    } else {
-      return res.status(400).json({ error: verificationResult.error });
+      const user = await User.findById(userId);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      const packageName = "com.sitehaazri.app";
+      const verificationResult = await verifyAndroidPurchase(
+        packageName,
+        purchaseToken,
+        `admin_manual_${userId}`
+      );
+
+      if (verificationResult.success) {
+        const billingCycle = verificationResult.originalProductId.includes(
+          "yearly"
+        )
+          ? "yearly"
+          : "monthly";
+
+        await User.updateOne(
+          { _id: user.id },
+          {
+            $set: {
+              plan: verificationResult.productId,
+              billing_cycle: billingCycle,
+              planSource: "google_play",
+              purchaseToken: purchaseToken,
+              lastPurchaseToken: user.purchaseToken || null,
+              isPaymentVerified: true,
+              isTrial: false,
+              isCancelled: false,
+              isGrace: false,
+              graceExpiresAt: null,
+              planActivatedAt: new Date(),
+            },
+            $max: {
+              planExpiresAt: verificationResult.expires,
+            },
+          }
+        );
+
+        await activateAllUserSites(user.id);
+
+        // Send webhook
+        try {
+          if (user.phoneNumber) {
+            await sendWebhook(
+              user.phoneNumber,
+              verificationResult.productId === "pro" ? 299 : 499,
+              verificationResult.expires,
+              false,
+              purchaseToken
+            );
+          }
+        } catch (e) {
+          console.error("Webhook failed:", e.message);
+        }
+
+        return res.status(200).json({
+          message: "Purchase verified and user updated successfully",
+          result: verificationResult,
+        });
+      } else {
+        return res.status(400).json({ error: verificationResult.error });
+      }
+    } catch (error) {
+      console.error("Manual verification error:", error);
+      return res.status(500).json({ error: error.message });
     }
-  } catch (error) {
-    console.error("Manual verification error:", error);
-    return res.status(500).json({ error: error.message });
   }
-});
+);
 
 module.exports = router;
 // Export internal functions for scripts/testing
 router.verifyAndroidPurchase = verifyAndroidPurchase;
 router.activateAllUserSites = activateAllUserSites;
-

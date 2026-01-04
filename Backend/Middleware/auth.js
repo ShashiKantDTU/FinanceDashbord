@@ -23,7 +23,7 @@ const authenticateToken = async (req, res, next) => {
 
         // Attach user information to request object
         req.user = decoded;
-
+        
         if (req.user && req.user.id && req.user.id.toString() === '683b167e47f3087645d8ba7f') {
             req.user.calculationType = 'special'
         } else {
