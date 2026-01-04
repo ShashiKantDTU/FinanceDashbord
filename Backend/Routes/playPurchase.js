@@ -121,7 +121,7 @@ async function verifyAndroidPurchase(
       packageName: packageName,
       token: purchaseToken,
     });
-    console.log('acknowledge state',response.data.acknowledgementState);
+
     // Check for valid subscription states (active or in grace period)
     if (
       response.data &&
@@ -307,8 +307,7 @@ router.post("/verify-android-purchase", authenticateToken, async (req, res) => {
       purchaseToken,
       `frontend_${user.id}`
     );
-    
-    console.log("Verification result:", verificationResult);
+
 
     if (verificationResult.success) {
 
