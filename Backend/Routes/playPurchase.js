@@ -202,6 +202,7 @@ async function verifyAndroidPurchase(
 }
 
 // Server-side acknowledgement function to finish the transaction
+// Note: Since May 21, 2025, subscriptionId is not required for acknowledge API
 async function acknowledgeAndroidPurchase(packageName, subscriptionId, purchaseToken, requestId = "unknown") {
   try {
     const serviceAccountCredentials = JSON.parse(process.env.PLAY_BILLING_SERVICE_KEY);
@@ -215,24 +216,24 @@ async function acknowledgeAndroidPurchase(packageName, subscriptionId, purchaseT
       auth: auth,
     });
 
-    console.log(`[${requestId}] Checking acknowledgement status for ${subscriptionId}...`);
+    console.log(`[${requestId}] Checking acknowledgement status for subscription...`);
 
-    // 1. Check if already acknowledged (Avoid errors)
-    const getResponse = await androidpublisher.purchases.subscriptions.get({
+    // 1. Check if already acknowledged using subscriptionsv2 API (recommended)
+    const getResponse = await androidpublisher.purchases.subscriptionsv2.get({
       packageName,
-      subscriptionId,
       token: purchaseToken,
     });
 
-    if (getResponse.data.acknowledgementState === 1) {
+    // acknowledgementState: "ACKNOWLEDGEMENT_STATE_ACKNOWLEDGED" or "ACKNOWLEDGEMENT_STATE_PENDING"
+    if (getResponse.data.acknowledgementState === "ACKNOWLEDGEMENT_STATE_ACKNOWLEDGED") {
       console.log(`[${requestId}] ✅ Purchase already acknowledged by Google.`);
       return true;
     }
 
-    // 2. Acknowledge
+    // 2. Acknowledge - subscriptionId is optional since May 2025, but we pass it for backward compatibility
     await androidpublisher.purchases.subscriptions.acknowledge({
       packageName,
-      subscriptionId,
+      subscriptionId: subscriptionId || "_", // Use placeholder if not provided
       token: purchaseToken,
       requestBody: {
         developerPayload: "server_webhook_acknowledgement",
@@ -243,6 +244,9 @@ async function acknowledgeAndroidPurchase(packageName, subscriptionId, purchaseT
     return true;
   } catch (error) {
     console.error(`[${requestId}] ❌ Failed to acknowledge purchase:`, error.message);
+    if (error.response) {
+      console.error(`[${requestId}] Error details:`, error.response.status, error.response.data);
+    }
     return false;
   }
 }
