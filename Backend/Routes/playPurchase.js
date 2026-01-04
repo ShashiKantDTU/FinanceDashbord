@@ -167,18 +167,30 @@ async function verifyAndroidPurchase(
         externalAccountIdentifiers: response.data.externalAccountIdentifiers || null
       };
     } else {
-      console.log(
-        `[${requestId}] ❌ Subscription not active: ${
-          response.data?.subscriptionState || "unknown"
-        }`
-      );
+      // Distinguish between normal lifecycle states and real errors
+      const state = response.data?.subscriptionState || "unknown";
+      
+      // These are normal lifecycle states, not errors
+      const isExpectedInactive = [
+        "SUBSCRIPTION_STATE_CANCELED", 
+        "SUBSCRIPTION_STATE_EXPIRED",
+        "SUBSCRIPTION_STATE_PAUSED",
+        "SUBSCRIPTION_STATE_ON_HOLD"
+      ].includes(state);
+
+      if (isExpectedInactive) {
+        console.log(`[${requestId}] ℹ️ Subscription state is ${state} (Normal inactive state).`);
+      } else {
+        console.log(`[${requestId}] ⚠️ Subscription not active: ${state}`);
+      }
+
       return {
         success: false,
-        error: `Subscription is not active. State: ${
-          response.data?.subscriptionState || "unknown"
-        }`,
-        subscriptionState: response.data?.subscriptionState,
+        error: `Subscription is not active. State: ${state}`,
+        subscriptionState: state,
         rawResponse: response.data,
+        // Flag so the route knows it's a valid token, just inactive
+        isValidButInactive: isExpectedInactive
       };
     }
   } catch (error) {
@@ -388,8 +400,29 @@ router.post("/verify-android-purchase", authenticateToken, async (req, res) => {
         provisional: true,
       });
     } else {
+      // Handle Valid-but-Inactive (Canceled/Expired) Tokens
+      if (verificationResult.isValidButInactive) {
+        console.log(
+          `ℹ️ User ${user.phoneNumber || user.email} synced an inactive token (${verificationResult.subscriptionState}). Returning OK to clear queue.`
+        );
+        
+        // Return 200 OK so frontend thinks "Verification Process" succeeded (even if plan is Free)
+        // This allows frontend to call finishTransaction() and stop retrying.
+        return res.status(200).json({
+          message: `Subscription is ${verificationResult.subscriptionState}`,
+          plan: "free",
+          billing_cycle: "monthly",
+          status: "inactive",
+          subscriptionState: verificationResult.subscriptionState,
+          provisional: false,
+          // Frontend can use this flag to know not to show a "Success" confetti
+          isInactive: true
+        });
+      }
+
+      // Handle Real Errors (Invalid Token / API Failures)
       console.log(
-        `❌ Frontend verification failed for user: ${user.email} - ${verificationResult.error}`
+        `❌ Frontend verification failed for user: ${user.phoneNumber || user.email} - ${verificationResult.error}`
       );
       res.status(400).json({ error: verificationResult.error });
     }
