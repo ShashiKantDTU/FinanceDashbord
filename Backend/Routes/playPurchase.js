@@ -314,9 +314,31 @@ router.post("/verify-android-purchase", authenticateToken, async (req, res) => {
       if (verificationResult.acknowledgementState === 'ACKNOWLEDGEMENT_STATE_ACKNOWLEDGED') {
         return res.status(400).json({ error: "Purchase has already been acknowledged." });
       }
-      if (verificationResult.externalAccountIdentifiers.obfuscatedExternalProfileId !== req.user.id) {
-        console.log(`Purchase token does not belong to the authenticated user. Expected: ${req.user.id}, Received: ${verificationResult.externalAccountIdentifiers.obfuscatedExternalProfileId}`);
-        return res.status(400).json({ error: "Purchase token does not belong to the authenticated user." });
+
+      // Check if externalAccountIdentifiers exists before accessing it.
+      // Old app versions (or purchases made outside the app) won't have this field.
+      if (
+        verificationResult.externalAccountIdentifiers &&
+        verificationResult.externalAccountIdentifiers.obfuscatedExternalProfileId
+      ) {
+        // STRICT CHECK: If Google has an ID, it MUST match the current user
+        if (
+          verificationResult.externalAccountIdentifiers.obfuscatedExternalProfileId !== req.user.id
+        ) {
+          console.log(
+            `Purchase token does not belong to the authenticated user. Expected: ${req.user.id}, Received: ${verificationResult.externalAccountIdentifiers.obfuscatedExternalProfileId}`
+          );
+          return res.status(400).json({
+            error: "Purchase token does not belong to the authenticated user.",
+          });
+        }
+      } else {
+        // LEGACY/FALLBACK HANDLING:
+        // If no ID is attached to the Google receipt, we implicitly trust the 
+        // currently authenticated user (req.user) because they hold the valid Purchase Token.
+        console.log(
+          `⚠️ Legacy purchase detected (No obfuscated ID). Linking token to current user: ${req.user.id}`
+        );
       }
 
       // Determine billing cycle from the original product ID (more reliable)
