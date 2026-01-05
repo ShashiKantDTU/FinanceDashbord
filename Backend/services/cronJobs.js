@@ -1420,7 +1420,7 @@ class CronJobService {
             console.log(`📅 Sending reports for: ${month}/${year} (Previous month from IST date)`);
 
             // Create log entry
-            const logId = await this.createCronJobLog('monthly-report', { month, year });
+            const logId = await this.createCronJobLog('monthly', { month, year });
 
             const userSitePairs = await this.getEligibleUsersForReports();
 
@@ -1552,7 +1552,7 @@ class CronJobService {
             console.log(`✅ Monthly Report completed: ${successCount} sent, ${failureCount} failed, ${skippedCount} skipped`);
         } catch (error) {
             console.error('❌ Error in sendMonthlyReportAll:', error);
-            const logId = await this.createCronJobLog('monthly-report', { error: 'Failed to create initial log' });
+            const logId = await this.createCronJobLog('monthly', { error: 'Failed to create initial log' });
             await this.updateCronJobLog(logId, {
                 status: 'failed',
                 error: error.message,

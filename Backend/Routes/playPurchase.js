@@ -282,7 +282,7 @@ router.post("/verify-android-purchase", authenticateToken, async (req, res) => {
     // --- NEW LOGIC: CHECK FIRST ---
     // Check if the webhook has already processed this exact token.
     if (
-      user.purchaseToken === purchaseToken &&
+      user.lastPurchaseToken === purchaseToken &&
       user.isPaymentVerified === true
     ) {
       console.log(

@@ -45,6 +45,7 @@ const authenticateToken = async (req, res, next) => {
             // add plan info from User to supervisor requests
             const user = await User.findById(supervisor.owner._id)
             req.user.plan = user.plan
+            req.user.lastPurchaseToken = user.lastPurchaseToken || null
             req.user.planExpiresAt = user.planExpiresAt
             req.user.planActivatedAt = user.planActivatedAt
             req.user.billing_cycle = user.billing_cycle
